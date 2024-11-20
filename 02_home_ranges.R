@@ -1,62 +1,60 @@
 library(tidyverse)
-library(sf)
 library(amt)
 
+set.seed(1)
 
+# Read in deer location data
 deer <- read_csv("data/location_data/deer_filtered.csv") %>%
           mutate(month=as.numeric(format(timestamp, "%m")),
                  year=as.numeric(format(timestamp, "%Y"))) %>%
-          select(DeerID:study,month,year,timestamp,X,Y)
+          select(DeerID:study,month,year,timestamp,X,Y) %>%
+          unite("DeerID", c(1,5), sep="_") # separate by year
 
+# Create track of all individuals
+deer_tr <- make_track(deer, X, Y, timestamp, id=DeerID, crs=32616)
 
-delta87924 <- deer %>% filter(DeerID=="87924_Delta") %>%
-  mutate(minutes=c(NA, diff(timestamp)),
-         hours=minutes/60) 
-  
+# Check sampling rate of all individuals
+trk_info <- deer_tr %>% summarize_sampling_rate_many(c("id"), time_unit="min")
 
-ggplot(delta87924) +
-  geom_path(aes(x=timestamp, y=X)) +
-  geom_point(aes(x=timestamp, y=X, color=hours)) +
-  theme_bw()
+range(trk_info$mean)
 
-
+# Loop over each individual, building home range and extracting points
 un.id <- unique(deer$DeerID)
-area <- data.frame()
+avail <- data.frame()
 for (i in 1:length(un.id)) {
   
   # Filter to ID
-  dat <- deer %>% filter(DeerID==un.id[i])
+  dat <- deer_tr %>% filter(id==un.id[i])
   
-  # Make amt track object
-  tr <- make_track(dat, X, Y, timestamp)
+  # Filter all locations to ~4 hours
+  dat <- track_resample(dat, rate=hours(4), tolerance=minutes(15))
   
-  # # Make template raster
-  trast <- make_trast(tr, res=10)
+  # Make template raster
+  trast <- make_trast(dat, res=10)
 
   # Create HR
-  # hr_deer <- hr_kde(tr, trast=trast, level=0.99)
-  hr_deer <- hr_mcp(tr, trast=trast)
-
-  tr_mcp <- hr_deer$mcp
-
-  area[i,1] <- hr_deer$mcp$area/1000/1000
-
-  # plot(st_geometry())
-
-  # Add buffer?? See Darlington et al. 2022
+  hr_deer <- hr_kde(dat, trast=trast, level=0.95)
 
   # Generate random points
-  # r1 <- random_points(tr, n = 5*nrow(dat)) #, presence = tr
+  r1 <- random_points(hr_deer, n = 5*nrow(dat)) 
   # plot(r1)
+
+  # Add ID to each location
+  r1 <- r1 %>% mutate(DeerID=un.id[i])
+  
+  # Save points
+  avail <- bind_rows(avail, r1)
   
 }
 
-r1 <- r1 %>% as_tibble() %>% rename(x=x_, y=y_)
+deer <- deer %>% select(DeerID, X, Y) %>%
+          mutate(type=1)
 
-ggplot() +
-  geom_point(data=r1, aes(x=x, y=y))
+avail <- avail %>% as_tibble() %>% 
+            select(DeerID,  x_, y_, case_) %>%
+            rename(X=x_, Y=y_, type=case_) %>%
+            mutate(type=as.numeric(type))
 
+deer <- bind_rows(deer, avail)
 
-
-
-
+write_csv(deer, "data/location_data/deer_used_avail.csv")
