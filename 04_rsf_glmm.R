@@ -55,9 +55,9 @@ layers <- scale(layers)
 names(layers) <- c("uplandforest", "grassland", "bottomlandhw", "water", "allforest", "foodcrops", "plantations", "streams", "tcc", "pop_density", "roads")
 
 ## Layers for each species model
-deer_layers <- c(layers["allforest"], layers["foodcrops"],  layers["streams"])
+deer_layers <- c(layers["allforest"], layers["plantations"], layers["foodcrops"], layers["streams"])
 
-pig_layers <- c(layers["bottomlandhw"], layers["uplandforest"], layers["plantations"], layers["foodcrops"], layers["roads"], layers["streams"])
+pig_layers <- c(layers["bottomlandhw"], layers["uplandforest"], layers["foodcrops"], layers["roads"], layers["streams"])
 
 #### Load data ####
 deer <- read_csv("data/deer_usedavail_covariates.csv")
@@ -65,12 +65,12 @@ pigs <- read_csv("data/pigs_usedavail_covariates.csv")
 
 ### Deer model
 
-system.time(m1 <- glmer(type ~ allforest + plantations + foodcrops + streams + (1|DeerID), data=deer, family=binomial(link = "logit")))
+system.time(m1 <- glmer(type ~ tcc + plantations + foodcrops + streams + (1|DeerID), data=deer, family=binomial(link = "logit")))
 
 pred_deer <- predict(deer_layers, m1, type="response", re.form = NA)
 
 pred_deer <- mask(pred_deer, ms_full)
-pred_deer <- pred_deer / 0.95601763112
+pred_deer <- pred_deer / 0.35876536686 #0.95601763112
 
 plot(pred_deer)
 

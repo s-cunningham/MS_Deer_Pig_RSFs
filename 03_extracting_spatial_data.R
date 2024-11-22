@@ -26,6 +26,19 @@ rast_list <- c("data/landscape_data/distance_to_upland90m.tif",
                "data/landscape_data/distance_to_allforest90m.tif")
 layers <- rast(rast_list)
 
+## NDVI
+# winter
+ndvi_w <- rast("data/landscape_data/ndvi5year_jan1.tif")
+ndvi_w <- project(ndvi_w, crs(layers))
+ndvi_w  <- resample(ndvi_w, layers, method="bilinear")
+layers <- c(layers, ndvi_w)
+
+# summer
+ndvi_s <- rast("data/landscape_data/ndvi5year_jun10.tif") 
+ndvi_s <- project(ndvi_s, crs(layers))
+ndvi_s  <- resample(ndvi_s, layers, method="bilinear")
+layers <- c(layers, ndvi_s)
+
 ## foodcrops
 food <- rast("data/landscape_data/distance_to_foodcrops90m.tif")
 food <- project(food, crs(layers))
