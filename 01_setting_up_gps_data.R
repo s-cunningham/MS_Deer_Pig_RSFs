@@ -92,7 +92,7 @@ write_csv(deer, "data/location_data/deer_filtered.csv")
 # Read GPS data
 pigs1 <- read_csv("data/location_data/Cleaned_DeltaMS_PigGPS_data.csv") %>% select(-Sex, -Temp) %>% rename(id=collar_id) %>% mutate(study="Delta")
 pigs2 <- read_csv("data/location_data/Cleaned_NorthMS_PigGPS_data.csv") %>% select(-Altitude, -Temp, -DOP) %>% mutate(study="Northern")
-pigs3 <- read_csv("data/location_data/Cleaned_Noxubee_PigGPS_data.csv") %>% select(-Temp) %>% rename(id=CollarID, datetime=DateTime, Long=x, Lat=y) %>% mutate(study="Noxubee")
+pigs3 <- read_csv("data/location_data/NoxubeePigs.csv") %>% rename(id=CollarID, datetime=Date.Time) %>% select(-Temp, -Sex) %>% mutate(study="Noxubee") %>% mutate(datetime=as_datetime(datetime, format="%m/%d/%Y %H:%M"))
 pigs4 <- read_csv("data/location_data/Cleaned_EasternMS_PigGPS_data.csv") %>% select(-Altitude, -Temp, -DOP) %>% rename(id=collar_id) %>% mutate(study="Eastern")
 
 # Combine
@@ -101,13 +101,41 @@ pigs <- bind_rows(pigs1, pigs2, pigs3, pigs4)
 # Remove locations that are outside of mississippi
 pigs <- st_as_sf(pigs, coords=c("Long", "Lat"), crs=4326) 
 
-# st_write(pigs, "data/location_data/all_pig_points.shp")
-
 pigs <- st_intersection(pigs, ms)
-pigs <- pigs %>% st_transform(crs=acea)
+pigs <- pigs %>% st_transform(crs=32616)
+
+# Convert back to non-spatial object
+xy <- st_coordinates(pigs) %>% as_tibble()
+pigs <- st_drop_geometry(pigs)
+
+pigs$X <- xy$X
+pigs$Y <- xy$Y
+
+pigs <- pigs %>% unite("PigID", c(1,3), sep="_", remove=FALSE)
+
+# Looks like they have already been filtered to DOP<10
+pigs <- pigs %>% select(PigID, id, study, datetime, X, Y) %>%
+          rename(timestamp=datetime)
+
+npts <- pigs %>% group_by(PigID) %>% count()
+hist(npts$n)
+sum(npts$n<1000)
+
+# Keep deer with >3 months of data
+pigs_time <- pigs %>% group_by(PigID) %>%
+  reframe(ts=range(timestamp)) %>%
+  mutate(time=rep(c("start","end"), 40)) %>%
+  pivot_wider(names_from="time", values_from="ts") %>%
+  mutate(duration=end-start,
+         months=as.numeric(duration/30))
+
+keep <- pigs_time %>% filter(months > 3) %>% select(PigID) %>% as.vector()
+keep <- unlist(unname(keep))
+
+pigs <- pigs %>% filter(PigID %in% keep)
 
 
-
+write_csv(pigs, "data/location_data/pigs_filtered.csv")
 
 
 
