@@ -76,22 +76,26 @@ roads <- mask(roads, layers[[1]])
 layers <- c(layers, gpw, roads)
 
 layers <- scale(layers)
-names(layers) <- c("uplandforest", "grassland", "bottomlandhw", "water", "allforest", "foodcrops", "plantations", "streams", "tcc", "pop_density", "roads")
+names(layers) <- c("uplandforest", "grassland", "bottomlandhw", "water", "allforest", "ndvi_w", "ndvi_s", "foodcrops", "plantations", "streams", "tcc", "pop_density", "roads")
 
 # Extract distance values at used and available locations
 dat_deer <- extract(layers, deer)
 dat_pigs <- extract(layers, pigs)
 
 # Combine spatial data with points
+deer_xy <- st_coordinates(deer)
 deer <- st_drop_geometry(deer)
 deer <- bind_cols(deer, dat_deer)
+deer <- bind_cols(deer, deer_xy) %>% select(DeerID:ID,X,Y,uplandforest:roads)
 
+pigs_xy <- st_coordinates(pigs)
 pigs <- st_drop_geometry(pigs)
 pigs <- bind_cols(pigs, dat_pigs)
+pigs <- bind_cols(pigs, pigs_xy) %>% select(PigID:ID,X,Y,uplandforest:roads)
 
 # Check correlations
-cor(deer[,4:13])
-cor(pigs[,4:13])
+cor(deer[,6:18])
+cor(pigs[,6:18])
 
 ## Deer
 # Add a year column (split out ID)

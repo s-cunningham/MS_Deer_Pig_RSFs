@@ -104,6 +104,9 @@ pigs <- st_as_sf(pigs, coords=c("Long", "Lat"), crs=4326)
 pigs <- st_intersection(pigs, ms)
 pigs <- pigs %>% st_transform(crs=32616)
 
+# st_write(pigs[,1:3], "data/location_data/pig_GPS_locations_all.shp", append=FALSE)
+
+
 # Convert back to non-spatial object
 xy <- st_coordinates(pigs) %>% as_tibble()
 pigs <- st_drop_geometry(pigs)

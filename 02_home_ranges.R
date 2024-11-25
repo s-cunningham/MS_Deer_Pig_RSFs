@@ -44,15 +44,16 @@ for (i in 1:length(un.id)) {
   # plot(r1)
 
   # Add ID to each location
-  r1 <- r1 %>% mutate(DeerID=un.id[i])
-  
+  r1 <- r1 %>% mutate(DeerID=un.id[i], 
+                      burst=unique(dat$burst_))
+
   # Save random points
   avail <- bind_rows(avail, r1)
   
 }
 
-deer_res <- deer_res %>% rename(DeerID=id, X=x_, Y=y_) %>% 
-          select(DeerID, X, Y) %>%
+deer_res <- deer_res %>% rename(DeerID=id, X=x_, Y=y_, burst=burst_) %>% 
+          select(DeerID, X, Y, burst) %>%
           mutate(type=1) %>% as_tibble()
 
 avail <- avail %>% as_tibble() %>% 
