@@ -22,6 +22,7 @@ range(trk_info$mean)
 un.id <- unique(deer$DeerID)
 avail <- data.frame()
 deer_res <- data.frame()
+size <- data.frame()
 for (i in 1:length(un.id)) {
   
   # Filter to ID
@@ -37,23 +38,31 @@ for (i in 1:length(un.id)) {
   trast <- make_trast(dat, res=10)
 
   # Create HR
-  hr_deer <- hr_kde(dat, trast=trast, level=0.95)
-
+  hr_deer <- hr_akde(dat, trast=trast, level=0.95)
+ 
+  # Calculate HR area
+  area <- hr_deer %>% hr_area() %>% mutate(areakm2=area/(1000^2)) %>%
+              select(-level, -area) %>%
+              pivot_wider(names_from = "what", values_from="areakm2")
+  
   # Generate random points
   r1 <- random_points(hr_deer, n = 5*nrow(dat)) 
   # plot(r1)
 
   # Add ID to each location
-  r1 <- r1 %>% mutate(DeerID=un.id[i], 
-                      burst=unique(dat$burst_))
+  r1 <- r1 %>% mutate(DeerID=un.id[i])
 
   # Save random points
   avail <- bind_rows(avail, r1)
   
+  # Save HR area
+  area$DeerID <- un.id[i]
+  size <- bind_rows(size, area)
+  
 }
 
-deer_res <- deer_res %>% rename(DeerID=id, X=x_, Y=y_, burst=burst_) %>% 
-          select(DeerID, X, Y, burst) %>%
+deer_res <- deer_res %>% rename(DeerID=id, X=x_, Y=y_) %>% 
+          select(DeerID, X, Y) %>%
           mutate(type=1) %>% as_tibble()
 
 avail <- avail %>% as_tibble() %>% 
@@ -64,7 +73,7 @@ avail <- avail %>% as_tibble() %>%
 all <- bind_rows(deer_res, avail)
 
 write_csv(all, "data/location_data/deer_used_avail.csv")
-
+write_csv(size, "data/location_data/deer_est_akde_homeranges.csv")
 
 #### Pigs ####
 set.seed(1)
@@ -103,7 +112,12 @@ for (i in 1:length(un.id)) {
   trast <- make_trast(dat, res=10)
   
   # Create HR
-  hr_pigs <- hr_kde(dat, trast=trast, level=0.95)
+  hr_pigs <- hr_akde(dat, trast=trast, level=0.95)
+  
+  # Calculate HR area
+  area <- hr_pigs %>% hr_area() %>% mutate(areakm2=area/(1000^2)) %>%
+    select(-level, -area) %>%
+    pivot_wider(names_from = "what", values_from="areakm2")
   
   # Generate random points
   r1 <- random_points(hr_pigs, n = 5*nrow(dat)) 
@@ -115,6 +129,9 @@ for (i in 1:length(un.id)) {
   # Save random points
   avail <- bind_rows(avail, r1)
   
+  # Save HR area
+  area$PigID <- un.id[i]
+  size <- bind_rows(size, area)
 }
 
 pigs_res <- pigs_res %>% rename(PigID=id, X=x_, Y=y_) %>% 
@@ -129,3 +146,4 @@ avail <- avail %>% as_tibble() %>%
 all <- bind_rows(pigs_res, avail)
 
 write_csv(all, "data/location_data/pigs_used_avail.csv")
+write_csv(size, "data/location_data/pigs_est_akde_homeranges.csv")
