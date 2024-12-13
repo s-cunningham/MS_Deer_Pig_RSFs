@@ -97,6 +97,7 @@ range(trk_info$mean)
 un.id <- unique(pigs$PigID)
 avail <- data.frame()
 pigs_res <- data.frame()
+size <- data.frame()
 for (i in 1:length(un.id)) {
   
   # Filter to ID

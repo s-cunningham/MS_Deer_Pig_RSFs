@@ -23,4 +23,4 @@ ndvi_w <- ifel(ndvi_w < 0, 0, ndvi_w)
 ndvi_s <- ifel(ndvi_s < 0, 0, ndvi_s)
 
 writeRaster(ndvi_w, "data/landscape_data/ndvi5year_jan1.tif", overwrite=TRUE)
-writeRaster(ndvi_w, "data/landscape_data/ndvi5year_jun10.tif", overwrite=TRUE)
+writeRaster(ndvi_s, "data/landscape_data/ndvi5year_jun10.tif", overwrite=TRUE)

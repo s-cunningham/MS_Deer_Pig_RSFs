@@ -19,8 +19,17 @@ pigs <- st_transform(pigs, crs=5070)
 # deer_buff <- deer %>% st_buffer(100) %>% st_as_sf()
 
 ## Load rasters
+ms_full <- vect("data/landscape_data/mississippi_ACEA.shp") 
+ms_buff <- vect("data/landscape_data/mississippi_ACEA_50kmbuffer.shp")
+
+deer_buffer <- vect("data/landscape_data/deer_10km_buffers.shp")
+pigs_buffer <- vect("data/landscape_data/PigsGPS_10kmBuffer.shp")
+
+## Load rasters
 rast_list <- c("data/landscape_data/distance_to_upland90m.tif",
+               "data/landscape_data/distance_to_decid_mixed90m.tif",
                "data/landscape_data/distance_to_herbaceous90m.tif",
+               "data/landscape_data/distance_to_evergreen90m.tif",
                "data/landscape_data/distance_to_bottomlandhw90m.tif",
                "data/landscape_data/distance_to_openwater90m.tif",
                "data/landscape_data/distance_to_allforest90m.tif")
@@ -34,7 +43,7 @@ ndvi_w  <- resample(ndvi_w, layers, method="bilinear")
 layers <- c(layers, ndvi_w)
 
 # summer
-ndvi_s <- rast("data/landscape_data/ndvi5year_jun10.tif") 
+ndvi_s <- rast("data/landscape_data/ndvi5year_jun10.tif")
 ndvi_s <- project(ndvi_s, crs(layers))
 ndvi_s  <- resample(ndvi_s, layers, method="bilinear")
 layers <- c(layers, ndvi_s)
@@ -72,11 +81,62 @@ ext(roads) <- ext(layers)
 roads <- resample(roads, layers)
 roads <- mask(roads, layers[[1]])
 
+## Soil properties
+fc <- rast("data/landscape_data/fc_gNATSGO_MS50km_WGS84.tif")
+fc <- project(fc, crs(layers))
+fc <- resample(fc, layers, method="bilinear")
+por <- rast("data/landscape_data/por_gNATSGO_MS50km_WGS84.tif") 
+por <- project(por, crs(layers))
+por <- resample(por, layers, method="bilinear")
+awc <- rast("data/landscape_data/awc_gNATSGO_MS50km_WGS84.tif")
+awc <- project(awc, crs(layers))
+awc <- resample(awc, layers, method="bilinear")
+
+layers <- c(layers, fc, por, awc)
+
+## Net primary productivity
+npp <- rast("data/landscape_data/2017-2023averageNPP_wgs84.tif")
+npp <- project(npp, crs(layers))
+npp <- resample(npp, layers, method="bilinear")
+
 # Add to raster stack
-layers <- c(layers, gpw, roads)
+layers <- c(layers, gpw, roads, npp)
+
+## Percentage layers
+pct_layers <- c("data/landscape_data/ms50km_pct_herbaceous_1pt5km.tif",
+                "data/landscape_data/ms50km_pct_decidmixed_1pt5km.tif",
+                "data/landscape_data/ms50km_pct_evergreen_1pt5km.tif",
+                "data/landscape_data/ms50km_pct_bottomlandhw_1pt5km.tif",
+                "data/landscape_data/ms50km_pct_medhighDevelopment_1pt5km.tif",
+                "data/landscape_data/ms50km_pct_openWater_1pt5km.tif")
+pct_layers <- rast(pct_layers)
+pct_crops <- rast("data/landscape_data/ms50km_pct_foodcrops_1pt5km.tif")
+pct_crops <- project(pct_crops, pct_layers)
+pct_layers <- c(pct_layers, pct_crops)
+
+pct_layers <- resample(pct_layers, layers, method="bilinear")
+
+# Reclassify missing data to 0
+m <- rbind(c(NA, 0))
+pct_layers <- classify(pct_layers, m)
+pct_layers <- mask(pct_layers, ms_buff)
+
+
+layers <- c(layers, pct_layers)
+
 
 layers <- scale(layers)
-names(layers) <- c("uplandforest", "grassland", "bottomlandhw", "water", "allforest", "ndvi_w", "ndvi_s", "foodcrops", "plantations", "streams", "tcc", "pop_density", "roads")
+names(layers) <- c("uplandforest", "decidmixed", "grassland", "evergreen", "bottomlandhw", "water", "allforest", "ndvi_w", "ndvi_s", "foodcrops",
+                   "plantations", "streams", "tcc", "fc", "por", "awc", "pop_density", "roads", "npp", "pctHerbaceous", "pctDecidMixed", 
+                   "pctEvergreen", "pctBottomland", "pctDevelopment", "pctWater", "pctCrops")
+
+
+# library(tidyterra)
+# ggplot() +
+#   # geom_spatraster(data=layers["ndvi_w"]) +
+#   geom_spatraster(data=layers["awc"]) +
+#   geom_sf(data=ms_full, fill=NA, color="gray80") +
+#   theme_bw()
 
 # Extract distance values at used and available locations
 dat_deer <- extract(layers, deer)
@@ -86,16 +146,16 @@ dat_pigs <- extract(layers, pigs)
 deer_xy <- st_coordinates(deer)
 deer <- st_drop_geometry(deer)
 deer <- bind_cols(deer, dat_deer)
-deer <- bind_cols(deer, deer_xy) %>% select(DeerID:ID,X,Y,uplandforest:roads)
+deer <- bind_cols(deer, deer_xy) %>% select(DeerID:ID,X,Y,uplandforest:pctCrops)
 
 pigs_xy <- st_coordinates(pigs)
 pigs <- st_drop_geometry(pigs)
 pigs <- bind_cols(pigs, dat_pigs)
-pigs <- bind_cols(pigs, pigs_xy) %>% select(PigID:ID,X,Y,uplandforest:roads)
+pigs <- bind_cols(pigs, pigs_xy) %>% select(PigID:ID,X,Y,uplandforest:pctCrops)
 
 # Check correlations
-cor(deer[,6:18])
-cor(pigs[,6:18])
+cor(deer[,6:31])
+cor(pigs[,6:31])
 
 ## Deer
 # Add a year column (split out ID)
