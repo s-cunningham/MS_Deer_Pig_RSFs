@@ -131,22 +131,35 @@ names(layers) <- c("uplandforest", "decidmixed", "grassland", "evergreen", "bott
                    "pctEvergreen", "pctBottomland", "pctDevelopment", "pctWater", "pctCrops")
 
 
-# library(tidyterra)
-# ggplot() +
-#   # geom_spatraster(data=layers["ndvi_w"]) +
-#   geom_spatraster(data=layers["awc"]) +
-#   geom_sf(data=ms_full, fill=NA, color="gray80") +
-#   theme_bw()
+### high res pct rasters
+# new_pct <- c("data/landscape_data/500m_pct_HerbShrubPast.tif",
+#              "data/landscape_data/500m_pct_CultCrops.tif",
+#              "data/landscape_data/500m_pct_Bottomlands.tif",
+#              "data/landscape_data/500m_pct_Evergreen.tif",
+#              "data/landscape_data/500m_pct_DecidMixed.tif",
+#              "data/landscape_data/500m_pct_Water.tif")
+# new_pct <- rast(new_pct)
+# 
+# m <- rbind(c(NA, 0))
+# new_pct <- classify(new_pct, m)
+# new_pct <- mask(new_pct, ms_buff)
+# 
+# new_pct <- scale(new_pct)
+# names(new_pct) <- c("HerbShrubPast", "CultCrops", "Bottomlands", "Evergreen", "DecidMixed", "Water")
+# 
+
 
 # Extract distance values at used and available locations
 dat_deer <- extract(layers, deer)
-dat_pigs <- extract(layers, pigs)
+# dat_deer <- extract(new_pct, deer)
+# dat_pigs <- extract(layers, pigs)
 
 # Combine spatial data with points
 deer_xy <- st_coordinates(deer)
 deer <- st_drop_geometry(deer)
 deer <- bind_cols(deer, dat_deer)
 deer <- bind_cols(deer, deer_xy) %>% select(DeerID:ID,X,Y,uplandforest:pctCrops)
+# deer <- bind_cols(deer, deer_xy) %>% select(DeerID:ID,X,Y,HerbShrubPast:Water)
 
 pigs_xy <- st_coordinates(pigs)
 pigs <- st_drop_geometry(pigs)
@@ -154,6 +167,7 @@ pigs <- bind_cols(pigs, dat_pigs)
 pigs <- bind_cols(pigs, pigs_xy) %>% select(PigID:ID,X,Y,uplandforest:pctCrops)
 
 # Check correlations
+# cor(deer[,6:31])
 cor(deer[,6:31])
 cor(pigs[,6:31])
 

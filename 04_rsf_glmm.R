@@ -116,7 +116,24 @@ layers <- c(layers, pct_layers)
 layers <- scale(layers)
 names(layers) <- c("uplandforest", "decidmixed", "grassland", "evergreen", "bottomlandhw", "water", "allforest", "ndvi_w", "ndvi_s", "foodcrops",
                    "plantations", "streams", "tcc", "fc", "por", "awc", "pop_density", "roads", "npp", "pctHerbaceous", "pctDecidMixed", 
-                   "pctEvergreen", "pctFoodcrops", "pctBottomlandhw", "pctDevelopment")
+                   "pctEvergreen", "pctBottomland", "pctDevelopment", "pctWater", "pctCrops")
+
+## high res pct rasters
+# new_pct <- c("data/landscape_data/500m_pct_HerbShrubPast.tif",
+#              "data/landscape_data/500m_pct_CultCrops.tif",
+#              "data/landscape_data/500m_pct_Bottomlands.tif",
+#              "data/landscape_data/500m_pct_Evergreen.tif",
+#              "data/landscape_data/500m_pct_DecidMixed.tif",
+#              "data/landscape_data/500m_pct_Water.tif")
+# new_pct <- rast(new_pct)
+# 
+# m <- rbind(c(NA, 0))
+# new_pct <- classify(new_pct, m)
+# new_pct <- mask(new_pct, ms_buff)
+# 
+# new_pct <- scale(new_pct)
+# names(new_pct) <- c("HerbShrubPast", "CultCrops", "Bottomlands", "Evergreen", "DecidMixed", "Water")
+# 
 
 #### Load data ####
 ## Load deer, add 5-fold label
@@ -136,25 +153,75 @@ npts <- npts %>% select(-n)
 pigs <- left_join(pigs, npts, by="PigID")
 
 #### Create habitat map ####
+temp_rast <- rast("data/landscape_data/template_1pt5km_raster.tif")
 set.seed(1)
 
-m1 <- glmer(type ~ pctHerbaceous + pctDecidMixed + pctEvergreen + pctCrops + pctBottomland + pctDevelopment + pctWater + (1|DeerID), data=deer, family=binomial(link = "logit"))
-deer_layers <- c(layers["pctHerbaceous"],  layers["pctDecidMixed"], layers["pctEvergreen"], 
-                 layers["pctCrops"], layers["pctBottomland"], layers["pctDevelopment"], layers["pctWater"]) #layers["fc"], layers["por"], layers["awc"],
+m1 <- glmer(type ~ pctHerbaceous + pctDecidMixed + pctCrops + pctBottomland + pctEvergreen + pctWater + (1|DeerID), data=deer, family=binomial(link = "logit"))
+deer_layers <- c(layers["pctHerbaceous"],  layers["pctDecidMixed"], layers["pctCrops"], 
+                 layers["pctBottomland"], layers["pctEvergreen"], layers["pctWater"]) #layers["fc"], layers["por"], layers["awc"],
 
 pred_deer <- predict(deer_layers, m1, type="response", re.form = NA)
 pred_deer <- mask(pred_deer, ms_full)
-pred_deer <- pred_deer/ minmax(pred_deer)[2]
+
+# Rescale to be between 0 and 1
+pred_deer <- (pred_deer-minmax(pred_deer)[1])/(minmax(pred_deer)[2]-minmax(pred_deer)[1])
 plot(pred_deer)
 
 
+
+# Resample to 1.5 x 1.5 km for RAMAS
 pred_deer <- resample(pred_deer, temp_rast)
 pred_deer <- mask(pred_deer, ms_full)
 pred_deer <- crop(pred_deer, ext(ms_full))
-# pred_deer <- pred_deer/ minmax(pred_deer)[2]
 plot(pred_deer)
+
+# Reclassify missing data to 0
+m <- rbind(c(NA, 0))
+pred_deer <- classify(pred_deer, m)
+
 
 writeRaster(pred_deer, "data/predictions/deer_glmm_rsf_FINALFINALFINAL.tif", overwrite=TRUE)
 writeRaster(pred_deer, "data/predictions/deer_glmm_rsf_FINALFINALFINAL.asc",NAflag=-9999, overwrite=TRUE)
+
+all_vals <- as.data.frame(pred_deer)
+range(all_vals$lyr1)
+mean(all_vals$lyr1)
+
+## Extract RSF predictions at each location
+deer_test <- deer %>% select(DeerID:Y)
+
+dat_deer <- extract(pred_deer, deer_test[,c(4:5)])
+
+deer_test$rsf <- dat_deer$lyr1
+
+hist(deer_test$rsf[deer_test$type==1], xlim=c(0,1))
+hist(deer_test$rsf[deer_test$type==0], xlim=c(0,1))
+
+min(deer_test$rsf[deer_test$type==1], na.rm=TRUE)
+mean(deer_test$rsf[deer_test$type==1], na.rm=TRUE)
+
+
+#### Pig map
+pigs_rsf <- glmer(type ~ bottomlandhw + uplandforest + foodcrops + roads + streams + (1|PigID), data=pigs, family=binomial(link = "logit"))
+pig_layers <- c(layers["bott"],  layers["pctDecidMixed"], 
+                 layers["pctCrops"], layers["pctBottomland"], layers["pctDevelopment"], layers["pctWater"])
+
+pred_pigs <- predict(pig_layers, pigs_m, type="response", re.form = NA)
+pred_pigs <- mask(pred_pigs, ms_full)
+pred_pigs <- pred_pigs/ minmax(pred_pigs)[2]
+plot(pred_pigs)
+
+pred_pigs <- resample(pred_pigs, temp_rast)
+pred_pigs <- mask(pred_pigs, ms_full)
+pred_pigs <- crop(pred_pigs, ext(ms_full))
+plot(pred_pigs)
+
+writeRaster(pred_pigs, "data/predictions/pigs_glmm_rsf_FINALFINALFINAL.tif", overwrite=TRUE)
+writeRaster(pred_pigs, "data/predictions/pigs_glmm_rsf_FINALFINALFINAL.asc",NAflag=-9999, overwrite=TRUE)
+
+
+
+
+
 
 
