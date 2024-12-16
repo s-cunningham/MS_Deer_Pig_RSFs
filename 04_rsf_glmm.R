@@ -156,18 +156,20 @@ pigs <- left_join(pigs, npts, by="PigID")
 temp_rast <- rast("data/landscape_data/template_1pt5km_raster.tif")
 set.seed(1)
 
+# Run model
 m1 <- glmer(type ~ pctHerbaceous + pctDecidMixed + pctCrops + pctBottomland + pctEvergreen + pctWater + (1|DeerID), data=deer, family=binomial(link = "logit"))
+
+# Predict
 deer_layers <- c(layers["pctHerbaceous"],  layers["pctDecidMixed"], layers["pctCrops"], 
                  layers["pctBottomland"], layers["pctEvergreen"], layers["pctWater"]) #layers["fc"], layers["por"], layers["awc"],
-
 pred_deer <- predict(deer_layers, m1, type="response", re.form = NA)
+
+# Mask to Mississippi
 pred_deer <- mask(pred_deer, ms_full)
 
 # Rescale to be between 0 and 1
 pred_deer <- (pred_deer-minmax(pred_deer)[1])/(minmax(pred_deer)[2]-minmax(pred_deer)[1])
 plot(pred_deer)
-
-
 
 # Resample to 1.5 x 1.5 km for RAMAS
 pred_deer <- resample(pred_deer, temp_rast)
@@ -200,24 +202,84 @@ hist(deer_test$rsf[deer_test$type==0], xlim=c(0,1))
 min(deer_test$rsf[deer_test$type==1], na.rm=TRUE)
 mean(deer_test$rsf[deer_test$type==1], na.rm=TRUE)
 
+thresh <- seq(0,1,by=0.05)
+res <- matrix(NA, ncol=3, nrow=length(thresh))
+res[,1] <- thresh
+for (i in 1:length(thresh)) {
+  
+  actu <- factor(deer_test$type, levels=c(0,1))
+  pred <- factor(if_else(deer_test$rsf >= thresh[i], 1, 0), levels=c(0,1))
+  
+  res[i,2] <- caret::sensitivity(pred, actu)
+  res[i,3] <- caret::specificity(pred, actu)
+}
+
+res <- res %>% as.data.frame() 
+names(res) <- c("Threshold", "Sensitivity", "Specificity")
+res <- res %>% mutate(TSS = Sensitivity + Specificity - 1)
+
+res %>% slice_max(TSS)
+
+quantile(deer_test$rsf, probs=c(0.25, 0.5, 0.75))
 
 #### Pig map
 pigs_rsf <- glmer(type ~ bottomlandhw + uplandforest + foodcrops + roads + streams + (1|PigID), data=pigs, family=binomial(link = "logit"))
-pig_layers <- c(layers["bott"],  layers["pctDecidMixed"], 
-                 layers["pctCrops"], layers["pctBottomland"], layers["pctDevelopment"], layers["pctWater"])
+# pigs_rsf <- glmer(type ~ pctDecidMixed + pctCrops + pctBottomland + roads + streams + (1|PigID), data=pigs, family=binomial(link = "logit"))
 
-pred_pigs <- predict(pig_layers, pigs_m, type="response", re.form = NA)
+# Predict across Mississippi
+pig_layers <- c(layers["bottomlandhw"],  layers["uplandforest"], layers["foodcrops"], layers["roads"], layers["streams"])
+# pig_layers <- c(layers["pctDecidMixed"],  layers["pctCrops"], layers["pctBottomland"], layers["roads"], layers["streams"])
+pred_pigs <- predict(pig_layers, pigs_rsf, type="response", re.form = NA)
+
+# Mask to state
 pred_pigs <- mask(pred_pigs, ms_full)
-pred_pigs <- pred_pigs/ minmax(pred_pigs)[2]
+
+# Rescale to be between 0 and 1
+pred_pigs <- (pred_pigs-minmax(pred_pigs)[1])/(minmax(pred_pigs)[2]-minmax(pred_pigs)[1])
 plot(pred_pigs)
 
+# Resample and crop rows of NAs
 pred_pigs <- resample(pred_pigs, temp_rast)
 pred_pigs <- mask(pred_pigs, ms_full)
 pred_pigs <- crop(pred_pigs, ext(ms_full))
 plot(pred_pigs)
 
+# Reclassify missing data to 0
+m <- rbind(c(NA, 0))
+pred_pigs <- classify(pred_pigs, m)
+
+
+# Save tif for viewing in ArcGIS, and ASCII for reading into RAMAS
 writeRaster(pred_pigs, "data/predictions/pigs_glmm_rsf_FINALFINALFINAL.tif", overwrite=TRUE)
-writeRaster(pred_pigs, "data/predictions/pigs_glmm_rsf_FINALFINALFINAL.asc",NAflag=-9999, overwrite=TRUE)
+writeRaster(pred_pigs, "data/predictions/pigs_glmm_rsf_FINALFINALFINAL.asc", NAflag=-9999, overwrite=TRUE)
+
+
+m <- rbind(c(0,NA))
+pig_map <- classify(pred_pigs, m)
+deer_map <- classify(pred_deer, m)
+
+pm <- ggplot() +
+  geom_spatraster(data=pig_map) +
+  scale_fill_whitebox_c(palette="viridi", na.value="transparent", limits=c(0,1), name="Habitat\nPreference") +
+  ggtitle("Wild Pigs") +
+  theme_bw() +
+  theme(legend.position = "none")
+
+dm <- ggplot() +
+  geom_spatraster(data=deer_map) +
+  scale_fill_whitebox_c(palette="viridi", na.value="transparent", limits=c(0,1), name="Habitat\nPreference") +
+  ggtitle("White-tailed Deer") +
+  theme_bw() +
+  theme(legend.title=element_text(size=11),
+        legend.text=element_text(size=10))
+
+library(patchwork)
+dm | pm
+ggsave(filename="figs/rsf_plots.svg")
+
+
+
+
 
 
 
