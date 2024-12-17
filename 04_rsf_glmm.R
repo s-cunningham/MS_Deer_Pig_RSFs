@@ -167,20 +167,19 @@ pred_deer <- predict(deer_layers, m1, type="response", re.form = NA)
 # Mask to Mississippi
 pred_deer <- mask(pred_deer, ms_full)
 
-# Rescale to be between 0 and 1
-pred_deer <- (pred_deer-minmax(pred_deer)[1])/(minmax(pred_deer)[2]-minmax(pred_deer)[1])
-plot(pred_deer)
-
 # Resample to 1.5 x 1.5 km for RAMAS
 pred_deer <- resample(pred_deer, temp_rast)
 pred_deer <- mask(pred_deer, ms_full)
 pred_deer <- crop(pred_deer, ext(ms_full))
 plot(pred_deer)
 
+# Rescale to be between 0 and 1
+pred_deer <- (pred_deer-minmax(pred_deer)[1])/(minmax(pred_deer)[2]-minmax(pred_deer)[1])
+plot(pred_deer)
+
 # Reclassify missing data to 0
 m <- rbind(c(NA, 0))
 pred_deer <- classify(pred_deer, m)
-
 
 writeRaster(pred_deer, "data/predictions/deer_glmm_rsf_FINALFINALFINAL.tif", overwrite=TRUE)
 writeRaster(pred_deer, "data/predictions/deer_glmm_rsf_FINALFINALFINAL.asc",NAflag=-9999, overwrite=TRUE)
@@ -234,14 +233,15 @@ pred_pigs <- predict(pig_layers, pigs_rsf, type="response", re.form = NA)
 # Mask to state
 pred_pigs <- mask(pred_pigs, ms_full)
 
-# Rescale to be between 0 and 1
-pred_pigs <- (pred_pigs-minmax(pred_pigs)[1])/(minmax(pred_pigs)[2]-minmax(pred_pigs)[1])
-plot(pred_pigs)
-
 # Resample and crop rows of NAs
 pred_pigs <- resample(pred_pigs, temp_rast)
 pred_pigs <- mask(pred_pigs, ms_full)
 pred_pigs <- crop(pred_pigs, ext(ms_full))
+plot(pred_pigs)
+
+# Rescale to be between 0 and 1
+# pred_pigs <- pred_pigs/minmax(pred_pigs)[2]
+pred_pigs <- (pred_pigs-minmax(pred_pigs)[1])/(minmax(pred_pigs)[2]-minmax(pred_pigs)[1])
 plot(pred_pigs)
 
 # Reclassify missing data to 0
