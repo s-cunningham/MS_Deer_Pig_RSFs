@@ -133,7 +133,7 @@ names(layers) <- c("uplandforest", "decidmixed", "grassland", "evergreen", "bott
 # 
 # new_pct <- scale(new_pct)
 # names(new_pct) <- c("HerbShrubPast", "CultCrops", "Bottomlands", "Evergreen", "DecidMixed", "Water")
-# 
+
 
 #### Load data ####
 ## Load deer, add 5-fold label
@@ -152,12 +152,13 @@ npts$folds <- sample(1:5, length(unique(npts$PigID)), replace=TRUE)
 npts <- npts %>% select(-n)
 pigs <- left_join(pigs, npts, by="PigID")
 
-#### Create habitat map ####
+#### Create habitat map for deer ####
 temp_rast <- rast("data/landscape_data/template_1pt5km_raster.tif")
 set.seed(1)
 
 # Run model
-m1 <- glmer(type ~ pctHerbaceous + pctDecidMixed + pctCrops + pctBottomland + pctEvergreen + pctWater + (1|DeerID), data=deer, family=binomial(link = "logit"))
+m1 <- glmer(type ~ HerbShrubPast + CultCrops + Bottomlands + DecidMixed + Evergreen + Water + (1|DeerID), data=deer, family=binomial(link = "logit"))
+# m1 <- glmer(type ~ pctHerbaceous + pctDecidMixed + pctCrops + pctBottomland + pctEvergreen + pctWater + (1|DeerID), data=deer, family=binomial(link = "logit"))
 
 # Predict
 deer_layers <- c(layers["pctHerbaceous"],  layers["pctDecidMixed"], layers["pctCrops"], 
@@ -201,6 +202,9 @@ hist(deer_test$rsf[deer_test$type==0], xlim=c(0,1))
 min(deer_test$rsf[deer_test$type==1], na.rm=TRUE)
 mean(deer_test$rsf[deer_test$type==1], na.rm=TRUE)
 
+quantile(deer_test$rsf[deer_test$type==1], probs=c(0.25,0.5,0.75, 0.95))
+
+
 thresh <- seq(0,1,by=0.05)
 res <- matrix(NA, ncol=3, nrow=length(thresh))
 res[,1] <- thresh
@@ -221,17 +225,20 @@ res %>% slice_max(TSS)
 
 quantile(deer_test$rsf, probs=c(0.25, 0.5, 0.75))
 
-#### Pig map
-pigs_rsf <- glmer(type ~ bottomlandhw + uplandforest + foodcrops + roads + streams + (1|PigID), data=pigs, family=binomial(link = "logit"))
+#### Pig map ####
+pigs_rsf <- glmer(type ~ bottomlandhw + uplandforest + foodcrops + roads + streams + pop_density + (1|PigID), data=pigs, family=binomial(link = "logit"))
 # pigs_rsf <- glmer(type ~ pctDecidMixed + pctCrops + pctBottomland + roads + streams + (1|PigID), data=pigs, family=binomial(link = "logit"))
 
 # Predict across Mississippi
-pig_layers <- c(layers["bottomlandhw"],  layers["uplandforest"], layers["foodcrops"], layers["roads"], layers["streams"])
+pig_layers <- c(layers["bottomlandhw"],  layers["uplandforest"], layers["foodcrops"], layers["roads"], layers["streams"], layers["pop_density"])
 # pig_layers <- c(layers["pctDecidMixed"],  layers["pctCrops"], layers["pctBottomland"], layers["roads"], layers["streams"])
 pred_pigs <- predict(pig_layers, pigs_rsf, type="response", re.form = NA)
 
 # Mask to state
 pred_pigs <- mask(pred_pigs, ms_full)
+
+# create template 1 km x 1 km raster 
+temp_rast <- rast(ext(ms_full), resolution=1000) 
 
 # Resample and crop rows of NAs
 pred_pigs <- resample(pred_pigs, temp_rast)
@@ -247,16 +254,55 @@ plot(pred_pigs)
 # Reclassify missing data to 0
 m <- rbind(c(NA, 0))
 pred_pigs <- classify(pred_pigs, m)
-
+plot(pred_pigs)
 
 # Save tif for viewing in ArcGIS, and ASCII for reading into RAMAS
-writeRaster(pred_pigs, "data/predictions/pigs_glmm_rsf_FINALFINALFINAL.tif", overwrite=TRUE)
-writeRaster(pred_pigs, "data/predictions/pigs_glmm_rsf_FINALFINALFINAL.asc", NAflag=-9999, overwrite=TRUE)
+writeRaster(pred_pigs, "data/predictions/pigs_glmm_rsf_FINALFINALFINALFINAL.tif", overwrite=TRUE)
+writeRaster(pred_pigs, "data/predictions/pigs_glmm_rsf_FINALFINALFINALFINAL.asc", NAflag=-9999, overwrite=TRUE)
+
+## Extract RSF predictions at each location
+pig_test <- pigs %>% select(PigID:Y)
+
+dat_pig <- extract(pred_pigs, pig_test[,c(4:5)])
+
+pig_test$rsf <- dat_pig$lyr1
+
+plot(density(pig_test$rsf[pig_test$type==0]), xlim=c(0,1))
+plot(density(pig_test$rsf[pig_test$type==1]), xlim=c(0,1))
+hist(pig_test$rsf[pig_test$type==1], xlim=c(0,1))
+hist(pig_test$rsf[pig_test$type==0], xlim=c(0,1))
+
+min(pig_test$rsf[pig_test$type==1], na.rm=TRUE)
+mean(pig_test$rsf[pig_test$type==1], na.rm=TRUE)
+
+quantile(pig_test$rsf, probs=c(0.25, 0.5, 0.75))
 
 
-m <- rbind(c(0,NA))
-pig_map <- classify(pred_pigs, m)
-deer_map <- classify(pred_deer, m)
+thresh <- seq(0,1,by=0.05)
+res <- matrix(NA, ncol=3, nrow=length(thresh))
+res[,1] <- thresh
+for (i in 1:length(thresh)) {
+  
+  actu <- factor(pig_test$type, levels=c(0,1))
+  pred <- factor(if_else(pig_test$rsf >= thresh[i], 1, 0), levels=c(0,1))
+  
+  res[i,2] <- caret::sensitivity(pred, actu)
+  res[i,3] <- caret::specificity(pred, actu)
+}
+
+res <- res %>% as.data.frame() 
+names(res) <- c("Threshold", "Sensitivity", "Specificity")
+res <- res %>% mutate(TSS = Sensitivity + Specificity - 1)
+
+res %>% slice_max(TSS)
+
+
+
+## Replace 0 with NA for plot
+# m <- rbind(c(0,NA))
+# pig_map <- classify(pred_pigs, m)
+# deer_map <- classify(pred_deer, m)
+pred_pigs <- mask(pred_pigs, ms_full)
 
 pm <- ggplot() +
   geom_spatraster(data=pig_map) +

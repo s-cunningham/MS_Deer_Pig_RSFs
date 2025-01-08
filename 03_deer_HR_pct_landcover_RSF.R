@@ -73,7 +73,7 @@ pred_deer <- predict(layers, m1, type="response", re.form = NA)
 # Mask to Mississippi
 pred_deer <- mask(pred_deer, ms_full)
 
-# Resample to 1.5 x 1.5 km for RAMAS
+# Resample to 1 x 1 km for RAMAS
 pred_deer <- resample(pred_deer, temp_rast)
 pred_deer <- mask(pred_deer, ms_full)
 pred_deer <- crop(pred_deer, ext(ms_full))
@@ -113,5 +113,22 @@ median(deer_test$rsf[deer_test$type==1], na.rm=TRUE)
 quantile(deer_test$rsf[deer_test$type==1], probs=c(0.25,0.5,0.75, 0.95))
 
 
+thresh <- seq(0,1,by=0.05)
+res <- matrix(NA, ncol=3, nrow=length(thresh))
+res[,1] <- thresh
+for (i in 1:length(thresh)) {
+  
+  actu <- factor(pig_test$type, levels=c(0,1))
+  pred <- factor(if_else(pig_test$rsf >= thresh[i], 1, 0), levels=c(0,1))
+  
+  res[i,2] <- caret::sensitivity(pred, actu)
+  res[i,3] <- caret::specificity(pred, actu)
+}
+
+res <- res %>% as.data.frame() 
+names(res) <- c("Threshold", "Sensitivity", "Specificity")
+res <- res %>% mutate(TSS = Sensitivity + Specificity - 1)
+
+res %>% slice_max(TSS)
 
 
