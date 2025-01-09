@@ -128,6 +128,8 @@ size <- size %>% filter(!(DeerID %in% short$DeerID))
 write_csv(all, "data/location_data/deer_used_avail.csv")
 write_csv(size, "data/location_data/deer_est_akde_homeranges.csv")
 
+all <- read_csv("data/location_data/deer_used_avail.csv")
+
 #### Pigs ####
 set.seed(1)
 # Read in deer location data
@@ -155,9 +157,18 @@ for (i in 1:length(un.id)) {
   
   # Filter to ID
   dat <- pigs_tr %>% filter(id==un.id[i])
-  
+
   # Filter all locations to ~4 hours
   dat <- track_resample(dat, rate=hours(4), tolerance=minutes(5))
+  
+  # dat <- dat %>% mutate(month=as.numeric(format(t_, "%m")))
+  # ggplot(dat) +
+  #   geom_path(aes(x=x_, y=y_, color=month)) +
+  #   geom_point(aes(x=x_, y=y_, color=month)) 
+  # 
+  # ggplot(dat) +
+  #   geom_line(aes(x=t_, y=y_))
+  
   
   # Save resampled data
   pigs_res <- bind_rows(pigs_res, dat)
@@ -213,5 +224,5 @@ size <- size %>% filter(!(PigID %in% short$PigID))
 write_csv(all, "data/location_data/pigs_used_avail.csv")
 write_csv(size, "data/location_data/pigs_est_akde_homeranges.csv")
 
-hr <- read_csv("data/location_data/pigs_est_akde_homeranges.csv")
+
 
