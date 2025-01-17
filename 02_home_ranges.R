@@ -1,6 +1,6 @@
 library(tidyverse)
 library(amt)
-# library(sf)
+library(sf)
 
 #### Deer ####
 set.seed(1)
@@ -130,6 +130,11 @@ write_csv(size, "data/location_data/deer_est_akde_homeranges.csv")
 
 all <- read_csv("data/location_data/deer_used_avail.csv")
 
+
+deer_sf <- all %>% filter(type==1) %>% separate("DeerID", into=c("ID", "study", "year"), remove=FALSE) %>%
+              st_as_sf(coords=c("X", "Y"), crs=32616)
+st_write(deer_sf, "data/location_data/filtered_deer_locations.shp")
+
 #### Pigs ####
 set.seed(1)
 # Read in deer location data
@@ -225,4 +230,7 @@ write_csv(all, "data/location_data/pigs_used_avail.csv")
 write_csv(size, "data/location_data/pigs_est_akde_homeranges.csv")
 
 
+pig_sf <- all %>% filter(type==1) %>% separate("PigID", into=c("ID", "study", "year"), remove=FALSE) %>%
+  st_as_sf(coords=c("X", "Y"), crs=32616)
+st_write(pig_sf, "data/location_data/filtered_pig_locations.shp")
 

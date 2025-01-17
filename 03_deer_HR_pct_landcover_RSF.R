@@ -87,9 +87,9 @@ plot(pred_deer)
 m <- rbind(c(NA, 0))
 pred_deer <- classify(pred_deer, m)
 
-writeRaster(pred_deer, "data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL.tif", overwrite=TRUE)
-writeRaster(pred_deer, "data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL.asc",NAflag=-9999, overwrite=TRUE)
-
+# writeRaster(pred_deer, "data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL.tif", overwrite=TRUE)
+# writeRaster(pred_deer, "data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL.asc",NAflag=-9999, overwrite=TRUE)
+# 
 
 all_vals <- as.data.frame(pred_deer)
 range(all_vals$lyr1)
@@ -113,13 +113,13 @@ median(deer_test$rsf[deer_test$type==1], na.rm=TRUE)
 quantile(deer_test$rsf[deer_test$type==1], probs=c(0.25,0.5,0.75, 0.95))
 
 
-thresh <- seq(0,1,by=0.05)
+thresh <- seq(0,1,by=0.01)
 res <- matrix(NA, ncol=3, nrow=length(thresh))
 res[,1] <- thresh
 for (i in 1:length(thresh)) {
   
-  actu <- factor(pig_test$type, levels=c(0,1))
-  pred <- factor(if_else(pig_test$rsf >= thresh[i], 1, 0), levels=c(0,1))
+  actu <- factor(deer_test$type, levels=c(0,1))
+  pred <- factor(if_else(deer_test$rsf >= thresh[i], 1, 0), levels=c(0,1))
   
   res[i,2] <- caret::sensitivity(pred, actu)
   res[i,3] <- caret::specificity(pred, actu)

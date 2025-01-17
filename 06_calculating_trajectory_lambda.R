@@ -31,6 +31,7 @@ read_sim <- function(file) {
   return(x)
 }
 
+#### PIG MODELS ####
 # read files
 file1 <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/pigs_core_sim.txt"
 p_core <- read_sim(file)
@@ -42,7 +43,7 @@ p_core_l <- lambda_calc(p_core)
 gm_mean(p_core_l)
 
 
-#### Deer simulations
+#### DEER MODELS ####
 ## Deer core patches, 14.3 deer/km2
 file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_core_sim.txt"
 d_core <- read_sim(file) 
@@ -53,46 +54,60 @@ d_core_l <- lambda_calc(d_core)
 # Calculate geometric mean lambda
 gm_mean(d_core_l)
 
-
-## Deer core patches, 14.3 deer/km2, fecundity varied by HSI
-file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_core_fecundHSI.txt"
-d_core <- read_sim(file) 
-
-# Calculate lambda
-d_core_l <- lambda_calc(d_core)
-
-# Calculate geometric mean lambda
-gm_mean(d_core_l)
-
-
-
 ## Deer core patches, 22 deer/km2
-file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_core_22deerkm2.txt"
-d_core <- read_sim(file)
+file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_core_22deerkm2_sim.txt"
+d_core22 <- read_sim(file) 
 
 # Calculate lambda
-d_core_l <- lambda_calc(d_core)
+d_core_l <- lambda_calc(d_core22)
 
 # Calculate geometric mean lambda
 gm_mean(d_core_l)
 
 
-## Highly marginal, 14.3 deer/km2
+## Deer marginal habitat, 14.3 deer/km2
+file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_marginal_sim.txt"
+d_m <- read_sim(file) 
+
+# Calculate lambda
+d_m_l <- lambda_calc(d_m)
+
+# Calculate geometric mean lambda
+gm_mean(d_m_l)
+
+
+## Deer marginal habitat, 22 deer/km2
+file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_marginal_22deerkm2_sim.txt"
+d_m22 <- read_sim(file) 
+
+# Calculate lambda
+d_m22_l <- lambda_calc(d_m22)
+
+# Calculate geometric mean lambda
+gm_mean(d_m22_l)
+
+
+## Deer marginal habitat, 14.3 deer/km2
 file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_highly_marginal_sim.txt"
-d_marg <- read_sim(file)
+d_hm <- read_sim(file) 
 
 # Calculate lambda
-d_marg_l <- lambda_calc(d_marg)
+d_hm_l <- lambda_calc(d_hm)
 
 # Calculate geometric mean lambda
-gm_mean(d_marg_l)
+gm_mean(d_hm_l)
 
-## Highly marginal, 14.3 deer/km2
-file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_highly_marginal_22deerkm2.txt"
-d_marg <- read_sim(file)
+
+## Deer marginal habitat, 22 deer/km2
+file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_highly_marginal_22deerkm2_sim.txt"
+d_hm22 <- read_sim(file) 
 
 # Calculate lambda
-d_marg_l <- lambda_calc(d_marg)
+d_hm22_l <- lambda_calc(d_hm22)
 
 # Calculate geometric mean lambda
-gm_mean(d_marg_l)
+gm_mean(d_hm22_l)
+
+
+## Read comparison file
+file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/sens_deer_core_1-5.txt"

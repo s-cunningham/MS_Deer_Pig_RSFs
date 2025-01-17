@@ -15,17 +15,17 @@ deerRSF <- rast("data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL.tif")
 pigsRSF <- mask(pigsRSF, ms)
 deerRSF <- mask(deerRSF, ms)
 
-ggplot() +
+pigs_rsf <- ggplot() +
   geom_spatraster(data=pigsRSF) +
-  scale_fill_viridis_c(option="C", direction=1, na.value="transparent", name="Suitability") +
+  scale_fill_viridis_c(option="C", direction=-1, na.value="transparent", name="Suitability") +
   geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.6) +
-  theme_classic()
+  theme_void()
 
-ggplot() +
+deer_rsf <- ggplot() +
   geom_spatraster(data=deerRSF) +
-  scale_fill_viridis_c(option="C", direction=1, na.value="transparent", name="Suitability") +
+  scale_fill_viridis_c(option="C", direction=-1, na.value="transparent", name="Suitability") +
   geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.6) +
-  theme_classic() +
+  theme_void() +
   annotation_north_arrow(
     which_north = TRUE,
     pad_x = unit(0.05, "npc"),
@@ -37,6 +37,18 @@ ggplot() +
     pad_x = unit(0.07, "npc"),
     pad_y = unit(0.07, "npc"),
     text_cex = .8) 
+
+deer_rsf + pigs_rsf +
+  plot_annotation(tag_levels = 'A', tag_prefix="(", tag_suffix=")") +
+  plot_layout(guides = 'collect') & 
+  theme(legend.position = 'bottom', 
+        legend.text=element_text(size=11),
+        legend.title=element_text(size=12),
+        # legend.key.height = unit(1, "cm"),
+        legend.key.width = unit(2, "cm"))
+
+ggsave(file="figs/both_rsf_maps.svg")
+# Saving 7.43 x 6.7 in image
 
 ## Plotting habitat patches
 # Core habitat patches
@@ -55,8 +67,8 @@ d_hmar <- rast("data/habitat_patches/deer_highly_marginal_patches.tif")
 deer <- mosaic(d_hmar, d_marg, fun = "sum")
 deer <- mosaic(deer, d_core, fun="sum")
 # Reclassify
-patch_vals <- c(1,2,3)
-patch_class <- c("Highly Marginal", "Marginal", "Core")
+patch_vals <- c(3,2,1)
+patch_class <- c("Core", "Marginal", "Highly Marginal")
 
 # Add patch types to raster
 levels(deer) <- list(data.frame(ID = patch_vals,
@@ -69,18 +81,38 @@ levels(pigs) <- list(data.frame(ID = patch_vals,
                                 patch = patch_class ))
 
 ## Plot
-ggplot() +
+deer_patches <- ggplot() +
   geom_spatraster(data=deer) +
-  scale_fill_viridis_d(option="C", direction=-1, na.value="transparent", name="Patch Type", na.translate=FALSE) +
+  scale_fill_viridis_d(option="C", direction=1, na.value="transparent", name="Patch Type:", na.translate=FALSE) +
   geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.6) +
-  theme_classic()
+  theme_void() +
+  annotation_north_arrow(
+    which_north = TRUE,
+    pad_x = unit(0.05, "npc"),
+    pad_y = unit(0.85, "npc"),
+    style = north_arrow_minimal()) +
+  annotation_scale(
+    height = unit(0.015, "npc"),
+    width_hint = 0.5,
+    pad_x = unit(0.07, "npc"),
+    pad_y = unit(0.07, "npc"),
+    text_cex = .8) 
 
-ggplot() +
+pig_patches <- ggplot() +
   geom_spatraster(data=pigs) +
-  scale_fill_viridis_d(option="C", direction=-1, name="Patch Type", na.value="transparent", na.translate=FALSE) +
+  scale_fill_viridis_d(option="C", direction=1, name="Patch Type:", na.value="transparent", na.translate=FALSE) +
   geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.6) +
-  theme_classic()
+  theme_void() 
 
+deer_patches + pig_patches +
+  plot_annotation(tag_levels = 'A', tag_prefix="(", tag_suffix=")") +
+  plot_layout(guides = 'collect') & 
+  theme(legend.position = 'bottom', 
+        legend.text=element_text(size=11),
+        legend.title=element_text(size=12))
+ 
+ggsave(file="figs/patches.svg")
+# Saving 7.43 x 6.7 in image
 
 ## subtract core and marginal area from RSF
 ## Deer
@@ -93,7 +125,7 @@ writeRaster(deerNoCore, "data/predictions/deer_glmm_rsf_FINAL_noCore.asc", NAfla
 m <- rbind(c(0.365,1,0))
 deerNoMarg <- classify(deerRSF, m)
 plot(deerNoMarg)
-writeRaster(deerNoCore, "data/predictions/deer_glmm_rsf_FINAL_noCoreMarg.asc", NAflag=-9999, overwrite=TRUE)
+writeRaster(deerNoMarg, "data/predictions/deer_glmm_rsf_FINAL_noCoreMarg.asc", NAflag=-9999, overwrite=TRUE)
 
 ## Pigs
 m <- rbind(c(0.53,1,0))
@@ -105,5 +137,5 @@ writeRaster(pigsNoCore, "data/predictions/pigs_glmm_rsf_FINAL_noCore.asc", NAfla
 m <- rbind(c(0.265,1,0))
 pigsNoMarg <- classify(pigsRSF, m)
 plot(pigsNoMarg)
-writeRaster(pigsNoCore, "data/predictions/pigs_glmm_rsf_FINAL_noCoreMarg.asc", NAflag=-9999, overwrite=TRUE)
+writeRaster(pigsNoMarg, "data/predictions/pigs_glmm_rsf_FINAL_noCoreMarg.asc", NAflag=-9999, overwrite=TRUE)
 

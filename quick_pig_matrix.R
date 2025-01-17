@@ -1,7 +1,7 @@
 library(tidyverse)
 
 
-Year<-1:25
+Year<-1:10
 
 ###################################################################
 ## Deterministic model
@@ -13,7 +13,8 @@ pig.matrix<-matrix(0,6,6)
 Fecundity<-c(0.54, 2.24, 2.24)
 N.0 <- c(10000,10000,10000,10000,10000,10000)
 
-pig.matrix[c(1,4),1:3]<-Fecundity
+pig.matrix[1,1:3] <- Fecundity
+pig.matrix[4,1:3] <- Fecundity
 pig.matrix[2,1] <- 0.3
 pig.matrix[3,2] <- 0.35
 pig.matrix[3,3] <- 0.35
@@ -55,4 +56,9 @@ lambda <- numeric()
 for(y in 1:nrow(results)){
   lambda[y] <- results$N.median[y+1]/results$N.median[y]
 }
-mean(lambda, na.rm=TRUE)
+mean(lambda, na.rm=TRUE) ## arithmatic mean
+
+# geometric mean
+prod(lambda[1:9])
+
+
