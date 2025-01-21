@@ -1,4 +1,5 @@
 library(tidyverse)
+library(patchwork)
 
 # Function for calculating geometric mean
 gm_mean <- function(x, na.rm=TRUE){
@@ -14,15 +15,16 @@ lambda_calc <- function(x) {
   return(lambda)
 }
 
-read_sim <- function(file) {
-  
-  x <- read_tsv(file, skip=14, n_max=11, show_col_types = FALSE) %>%
+read_sim <- function(file, skip_rows=14) {
+
+  x <- read_tsv(file, skip=skip_rows, n_max=11, show_col_types = FALSE) %>%
     # Change obnoxious column name
-    rename(allcols=`Minimum    -1 S.D.    Average    +1 S.D.    Maximum`) %>%
+    rename(any_of(c(allcols="Minimum      Lower       Mean      Upper    Maximum", 
+                    allcols="Minimum    -1 S.D.    Average    +1 S.D.    Maximum"))) %>%
     # because there are a different number of spaces, just want all whitespace to become a bar
-    mutate(allcols = str_replace_all(allcols, "[[:space:]]+", "|")) %>% 
+    mutate(allcols = str_replace_all(allcols, "[[:space:]]+", "|")) %>%
     # now separate 
-    separate_wider_delim(allcols, 
+    separate_wider_delim(allcols,
                          names=c("Time", "Minimum", "lSD", "Average", "hSD", "Maximum"),
                          delim="|") %>%
     # convert caracter columns to numeric
@@ -31,83 +33,172 @@ read_sim <- function(file) {
   return(x)
 }
 
-#### PIG MODELS ####
-# read files
-file1 <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/pigs_core_sim.txt"
-p_core <- read_sim(file)
+### Read simulation results
+sim_file <- list.files(path="results/simulations/", pattern=".txt", full.names=TRUE)
 
-# Calculate lambda
-p_core_l <- lambda_calc(p_core)
+sims <- data.frame()
+for (i in 1:length(sim_file)) {
+  
+  # Read File
+  temp <- read_sim(sim_file[i])
+  
+  # Standard deviation lambda
+  lSD <- numeric()
+  uSD <- numeric()
+  for(y in 1:nrow(temp)){
+    lSD[y] <- temp$lSD[y+1]/temp$lSD[y]
+    uSD[y] <- temp$hSD[y+1]/temp$hSD[y]
+  }
+  
+  # Calculate geometric mean lambda
+  lmda <- gm_mean(lambda_calc(temp))
+  
+  # Combine with filename
+  res <- data.frame(file=str_split(sim_file[i], pattern="/")[[1]][3], lambda=lmda,
+                    lower=gm_mean(lSD), upper=gm_mean(uSD))
+  
+  # Add to results df
+  sims <- bind_rows(sims, res)
+  
+}
+sims <- sims %>% as_tibble %>% 
+  select(file, lower, lambda, upper) %>%
+  mutate(file=gsub(".txt", "", x=file),
+         file=gsub("rmax", "", x=file)) %>%
+  mutate(species=str_split_i(file, "_", i=1),
+         patch=str_split_i(file, "_", i=2),
+         density=str_split_i(file, "_", i=3)) %>%
+  mutate(density=if_else(density=="14", "14.3",density)) %>%
+  rename(density_int=density) %>%
+  mutate(density=if_else(density_int=="14.3" | density_int=="8", "Low", "High")) %>%
+  mutate(level="0") %>%
+  select(species, patch, density, level, lower:upper)
 
-# Calculate geometric mean lambda
-gm_mean(p_core_l)
+#### List trajectory files ####
+files <- list.files(path="results/sensitivity_analysis/", pattern=".txt", full.names=TRUE)
+
+results <- data.frame()
+for (i in 1:length(files)) {
+  
+  # Read File
+  temp <- read_sim(files[i], skip_rows=15)
+  
+  # Standard deviation lambda
+  lSD <- numeric()
+  uSD <- numeric()
+  for(y in 1:nrow(temp)){
+    lSD[y] <- temp$lSD[y+1]/temp$lSD[y]
+    uSD[y] <- temp$hSD[y+1]/temp$hSD[y]
+  }
+  
+  # Calculate geometric mean lambda
+  lmda <- gm_mean(lambda_calc(temp))
+  
+  # Combine with filename
+  res <- data.frame(file=str_split(files[i], pattern="/")[[1]][3], lambda=lmda,
+                    lower=gm_mean(lSD), upper=gm_mean(uSD))
+  
+  # Add to results df
+  results <- bind_rows(results, res)
+  
+}
+results
+
+results <- results %>% as_tibble %>% 
+               select(file, lower, lambda, upper) %>%
+               mutate(file=gsub(".txt", "", x=file),
+                      file=gsub("rmax", "", x=file)) %>%
+               mutate(species=str_split_i(file, "_", i=1),
+                      patch=str_split_i(file, "_", i=2),
+                      density=str_split_i(file, "_", i=3),
+                      level=str_split_i(file, "_", i=4)) %>%
+                mutate(density=if_else(density=="14", "14.3",density)) %>%
+                rename(density_int=density) %>%
+                mutate(density=if_else(density_int=="14.3" | density_int=="8", "Low", "High")) %>%
+                select(species, patch, density, level, lower:upper)
+
+results <- bind_rows(sims, results)
 
 
-#### DEER MODELS ####
-## Deer core patches, 14.3 deer/km2
-file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_core_sim.txt"
-d_core <- read_sim(file) 
+results$level <- factor(results$level, levels=c("-40","-30","-20","-10","0", "10","20","30","40"))
+results$species <- factor(results$species, levels=c("deer", "pigs"), labels=c("White-tailed Deer", "Wild Pigs"))
+# results$density <- factor(results$density, levels=c("Low", "High"), labels=c("Low Density", "High Density"))
+results$patch <- factor(results$patch, levels=c("core", "marginal"), labels=c("Core", "Core+Marginal"))
 
-# Calculate lambda
-d_core_l <- lambda_calc(d_core)
+results <- results %>% filter(patch!="highlymarginal" & density=="Low")
 
-# Calculate geometric mean lambda
-gm_mean(d_core_l)
+ggplot(results) +
+  geom_vline(xintercept=5, color="gray90") +
+  geom_hline(yintercept=1, color="gray5") +
+  geom_segment(aes(x=level, y=lower, yend=upper, group=patch, color=patch), position=position_dodge(width = 0.5)) +
+  geom_point(aes(x=level, y=lambda, group=patch, color=patch), position=position_dodge(width = 0.5)) +
+  scale_color_manual(values=c("#0d0887", "#cc4778"), name="Patch Type") +
+  facet_grid(.~species) +
+  ylab(expression("Finite rate of increase ("*lambda*")")) + xlab("Change in maximum growth rate (%)") +
+  guides(color=guide_legend(position = "inside")) +
+  theme_classic() +
+  theme(strip.background=element_rect(color=NA,fill=NA),
+        panel.border=element_rect(fill=NA, color="black", linewidth=1),
+        axis.line=element_line(linewidth=0),
+        legend.position.inside=c(0.01,0.99),
+        legend.justification=c(0,1),
+        strip.text=element_text(size=11),
+        legend.title=element_blank(),
+        legend.text=element_text(size=11),
+        axis.title=element_text(size=12),
+        axis.text=element_text(size=11))
+              
 
-## Deer core patches, 22 deer/km2
-file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_core_22deerkm2_sim.txt"
-d_core22 <- read_sim(file) 
+deer <- results %>% filter(species=="White-tailed Deer") 
+pigs <- results %>% filter(species=="Wild Pigs")
 
-# Calculate lambda
-d_core_l <- lambda_calc(d_core22)
+deer_labeller <- as_labeller(c(Low="14.3~deer/km^2", High="22~deer/km^2"), default=label_parsed)
+deer$density <- factor(deer$density, levels=c("Low", "High"))
 
-# Calculate geometric mean lambda
-gm_mean(d_core_l)
+pigs_labeller <- as_labeller(c(Low="8~pigs/km^2", High="27~pigs/km^2"), default=label_parsed)
+pigs$density <- factor(pigs$density, levels=c("Low", "High"))
 
+deer_plot <- ggplot(deer) +
+  coord_cartesian(ylim=c(0.95, 1.08)) +
+  geom_hline(yintercept=1, color="gray") +
+  geom_segment(aes(x=level, y=lower, yend=upper, group=patch, color=patch), position=position_dodge(width = 0.5)) +
+  geom_point(aes(x=level, y=lambda, group=patch, color=patch), position=position_dodge(width = 0.5)) +
+  scale_color_manual(values=c("#0d0887", "#cc4778"), name="Patch Type") +
+  facet_wrap(~density, labeller=deer_labeller) +
+  ylab(expression("Finite rate of increase ("*lambda*")")) + xlab("Change in maximum growth rate (%)") +
+  guides(color=guide_legend(position = "inside")) +
+  theme_classic() +
+  theme(panel.border=element_rect(fill=NA, color="black", linewidth=1),
+        strip.background=element_rect(color=NA,fill=NA),
+        strip.text=element_text(size=11),
+        axis.line=element_line(linewidth=0),
+        legend.position.inside=c(0.01,0.99),
+        legend.justification=c(0,1),
+        legend.title=element_blank(),
+        legend.text=element_text(size=11),
+        axis.title.y=element_text(size=12),
+        axis.title.x=element_blank(),
+        axis.text=element_text(size=11))
 
-## Deer marginal habitat, 14.3 deer/km2
-file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_marginal_sim.txt"
-d_m <- read_sim(file) 
+pig_plot <- ggplot(pigs) +
+  coord_cartesian(ylim=c(0.95, 1.08)) +
+  geom_hline(yintercept=1, color="gray") +
+  geom_segment(aes(x=level, y=lower, yend=upper, group=patch, color=patch), position=position_dodge(width = 0.5)) +
+  geom_point(aes(x=level, y=lambda, group=patch, color=patch), position=position_dodge(width = 0.5)) +
+  scale_color_manual(values=c("#0d0887", "#cc4778")) +
+  facet_wrap(~density, labeller=pigs_labeller) +
+  ylab(expression("Finite rate of increase ("*lambda*")")) + xlab("Change in maximum growth rate (%)") +
+  theme_classic() +
+  theme(panel.border=element_rect(fill=NA, color="black", linewidth=1),
+        strip.background=element_rect(color=NA,fill=NA),
+        strip.text=element_text(size=11),
+        axis.line=element_line(linewidth=0),
+        legend.position="none",
+        legend.justification=c(0,1),
+        legend.title=element_blank(),
+        legend.text=element_text(size=11),
+        axis.title=element_text(size=12),
+        axis.text=element_text(size=11))
 
-# Calculate lambda
-d_m_l <- lambda_calc(d_m)
+deer_plot / pig_plot + plot_annotation(tag_levels="A", tag_prefix="(", tag_suffix=")") 
 
-# Calculate geometric mean lambda
-gm_mean(d_m_l)
-
-
-## Deer marginal habitat, 22 deer/km2
-file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_marginal_22deerkm2_sim.txt"
-d_m22 <- read_sim(file) 
-
-# Calculate lambda
-d_m22_l <- lambda_calc(d_m22)
-
-# Calculate geometric mean lambda
-gm_mean(d_m22_l)
-
-
-## Deer marginal habitat, 14.3 deer/km2
-file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_highly_marginal_sim.txt"
-d_hm <- read_sim(file) 
-
-# Calculate lambda
-d_hm_l <- lambda_calc(d_hm)
-
-# Calculate geometric mean lambda
-gm_mean(d_hm_l)
-
-
-## Deer marginal habitat, 22 deer/km2
-file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/deer_highly_marginal_22deerkm2_sim.txt"
-d_hm22 <- read_sim(file) 
-
-# Calculate lambda
-d_hm22_l <- lambda_calc(d_hm22)
-
-# Calculate geometric mean lambda
-gm_mean(d_hm22_l)
-
-
-## Read comparison file
-file <- "C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/trajectory_tables/sens_deer_core_1-5.txt"
