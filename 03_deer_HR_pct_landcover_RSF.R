@@ -15,6 +15,8 @@ deer <- st_transform(deer, crs=5070)
 ## Load rasters
 ms_full <- vect("data/landscape_data/mississippi_ACEA.shp") 
 ms_buff <- vect("data/landscape_data/mississippi_ACEA_50kmbuffer.shp")
+lakes <- vect("data/landscape_data/ne_ms_lakes.shp") 
+lakes <- project(lakes, ms_full)
 
 deer_buffer <- vect("data/landscape_data/deer_10km_buffers.shp")
 
@@ -56,32 +58,71 @@ deer <- deer %>% separate(DeerID, into=c("id", "study", "year"), sep="_") %>%
   unite("DeerID", 1:2, sep="_")
 
 # Save file
-write_csv(deer, "data/deer_usedavail_HRcovariates.csv")
+# write_csv(deer, "data/deer_usedavail_HRcovariates.csv")
 
 library(lme4)
 set.seed(1)
 
-# Run model
+## Run model
 m1 <- glmer(type ~ pctBottomland + pctDecid + pctEvergreen + pctWater + pctHerbaceous + pctCrops + (1|DeerID), data=deer, family=binomial(link = "logit"))
 
 ## Create empty raster
 temp_rast <- rast(ext(ms_full), resolution=1000) # create template raster 1 km x 1 km
 
 # Predict
+layers <- c(layers["pctBottomland"],  layers["pctDecid"], layers["pctEvergreen"], layers["pctWater"], layers["pctHerbaceous"], layers["pctCrops"])
 pred_deer <- predict(layers, m1, type="response", re.form = NA)
 
-# Mask to Mississippi
+## Get SE of predictions
+# Load points of raster cells
+pts <- vect("data/landscape_data/ms_masked_90m_pts.shp")
+pts <- project(pts, crs(layers))
+
+# Extract raster values at points (i.e., put the raster values into a data frame)
+pts_extr <- extract(layers, pts)
+pts_extr <- pts_extr %>% select(-ID)
+
+# Predict standard errors. Change type to "link" so that everything is on the same (log-odds) scale, 
+# instead of generating predicted probabilities (we will do this conversion manually)
+deer_sd <- predict(m1, newdata=pts_extr, type="link", se.fit=TRUE, re.form=NA)
+
+# Create tibble for calculations
+deer_sd <- data.frame(fit=deer_sd$fit, se.fit=deer_sd$se.fit)
+
+# Calculate confidence intervals
+deer_sd <- deer_sd %>% as_tibble() %>%
+               mutate(lci=boot::inv.logit(fit - (1.96 * se.fit)),
+                      uci=boot::inv.logit(fit + (1.96 * se.fit)),
+                      fit=boot::inv.logit(fit))
+
+## Mask predicted probabilities to state
 pred_deer <- mask(pred_deer, ms_full)
 
-# Resample to 1 x 1 km for RAMAS
+# create template 1 km x 1 km raster 
+temp_rast <- rast(ext(ms_full), resolution=1000) 
+
+# Resample and crop rows of NAs
 pred_deer <- resample(pred_deer, temp_rast)
 pred_deer <- mask(pred_deer, ms_full)
 pred_deer <- crop(pred_deer, ext(ms_full))
 plot(pred_deer)
 
-# Rescale to be between 0 and 1
+# Rescale predicted probabilities to be between 0 and 1
 pred_deer <- (pred_deer-minmax(pred_deer)[1])/(minmax(pred_deer)[2]-minmax(pred_deer)[1])
 plot(pred_deer)
+
+# Rescale confidence intervals based on rescaled predicted probabilities
+deer_sd <- deer_sd %>% 
+                mutate(fit=scales::rescale(fit, to=c(0,1)),
+                       lci=scales::rescale(lci, to=c(0,1)),
+                       uci=scales::rescale(uci, to=c(0,1))) %>%
+                rename(uCI=lci, lCI=uci)  # It makes no sense, but it does after we switch 
+
+pts$lci <- deer_sd$lCI
+pts$uci <- deer_sd$uCI
+
+# Write shapefile
+writeVector(pts, "data/landscape_data/deer_pts_se.shp", overwrite=TRUE)
 
 # Reclassify missing data to 0
 m <- rbind(c(NA, 0))
@@ -89,8 +130,35 @@ pred_deer <- classify(pred_deer, m)
 
 # writeRaster(pred_deer, "data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL.tif", overwrite=TRUE)
 # writeRaster(pred_deer, "data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL.asc",NAflag=-9999, overwrite=TRUE)
-# 
 
+## Read back in raster from points to do some final clipping/cleaning
+deer_uci <- rast("data/predictions/deer_glmm_rsf_UpperCI.tif")
+deer_lci <- rast("data/predictions/deer_glmm_rsf_LowerCI.tif")
+
+# Resample and crop rows of NAs
+deer_uci <- mask(deer_uci, ms_full)
+deer_lci <- mask(deer_lci, ms_full)
+
+deer_uci <- resample(deer_uci, temp_rast)
+deer_lci <- resample(deer_lci, temp_rast)
+
+deer_uci <- crop(deer_uci, ext(ms_full))
+deer_lci <- crop(deer_lci, ext(ms_full))
+
+plot(deer_lci)
+plot(pred_deer)
+plot(deer_uci)
+
+# Reclassify missing data to 0
+deer_uci <- classify(deer_uci, m)
+deer_lci <- classify(deer_lci, m)
+
+## Save LCI and UCI rasters as .asc
+writeRaster(deer_uci, "data/predictions/deer_glmm_rsf_UpperCI.asc",NAflag=-9999, overwrite=TRUE)
+writeRaster(deer_lci, "data/predictions/deer_glmm_rsf_LowerCI.asc",NAflag=-9999, overwrite=TRUE)
+
+
+#### Check range of values and points ####
 all_vals <- as.data.frame(pred_deer)
 range(all_vals$lyr1)
 mean(all_vals$lyr1)
