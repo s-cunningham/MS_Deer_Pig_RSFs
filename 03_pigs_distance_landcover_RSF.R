@@ -1,164 +1,192 @@
 library(tidyverse)
+library(lme4)
 library(terra)
 library(sf)
-library(lme4)
+library(tidyterra)
+library(ggspatial)
 
-## Read location data
-pigs <- read_csv("data/location_data/pigs_used_avail.csv")
+options(scipen=999)
 
-# convert to sf object
-pigs <- st_as_sf(pigs, coords=c("X", "Y"), crs=32616)
-
-# Reproject to ACEA
-pigs <- st_transform(pigs, crs=5070)
-
-## Load rasters
+#### Load rasters for prediction ####
 ms_full <- vect("data/landscape_data/mississippi_ACEA.shp") 
 ms_buff <- vect("data/landscape_data/mississippi_ACEA_50kmbuffer.shp")
 
-## Load rasters
-# rast_list <- c("data/landscape_data/distance_to_upland90m.tif",
-#                "data/landscape_data/distance_to_decid_mixed90m.tif",
-#                "data/landscape_data/distance_to_herbaceous90m.tif",
-#                "data/landscape_data/distance_to_evergreen90m.tif",
-#                "data/landscape_data/distance_to_bottomlandhw90m.tif",
-#                # "data/landscape_data/distance_to_crops90m.tif",
-#                "data/landscape_data/distance_to_openwater90m.tif",
-#                "data/landscape_data/distance_to_allforest90m.tif")
-# layers <- rast(rast_list)
-# ## foodcrops
-# food <- rast("data/landscape_data/distance_to_foodcrops90m.tif")
-# food <- project(food, crs(layers))
-# layers <- c(layers, food)
-# names(layers) <- c("uplands", "decid", "herbaceous", "evergreen", "bottomlandhw", "crops", "water", "allforest")
+pigs_buffer <- vect("data/landscape_data/PigsGPS_10kmBuffer.shp")
 
 ## Load rasters
-rast_list <- c("data/landscape_data/5pt4km2_bottomlandSUM.tif",
-               "data/landscape_data/5pt4km2_decidSUM.tif",
-               "data/landscape_data/5pt4km2_evergreenSUM.tif",
-               "data/landscape_data/5pt4km2_herbaceousSUM.tif",
-               "data/landscape_data/5pt4km2_waterSUM.tif",
-               "data/landscape_data/5pt4km2_alldecidSUM.tif",
-               "data/landscape_data/5pt4km2_cropsSUM.tif",
-               "data/landscape_data/5pt4km2_developedSUM.tif",
-               "data/landscape_data/5pt4km2_decidmixedSUM.tif")
+rast_list <- c("data/landscape_data/distance_to_upland90m.tif",
+               "data/landscape_data/distance_to_decid_mixed90m.tif",
+               "data/landscape_data/distance_to_herbaceous90m.tif",
+               "data/landscape_data/distance_to_evergreen90m.tif",
+               "data/landscape_data/distance_to_bottomlandhw90m.tif",
+               "data/landscape_data/distance_to_openwater90m.tif",
+               "data/landscape_data/distance_to_allforest90m.tif")
 layers <- rast(rast_list)
 
-# Reclassify missing data to 0
-m <- rbind(c(NA, 0))
-layers <- classify(layers, m)
+## foodcrops
+food <- rast("data/landscape_data/distance_to_foodcrops90m.tif")
+food <- project(food, crs(layers))
+layers <- c(layers, food)
 
-# Convert to % of median home range
-layers <- layers / 709
-
-lw <- rast("data/landscape_data/distance_to_large_water90m.tif")
-ext(lw) <- ext(layers)
-lw <- resample(lw, layers)
-layers <- c(layers, lw)
-
-names(layers) <- c("pctBottomland", "pctDecid", "pctEvergreen","pctHerbaceous", "pctWater", "pctAllDecid", "pctCrops", "pctDevel", "pctUplandDecM", "largeWater")
-
-# load distance to roads raster
-# roads <- rast("data/landscape_data/distance_to_roads50kmbuff.tif")
-# roads <- project(roads, crs(layers))
-# ext(roads) <- ext(layers)
-# roads <- resample(roads, layers)
-# roads <- mask(roads, layers[[1]])
-
-# Distance to water
-
-
-# distance to streams
 # USA streams rivers (ESRI)
 streams <- rast("data/landscape_data/distance_to_rivers_streams.tif")
-streams <- resample(streams, layers, method="bilinear")
-
-# combine
+streams <- resample(streams, food, method="bilinear")
 layers <- c(layers, streams)
 
-names(layers)[11] <- c("streams")
-# names(layers)[6:7] <- c("streams")
+gpw <- rast("data/landscape_data/gpw_PopDensity_90m50km.tif")
+gpw <- project(gpw, crs(layers))
+gpw <- resample(gpw, layers)
+gpw <- mask(gpw, layers[[1]])
+ext(gpw) <- ext(layers)
+layers <- c(layers, gpw)
 
-# center & scale
+roads <- rast("data/landscape_data/distance_to_roads50kmbuff.tif")
+roads <- project(roads, crs(layers))
+ext(roads) <- ext(layers)
+roads <- resample(roads, layers)
+roads <- mask(roads, layers[[1]])
+layers <- c(layers, roads)
+
 layers <- scale(layers)
+names(layers) <- c("uplandforest", "decidmixed", "grassland", "evergreen", "bottomlandhw", "water", "allforest", "foodcrops", "streams", "pop_density", "roads")
 
-# Extract values from rasters
-dat_pigs <- extract(layers, pigs)
+## Load pig locations, add 5-fold label
+pigs <- read_csv("data/pigs_usedavail_covariates.csv")
 
-# combine spatial data with points
-pigs_xy <- st_coordinates(pigs)
-pigs <- st_drop_geometry(pigs)
-pigs <- bind_cols(pigs, dat_pigs)
-pigs <- bind_cols(pigs, pigs_xy) %>% select(PigID:ID,X,Y,pctBottomland:streams)
+#### Pig map ####
+pigs_rsf <- glmer(type ~ bottomlandhw + uplandforest + foodcrops + roads + streams + (1|PigID), data=pigs, family=binomial(link = "logit"))
+# pigs_rsf <- glmer(type ~ pctDecidMixed + pctCrops + pctBottomland + roads + streams + (1|PigID), data=pigs, family=binomial(link = "logit"))
 
-# Check correlations
-cor(pigs[,6:16])
+# Predict across Mississippi
+pig_layers <- c(layers["bottomlandhw"],  layers["uplandforest"], layers["foodcrops"], layers["roads"], layers["streams"])
+pred_pigs <- predict(pig_layers, pigs_rsf, type="response", re.form = NA)
 
-# reorganize and create ID column
-pigs <- pigs %>% separate(PigID, into=c("id", "study", "year"), sep="_") %>%
-  select(-ID) %>%
-  unite("PigID", 1:2, sep="_")
-
-# Save file
-write_csv(pigs, "data/pigs_usedavail_HRcovariates.csv")
-
-#### Running RSF model
-set.seed(1)
-
-# Run model
-m1 <- glmer(type ~ pctAllDecid + pctCrops + pctHerbaceous + pctDevel + streams + largeWater + (1|PigID), data=pigs, family=binomial(link = "logit"))
+# Mask to state
+pred_pigs <- mask(pred_pigs, ms_full)
+plot(pred_pigs)
 
 # create template 1 km x 1 km raster 
 temp_rast <- rast(ext(ms_full), resolution=1000) 
 
-# Predict
-pred_pigs <- predict(layers, m1, type="response", re.form = NA)
-
-# Mask to Mississippi
-pred_pigs <- mask(pred_pigs, ms_full)
-
-# Resample to 1 x 1 km for RAMAS
+# Resample and crop rows of NAs
 pred_pigs <- resample(pred_pigs, temp_rast)
 pred_pigs <- mask(pred_pigs, ms_full)
 pred_pigs <- crop(pred_pigs, ext(ms_full))
 plot(pred_pigs)
 
 # Rescale to be between 0 and 1
+# pred_pigs <- pred_pigs/minmax(pred_pigs)[2]
 pred_pigs <- (pred_pigs-minmax(pred_pigs)[1])/(minmax(pred_pigs)[2]-minmax(pred_pigs)[1])
 plot(pred_pigs)
 
 # Reclassify missing data to 0
 m <- rbind(c(NA, 0))
 pred_pigs <- classify(pred_pigs, m)
+plot(pred_pigs)
 
+# Save tif for viewing in ArcGIS, and ASCII for reading into RAMAS
 writeRaster(pred_pigs, "data/predictions/pigs_glmm_rsf_FINALFINALFINALFINAL.tif", overwrite=TRUE)
-writeRaster(pred_pigs, "data/predictions/pigs_glmm_rsf_FINALFINALFINALFINAL.asc",NAflag=-9999, overwrite=TRUE)
+writeRaster(pred_pigs, "data/predictions/pigs_glmm_rsf_FINALFINALFINALFINAL.asc", NAflag=-9999, overwrite=TRUE)
+
+#### Prediction uncertainty ####
+## Get SE of predictions
+# Load points of raster cells
+pts <- vect("data/landscape_data/ms_masked_90m_pts.shp")
+pts <- project(pts, crs(layers))
+
+# Extract raster values at points (i.e., put the raster values into a data frame)
+pts_extr <- extract(pig_layers, pts)
+pts_extr <- pts_extr %>% select(-ID)
+
+# Predict standard errors. Change type to "link" so that everything is on the same (log-odds) scale, 
+# instead of generating predicted probabilities (we will do this conversion manually)
+pigs_sd <- predict(pigs_rsf, newdata=pts_extr, type="link", se.fit=TRUE, re.form=NA)
+
+# Create tibble for calculations
+pigs_sd <- data.frame(fit=pigs_sd$fit, se.fit=pigs_sd$se.fit)
+
+# Calculate confidence intervals
+pigs_sd <- pigs_sd %>% as_tibble() %>%
+  mutate(lci=boot::inv.logit(fit - (1.96 * se.fit)),
+         uci=boot::inv.logit(fit + (1.96 * se.fit))) %>%
+  mutate(fit=boot::inv.logit(fit))
+
+# Rescale confidence intervals based on rescaled predicted probabilities
+pigs_sd <- pigs_sd %>% 
+  mutate(fit=scales::rescale(fit, to=c(0,1)),
+         lci=scales::rescale(lci, to=c(0,1)),
+         uci=scales::rescale(uci, to=c(0,1))) 
+
+pts$lci <- pigs_sd$lci
+pts$uci <- pigs_sd$uci
+
+# Write shapefile
+writeVector(pts, "data/landscape_data/pigs_pts_se.shp", overwrite=TRUE)
+# go open the point file in ArcGIS and convert it to a raster
+
+## Read back in raster from points to do some final clipping/cleaning
+pigs_uci <- rast("data/predictions/pigs_glmm_rsf_UpperCI.tif")
+pigs_lci <- rast("data/predictions/pigs_glmm_rsf_LowerCI.tif")
+
+# Resample and crop rows of NAs
+pigs_uci <- mask(pigs_uci, ms_full)
+pigs_lci <- mask(pigs_lci, ms_full)
+
+pigs_uci <- resample(pigs_uci, temp_rast)
+pigs_lci <- resample(pigs_lci, temp_rast)
+
+pigs_uci <- crop(pigs_uci, ext(ms_full))
+pigs_lci <- crop(pigs_lci, ext(ms_full))
+
+plot(pigs_lci)
+plot(pred_pigs)
+plot(pigs_uci)
+
+# Reclassify missing data to 0
+pigs_uci <- classify(pigs_uci, m)
+pigs_lci <- classify(pigs_lci, m)
+
+## Save LCI and UCI rasters as .asc
+writeRaster(pigs_uci, "data/predictions/pigs_glmm_rsf_UpperCI.asc",NAflag=-9999, overwrite=TRUE)
+writeRaster(pigs_lci, "data/predictions/pigs_glmm_rsf_LowerCI.asc",NAflag=-9999, overwrite=TRUE)
 
 
 
-all_vals <- as.data.frame(pred_pigs)
-range(all_vals$lyr1)
-mean(all_vals$lyr1)
-quantile(all_vals$lyr1, probs=c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1))
+#### Extract RSF predictions at each location ####
+pig_test <- pigs %>% select(PigID:Y)
 
-## Extract RSF predictions at each location
-pigs_test <- pigs %>% select(pigsID:Y)
+dat_pig <- extract(pred_pigs, pig_test[,c(4:5)])
 
-dat_pigs <- extract(pred_pigs, pigs_test[,c(4:5)])
+pig_test$rsf <- dat_pig$lyr1
 
-pigs_test$rsf <- dat_pigs$lyr1
+plot(density(pig_test$rsf[pig_test$type==0]), xlim=c(0,1))
+plot(density(pig_test$rsf[pig_test$type==1]), xlim=c(0,1))
+hist(pig_test$rsf[pig_test$type==1], xlim=c(0,1))
+hist(pig_test$rsf[pig_test$type==0], xlim=c(0,1))
 
-hist(pigs_test$rsf[pigs_test$type==1], xlim=c(0,1))
-hist(pigs_test$rsf[pigs_test$type==0], xlim=c(0,1))
+min(pig_test$rsf[pig_test$type==1], na.rm=TRUE)
+mean(pig_test$rsf[pig_test$type==1], na.rm=TRUE)
 
-min(pigs_test$rsf[pigs_test$type==1], na.rm=TRUE)
-mean(pigs_test$rsf[pigs_test$type==1], na.rm=TRUE)
-median(pigs_test$rsf[pigs_test$type==1], na.rm=TRUE)
-
-quantile(pigs_test$rsf[pigs_test$type==1], probs=c(0.25,0.5,0.75, 0.95))
+quantile(pig_test$rsf, probs=c(0.25, 0.5, 0.75))
 
 
+thresh <- seq(0,1,by=0.01)
+res <- matrix(NA, ncol=3, nrow=length(thresh))
+res[,1] <- thresh
+for (i in 1:length(thresh)) {
+  
+  actu <- factor(pig_test$type, levels=c(0,1))
+  pred <- factor(if_else(pig_test$rsf >= thresh[i], 1, 0), levels=c(0,1))
+  
+  res[i,2] <- caret::sensitivity(pred, actu)
+  res[i,3] <- caret::specificity(pred, actu)
+}
 
+res <- res %>% as.data.frame() 
+names(res) <- c("Threshold", "Sensitivity", "Specificity")
+res <- res %>% mutate(TSS = Sensitivity + Specificity - 1)
+
+res %>% slice_max(TSS)
 
 
 

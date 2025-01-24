@@ -15,8 +15,8 @@ deer <- st_transform(deer, crs=5070)
 ## Load rasters
 ms_full <- vect("data/landscape_data/mississippi_ACEA.shp") 
 ms_buff <- vect("data/landscape_data/mississippi_ACEA_50kmbuffer.shp")
-lakes <- vect("data/landscape_data/ne_ms_lakes.shp") 
-lakes <- project(lakes, ms_full)
+# lakes <- vect("data/landscape_data/ne_ms_lakes.shp") 
+# lakes <- project(lakes, ms_full)
 
 deer_buffer <- vect("data/landscape_data/deer_10km_buffers.shp")
 
@@ -123,6 +123,7 @@ pts$uci <- deer_sd$uCI
 
 # Write shapefile
 writeVector(pts, "data/landscape_data/deer_pts_se.shp", overwrite=TRUE)
+# go open the point file in ArcGIS and convert it to a raster
 
 # Reclassify missing data to 0
 m <- rbind(c(NA, 0))
