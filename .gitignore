@@ -5,6 +5,14 @@
 # Folders
 /data/
 /figs/
+/results/
+
+# Scratch scripts
+spare_code_rsf.R
+npp_averaging.R
+00_functions.R
+04_rsf_randomforest.R
+04_pigs_rsf_glmm.R
 
 # Session Data files
 .RData
