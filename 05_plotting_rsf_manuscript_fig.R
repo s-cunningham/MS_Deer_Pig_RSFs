@@ -6,6 +6,8 @@ library(ggspatial)
 
 # Misissippi polygon
 ms <- vect("data/landscape_data/mississippi_ACEA.shp")
+lakes <- vect("data/landscape_data/ne_ms_lakes.shp")
+lakes <- project(lakes, ms)
 
 # RSF prediction rasters
 pigsRSF <- rast("data/predictions/pigs_glmm_rsf_FINALFINALFINALFINAL.tif")
@@ -15,17 +17,27 @@ deerRSF <- rast("data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL.tif")
 pigsRSF <- mask(pigsRSF, ms)
 deerRSF <- mask(deerRSF, ms)
 
+# Mask lakes
+pigsRSF <- mask(pigsRSF, lakes, inverse=TRUE)
+deerRSF <- mask(deerRSF, lakes, inverse=TRUE)
+
 pigs_rsf <- ggplot() +
   geom_spatraster(data=pigsRSF) +
   scale_fill_viridis_c(option="C", direction=-1, na.value="transparent", name="Suitability") +
   geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.6) +
-  theme_void()
+  theme_void() +
+  theme(legend.position="none")
 
 deer_rsf <- ggplot() +
   geom_spatraster(data=deerRSF) +
   scale_fill_viridis_c(option="C", direction=-1, na.value="transparent", name="Suitability") +
   geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.6) +
   theme_void() +
+  theme(legend.position = 'bottom',
+        legend.text=element_text(size=11),
+        legend.title=element_text(size=12),
+        # legend.key.height = unit(1, "cm"),
+        legend.key.width = unit(2, "cm")) +
   annotation_north_arrow(
     which_north = TRUE,
     pad_x = unit(0.05, "npc"),
@@ -39,17 +51,12 @@ deer_rsf <- ggplot() +
     text_cex = .8) 
 
 deer_rsf + pigs_rsf +
-  plot_annotation(tag_levels = 'A', tag_prefix="(", tag_suffix=")") +
-  plot_layout(guides = 'collect') & 
-  theme(legend.position = 'bottom', 
-        legend.text=element_text(size=11),
-        legend.title=element_text(size=12),
-        # legend.key.height = unit(1, "cm"),
-        legend.key.width = unit(2, "cm"))
+  plot_annotation(tag_levels = 'A', tag_prefix="(", tag_suffix=")") 
 
 ggsave(file="figs/both_rsf_maps.svg")
 # Saving 7.43 x 6.7 in image
 # Saving 10.1 x 9.06 in image (2025-01-24)
+# Saving 10.6 x 9.06 in image (2025-01-28)
 
 ## Plotting habitat patches
 

@@ -135,3 +135,8 @@ deer_patches + pig_patches +
 
 ggsave(file="figs/patches.svg")
 # Saving 10.6 x 9.06 in image
+
+####
+
+
+

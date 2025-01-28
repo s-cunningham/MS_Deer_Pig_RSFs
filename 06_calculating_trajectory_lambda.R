@@ -64,23 +64,21 @@ for (i in 1:length(sim_file)) {
 }
 sims <- sims %>% as_tibble %>% 
   select(file, lower, lambda, upper) %>%
-  mutate(file=gsub(".txt", "", x=file),
-         file=gsub("rmax", "", x=file)) %>%
+  mutate(file=gsub(".txt", "", x=file)) %>%
   mutate(species=str_split_i(file, "_", i=1),
-         patch=str_split_i(file, "_", i=2),
-         density=str_split_i(file, "_", i=3)) %>%
+         patch=str_split_i(file, "_", i=3),
+         density=str_split_i(file, "_", i=2)) %>%
   mutate(density=if_else(density=="14", "14.3",density)) %>%
   rename(density_int=density) %>%
   mutate(density=if_else(density_int=="14.3" | density_int=="8", "Low", "High")) %>%
   mutate(level="0") %>%
-  select(species, patch, density, level, lower:upper) #%>%
-  # mutate(sd=((upper-lambda)+(lambda-lower))/2,
-  #        se=sd/sqrt(5000),
-  #        lCI=lambda-(1.96*se),
-  #        uCI=lambda+(1.96*se))
+  select(species, patch, density, level, lower:upper) %>%
+  mutate(patch=case_when(patch=="c" ~ "core",
+                         patch=="hm" ~ "highlymarginal",
+                         patch=="m" ~ "marginal"))
 
 #### List trajectory files ####
-files <- list.files(path="results/sensitivity_analysis/", pattern=".txt", full.names=TRUE)
+files <- list.files(path="results/sensitivity_analysis/Rmax_sensitivity/", pattern=".txt", full.names=TRUE)
 
 results <- data.frame()
 for (i in 1:length(files)) {
@@ -100,7 +98,7 @@ for (i in 1:length(files)) {
   lmda <- gm_mean(lambda_calc(temp))
   
   # Combine with filename
-  res <- data.frame(file=str_split(files[i], pattern="/")[[1]][3], lambda=lmda,
+  res <- data.frame(file=str_split(files[i], pattern="/")[[1]][4], lambda=lmda,
                     lower=gm_mean(lSD), upper=gm_mean(uSD))
   
   # Add to results df
@@ -114,13 +112,16 @@ results <- results %>% as_tibble %>%
                mutate(file=gsub(".txt", "", x=file),
                       file=gsub("rmax", "", x=file)) %>%
                mutate(species=str_split_i(file, "_", i=1),
-                      patch=str_split_i(file, "_", i=2),
-                      density=str_split_i(file, "_", i=3),
-                      level=str_split_i(file, "_", i=4)) %>%
+                      patch=str_split_i(file, "_", i=3),
+                      density=str_split_i(file, "_", i=2),
+                      level=str_split_i(file, "_", i=5)) %>%
                 mutate(density=if_else(density=="14", "14.3",density)) %>%
                 rename(density_int=density) %>%
                 mutate(density=if_else(density_int=="14.3" | density_int=="8", "Low", "High")) %>%
-                select(species, patch, density, level, lower:upper)
+                select(species, patch, density, level, lower:upper) %>%
+                mutate(patch=case_when(patch=="c" ~ "core",
+                         patch=="hm" ~ "highlymarginal",
+                         patch=="m" ~ "marginal"))
 
 results <- bind_rows(sims, results)
 
@@ -133,7 +134,7 @@ results$patch <- factor(results$patch, levels=c("core", "marginal"), labels=c("C
 results <- results %>% filter(patch!="highlymarginal" & density=="Low")
 
 ggplot(results) +
-  geom_vline(xintercept=5, color="gray90") +
+  # geom_vline(xintercept=5, color="gray90") +
   geom_hline(yintercept=1, color="gray5") +
   geom_segment(aes(x=level, y=lower, yend=upper, group=patch, color=patch), position=position_dodge(width = 0.5)) +
   geom_point(aes(x=level, y=lambda, group=patch, color=patch), position=position_dodge(width = 0.5)) +
@@ -152,8 +153,10 @@ ggplot(results) +
         legend.text=element_text(size=11),
         axis.title=element_text(size=12),
         axis.text=element_text(size=11))
-              
+ggsave(file="figs/lambda_rmax_sensitivity.svg")
+# Saving 9.42 x 5.22 in image
 
+### Separate species, plot by density
 deer <- results %>% filter(species=="White-tailed Deer") 
 pigs <- results %>% filter(species=="Wild Pigs")
 
@@ -206,37 +209,5 @@ pig_plot <- ggplot(pigs) +
         axis.text=element_text(size=11))
 
 deer_plot / pig_plot + plot_annotation(tag_levels="A", tag_prefix="(", tag_suffix=")") 
-
-
-## N0 models (pigs marginal)
-
-N0_files <- list.files(path="results/initial_abundance_sensitivity/", pattern=".txt", full.names=TRUE)
-results <- data.frame()
-for (i in 1:length(N0_files)) {
-  
-  # Read File
-  temp <- read_sim(N0_files[i], skip_rows=15)
-  
-  # Standard deviation lambda
-  lSD <- numeric()
-  uSD <- numeric()
-  for(y in 1:nrow(temp)){
-    lSD[y] <- temp$lSD[y+1]/temp$lSD[y]
-    uSD[y] <- temp$hSD[y+1]/temp$hSD[y]
-  }
-  
-  # Calculate geometric mean lambda
-  lmda <- gm_mean(lambda_calc(temp))
-  
-  # Combine with filename
-  res <- data.frame(file=str_split(N0_files[i], pattern="/")[[1]][3], lambda=lmda,
-                    lower=gm_mean(lSD), upper=gm_mean(uSD))
-  
-  # Add to results df
-  results <- bind_rows(results, res)
-  
-}
-results
-
 
 
