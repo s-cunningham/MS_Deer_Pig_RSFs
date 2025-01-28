@@ -49,6 +49,7 @@ deer_rsf + pigs_rsf +
 
 ggsave(file="figs/both_rsf_maps.svg")
 # Saving 7.43 x 6.7 in image
+# Saving 10.1 x 9.06 in image (2025-01-24)
 
 ## Plotting habitat patches
 # Core habitat patches
