@@ -13,6 +13,9 @@ ms_buff <- vect("data/landscape_data/mississippi_ACEA_50kmbuffer.shp")
 
 pigs_buffer <- vect("data/landscape_data/PigsGPS_10kmBuffer.shp")
 
+lakes <- vect("data/landscape_data/ne_ms_lakes.shp")
+lakes <- project(lakes, ms_full)
+
 ## Load rasters
 rast_list <- c("data/landscape_data/distance_to_upland90m.tif",
                "data/landscape_data/distance_to_decid_mixed90m.tif",
@@ -59,34 +62,9 @@ pigs_rsf <- glmer(type ~ bottomlandhw + uplandforest + foodcrops + roads + strea
 
 # Predict across Mississippi
 pig_layers <- c(layers["bottomlandhw"],  layers["uplandforest"], layers["foodcrops"], layers["roads"], layers["streams"])
-pred_pigs <- predict(pig_layers, pigs_rsf, type="response", re.form = NA)
-
-# Mask to state
-pred_pigs <- mask(pred_pigs, ms_full)
-plot(pred_pigs)
 
 # create template 1 km x 1 km raster 
 temp_rast <- rast(ext(ms_full), resolution=1000) 
-
-# Resample and crop rows of NAs
-pred_pigs <- resample(pred_pigs, temp_rast)
-pred_pigs <- mask(pred_pigs, ms_full)
-pred_pigs <- crop(pred_pigs, ext(ms_full))
-plot(pred_pigs)
-
-# Rescale to be between 0 and 1
-# pred_pigs <- pred_pigs/minmax(pred_pigs)[2]
-pred_pigs <- (pred_pigs-minmax(pred_pigs)[1])/(minmax(pred_pigs)[2]-minmax(pred_pigs)[1])
-plot(pred_pigs)
-
-# Reclassify missing data to 0
-m <- rbind(c(NA, 0))
-pred_pigs <- classify(pred_pigs, m)
-plot(pred_pigs)
-
-# Save tif for viewing in ArcGIS, and ASCII for reading into RAMAS
-writeRaster(pred_pigs, "data/predictions/pigs_glmm_rsf_FINALFINALFINALFINAL.tif", overwrite=TRUE)
-writeRaster(pred_pigs, "data/predictions/pigs_glmm_rsf_FINALFINALFINALFINAL.asc", NAflag=-9999, overwrite=TRUE)
 
 #### Prediction uncertainty ####
 ## Get SE of predictions
@@ -109,55 +87,77 @@ pigs_sd <- data.frame(fit=pigs_sd$fit, se.fit=pigs_sd$se.fit)
 pigs_sd <- pigs_sd %>% as_tibble() %>%
   mutate(lci=boot::inv.logit(fit - (1.96 * se.fit)),
          uci=boot::inv.logit(fit + (1.96 * se.fit))) %>%
-  mutate(fit=boot::inv.logit(fit))
+  mutate(fit=boot::inv.logit(fit)) 
 
-# Rescale confidence intervals based on rescaled predicted probabilities
-pigs_sd <- pigs_sd %>% 
-  mutate(fit=scales::rescale(fit, to=c(0,1)),
-         lci=scales::rescale(lci, to=c(0,1)),
-         uci=scales::rescale(uci, to=c(0,1))) 
-
+pts$fit <- pigs_sd$fit
 pts$lci <- pigs_sd$lci
 pts$uci <- pigs_sd$uci
+# pts$se <- pigs_sd$se.fit
 
 # Write shapefile
 writeVector(pts, "data/landscape_data/pigs_pts_se.shp", overwrite=TRUE)
 # go open the point file in ArcGIS and convert it to a raster
 
-## Read back in raster from points to do some final clipping/cleaning
-pigs_uci <- rast("data/predictions/pigs_glmm_rsf_UpperCI.tif")
-pigs_lci <- rast("data/predictions/pigs_glmm_rsf_LowerCI.tif")
+## Convert points to raster. this is pretty memory-intensive
+# The second argument is a raster that matches the resolution of the pts SpatVector (i.e., 90x90)
+pigs_uci <- rasterize(pts, layers["bottomlandhw"], field="uci", fun="mean")
+pigs_lci <- rasterize(pts, layers["bottomlandhw"], field="lci", fun="mean")
+pigs_mean <- rasterize(pts, layers["bottomlandhw"], field="fit", fun="mean")
 
-# Resample and crop rows of NAs
+## Read back in raster from points to do some final clipping/cleaning
+# pigs_uci <- rast("data/predictions/pigs_glmm_rsf_UpperCI.tif")
+# pigs_lci <- rast("data/predictions/pigs_glmm_rsf_LowerCI.tif")
+# pigs_mean <- rast("data/predictions/pigs_glmm_rsf_mean.tif")
+
+# Crop rows of NAs
 pigs_uci <- mask(pigs_uci, ms_full)
 pigs_lci <- mask(pigs_lci, ms_full)
+pigs_mean <- mask(pigs_mean, ms_full)
 
+## Rescale
+# find min and max values
+max_hsi <- max(minmax(pigs_uci)[2], minmax(pigs_lci)[2], minmax(pigs_mean)[2])
+min_hsi <- min(minmax(pigs_uci)[1], minmax(pigs_lci)[1], minmax(pigs_mean)[1])
+
+# apply scaling
+pigs_uci <- (pigs_uci-min_hsi)/(max_hsi-min_hsi)
+pigs_lci <- (pigs_lci-min_hsi)/(max_hsi-min_hsi)
+pigs_mean <- (pigs_mean-min_hsi)/(max_hsi-min_hsi)
+
+# Mask lakes
+pigs_uci <- mask(pigs_uci, lakes, inverse=TRUE)
+pigs_lci <- mask(pigs_lci, lakes, inverse=TRUE)
+pigs_mean <- mask(pigs_mean, lakes, inverse=TRUE)
+
+# Resample to 1x1 km
 pigs_uci <- resample(pigs_uci, temp_rast)
 pigs_lci <- resample(pigs_lci, temp_rast)
+pigs_mean <- resample(pigs_mean, temp_rast)
 
+# Get rid of extra space around MS
 pigs_uci <- crop(pigs_uci, ext(ms_full))
 pigs_lci <- crop(pigs_lci, ext(ms_full))
-
-plot(pigs_lci)
-plot(pred_pigs)
-plot(pigs_uci)
+pigs_mean <- crop(pigs_mean, ext(ms_full))
 
 # Reclassify missing data to 0
+m <- rbind(c(NA, 0))
 pigs_uci <- classify(pigs_uci, m)
 pigs_lci <- classify(pigs_lci, m)
+pigs_mean <- classify(pigs_mean, m)
 
 ## Save LCI and UCI rasters as .asc
 writeRaster(pigs_uci, "data/predictions/pigs_glmm_rsf_UpperCI.asc",NAflag=-9999, overwrite=TRUE)
 writeRaster(pigs_lci, "data/predictions/pigs_glmm_rsf_LowerCI.asc",NAflag=-9999, overwrite=TRUE)
-
-
+writeRaster(pigs_mean, "data/predictions/pigs_glmm_rsf_FINALFINALFINALFINAL.asc",NAflag=-9999, overwrite=TRUE)
+# additionally save mean predictions as .tif for plotting
+writeRaster(pigs_mean, "data/predictions/pigs_glmm_rsf_FINALFINALFINALFINAL.tif", overwrite=TRUE)
 
 #### Extract RSF predictions at each location ####
 pig_test <- pigs %>% select(PigID:Y)
 
-dat_pig <- extract(pred_pigs, pig_test[,c(4:5)])
+dat_pig <- extract(pigs_mean, pig_test[,c(4:5)])
 
-pig_test$rsf <- dat_pig$lyr1
+pig_test$rsf <- dat_pig$mean
 
 plot(density(pig_test$rsf[pig_test$type==0]), xlim=c(0,1))
 plot(density(pig_test$rsf[pig_test$type==1]), xlim=c(0,1))
