@@ -41,6 +41,7 @@ for (i in 1:length(sim_file)) {
   
   # Read File
   temp <- read_sim(sim_file[i])
+  temp <- temp %>% mutate(sd=((hSD-Average) + (Average=lSD))/2)
   
   # Standard deviation lambda
   lSD <- numeric()
@@ -50,7 +51,7 @@ for (i in 1:length(sim_file)) {
     uSD[y] <- temp$hSD[y+1]/temp$hSD[y]
   }
   
-  # Calculate geometric mean lambda
+  # Calculate geomlSD# Calculate geometric mean lambda
   lmda <- gm_mean(lambda_calc(temp))
   
   # Combine with filename
@@ -72,7 +73,11 @@ sims <- sims %>% as_tibble %>%
   rename(density_int=density) %>%
   mutate(density=if_else(density_int=="14.3" | density_int=="8", "Low", "High")) %>%
   mutate(level="0") %>%
-  select(species, patch, density, level, lower:upper)
+  select(species, patch, density, level, lower:upper) #%>%
+  # mutate(sd=((upper-lambda)+(lambda-lower))/2,
+  #        se=sd/sqrt(5000),
+  #        lCI=lambda-(1.96*se),
+  #        uCI=lambda+(1.96*se))
 
 #### List trajectory files ####
 files <- list.files(path="results/sensitivity_analysis/", pattern=".txt", full.names=TRUE)
@@ -201,4 +206,37 @@ pig_plot <- ggplot(pigs) +
         axis.text=element_text(size=11))
 
 deer_plot / pig_plot + plot_annotation(tag_levels="A", tag_prefix="(", tag_suffix=")") 
+
+
+## N0 models (pigs marginal)
+
+N0_files <- list.files(path="results/initial_abundance_sensitivity/", pattern=".txt", full.names=TRUE)
+results <- data.frame()
+for (i in 1:length(N0_files)) {
+  
+  # Read File
+  temp <- read_sim(N0_files[i], skip_rows=15)
+  
+  # Standard deviation lambda
+  lSD <- numeric()
+  uSD <- numeric()
+  for(y in 1:nrow(temp)){
+    lSD[y] <- temp$lSD[y+1]/temp$lSD[y]
+    uSD[y] <- temp$hSD[y+1]/temp$hSD[y]
+  }
+  
+  # Calculate geometric mean lambda
+  lmda <- gm_mean(lambda_calc(temp))
+  
+  # Combine with filename
+  res <- data.frame(file=str_split(N0_files[i], pattern="/")[[1]][3], lambda=lmda,
+                    lower=gm_mean(lSD), upper=gm_mean(uSD))
+  
+  # Add to results df
+  results <- bind_rows(results, res)
+  
+}
+results
+
+
 
