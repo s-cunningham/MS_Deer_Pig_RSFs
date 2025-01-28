@@ -15,8 +15,8 @@ deer <- st_transform(deer, crs=5070)
 ## Load rasters
 ms_full <- vect("data/landscape_data/mississippi_ACEA.shp") 
 ms_buff <- vect("data/landscape_data/mississippi_ACEA_50kmbuffer.shp")
-# lakes <- vect("data/landscape_data/ne_ms_lakes.shp") 
-# lakes <- project(lakes, ms_full)
+lakes <- vect("data/landscape_data/ne_ms_lakes.shp")
+lakes <- project(lakes, ms_full)
 
 deer_buffer <- vect("data/landscape_data/deer_10km_buffers.shp")
 
@@ -68,12 +68,13 @@ m1 <- glmer(type ~ pctBottomland + pctDecid + pctEvergreen + pctWater + pctHerba
 
 ## Create empty raster
 temp_rast <- rast(ext(ms_full), resolution=1000) # create template raster 1 km x 1 km
+temp_pts <- as.points(temp_rast, values=FALSE, na.rm=TRUE)
+crs(temp_pts) <- crs(ms_full) # Define projection
 
 # Predict
 layers <- c(layers["pctBottomland"],  layers["pctDecid"], layers["pctEvergreen"], layers["pctWater"], layers["pctHerbaceous"], layers["pctCrops"])
-pred_deer <- predict(layers, m1, type="response", re.form = NA)
 
-## Get SE of predictions
+#### Get SE of predictions
 # Load points of raster cells
 pts <- vect("data/landscape_data/ms_masked_90m_pts.shp")
 pts <- project(pts, crs(layers))
@@ -91,86 +92,84 @@ deer_sd <- data.frame(fit=deer_sd$fit, se.fit=deer_sd$se.fit)
 
 # Calculate confidence intervals
 deer_sd <- deer_sd %>% as_tibble() %>%
-               mutate(lci=boot::inv.logit(fit - (1.96 * se.fit)),
-                      uci=boot::inv.logit(fit + (1.96 * se.fit)),
-                      fit=boot::inv.logit(fit))
+  mutate(lci=boot::inv.logit(fit - (1.96 * se.fit)),
+         uci=boot::inv.logit(fit + (1.96 * se.fit))) %>%
+  mutate(fit=boot::inv.logit(fit))
 
-## Mask predicted probabilities to state
-pred_deer <- mask(pred_deer, ms_full)
+# Add values to pts SpatVector object. This takes up a lot of memory
+pts$fit <- deer_sd$fit
+pts$lci <- deer_sd$lci
+pts$uci <- deer_sd$uci
 
-# create template 1 km x 1 km raster 
-temp_rast <- rast(ext(ms_full), resolution=1000) 
-
-# Resample and crop rows of NAs
-pred_deer <- resample(pred_deer, temp_rast)
-pred_deer <- mask(pred_deer, ms_full)
-pred_deer <- crop(pred_deer, ext(ms_full))
-plot(pred_deer)
-
-# Rescale predicted probabilities to be between 0 and 1
-pred_deer <- (pred_deer-minmax(pred_deer)[1])/(minmax(pred_deer)[2]-minmax(pred_deer)[1])
-plot(pred_deer)
-
-# Rescale confidence intervals based on rescaled predicted probabilities
-deer_sd <- deer_sd %>% 
-                mutate(fit=scales::rescale(fit, to=c(0,1)),
-                       lci=scales::rescale(lci, to=c(0,1)),
-                       uci=scales::rescale(uci, to=c(0,1))) %>%
-                rename(uCI=lci, lCI=uci)  # It makes no sense, but it does after we switch 
-
-pts$lci <- deer_sd$lCI
-pts$uci <- deer_sd$uCI
-
-# Write shapefile
+# Write shapefile (slow...)
 writeVector(pts, "data/landscape_data/deer_pts_se.shp", overwrite=TRUE)
 # go open the point file in ArcGIS and convert it to a raster
 
-# Reclassify missing data to 0
-m <- rbind(c(NA, 0))
-pred_deer <- classify(pred_deer, m)
-
-# writeRaster(pred_deer, "data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL.tif", overwrite=TRUE)
-# writeRaster(pred_deer, "data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL.asc",NAflag=-9999, overwrite=TRUE)
+## Convert points to raster. this is pretty memory-intensive (i.e., I hit 45 GB on my 64-GB machine)
+deer_uci <- rasterize(pts, layers["pctBottomland"], field="uci", fun="mean")
+deer_lci <- rasterize(pts, layers["pctBottomland"], field="lci", fun="mean")
+deer_mean <- rasterize(pts, layers["pctBottomland"], field="fit", fun="mean")
 
 ## Read back in raster from points to do some final clipping/cleaning
-deer_uci <- rast("data/predictions/deer_glmm_rsf_UpperCI.tif")
-deer_lci <- rast("data/predictions/deer_glmm_rsf_LowerCI.tif")
+# deer_uci <- rast("data/predictions/deer_glmm_rsf_UpperCI.tif")
+# deer_lci <- rast("data/predictions/deer_glmm_rsf_LowerCI.tif")
+# deer_mean <- rast("data/predictions/deer_glmm_rsf_mean.tif")
 
-# Resample and crop rows of NAs
+# Crop rows of NAs
 deer_uci <- mask(deer_uci, ms_full)
 deer_lci <- mask(deer_lci, ms_full)
+deer_mean <- mask(deer_mean, ms_full)
 
+## Rescale
+# find min and max values
+max_hsi <- max(minmax(deer_uci)[2], minmax(deer_lci)[2], minmax(deer_mean)[2])
+min_hsi <- min(minmax(deer_uci)[1], minmax(deer_lci)[1], minmax(deer_mean)[1])
+
+# apply scaling
+deer_uci <- (deer_uci-min_hsi)/(max_hsi-min_hsi)
+deer_lci <- (deer_lci-min_hsi)/(max_hsi-min_hsi)
+deer_mean <- (deer_mean-min_hsi)/(max_hsi-min_hsi)
+
+# Mask lakes
+deer_uci <- mask(deer_uci, lakes, inverse=TRUE)
+deer_lci <- mask(deer_lci, lakes, inverse=TRUE)
+deer_mean <- mask(deer_mean, lakes, inverse=TRUE)
+
+# Resample to 1x1 km
 deer_uci <- resample(deer_uci, temp_rast)
 deer_lci <- resample(deer_lci, temp_rast)
+deer_mean <- resample(deer_mean, temp_rast)
 
+# Get rid of extra space around MS
 deer_uci <- crop(deer_uci, ext(ms_full))
 deer_lci <- crop(deer_lci, ext(ms_full))
-
-plot(deer_lci)
-plot(pred_deer)
-plot(deer_uci)
+deer_mean <- crop(deer_mean, ext(ms_full))
 
 # Reclassify missing data to 0
+m <- rbind(c(NA, 0))
 deer_uci <- classify(deer_uci, m)
 deer_lci <- classify(deer_lci, m)
+deer_mean <- classify(deer_mean, m)
 
 ## Save LCI and UCI rasters as .asc
-writeRaster(deer_uci, "data/predictions/deer_glmm_rsf_UpperCI.asc",NAflag=-9999, overwrite=TRUE)
-writeRaster(deer_lci, "data/predictions/deer_glmm_rsf_LowerCI.asc",NAflag=-9999, overwrite=TRUE)
-
+writeRaster(deer_uci, "data/predictions/deer_glmm_rsf_UpperCI.asc", NAflag=-9999, overwrite=TRUE)
+writeRaster(deer_lci, "data/predictions/deer_glmm_rsf_LowerCI.asc", NAflag=-9999, overwrite=TRUE)
+writeRaster(deer_mean, "data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL.asc", NAflag=-9999, overwrite=TRUE)
+# additionally save mean predictions as .tif for plotting
+writeRaster(deer_mean, "data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL.tif", overwrite=TRUE)
 
 #### Check range of values and points ####
-all_vals <- as.data.frame(pred_deer)
-range(all_vals$lyr1)
-mean(all_vals$lyr1)
-quantile(all_vals$lyr1, probs=c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1))
+all_vals <- as.data.frame(deer_mean)
+range(all_vals$mean)
+mean(all_vals$mean)
+quantile(all_vals$mean, probs=c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1))
 
 ## Extract RSF predictions at each location
 deer_test <- deer %>% select(DeerID:Y)
 
-dat_deer <- extract(pred_deer, deer_test[,c(4:5)])
+dat_deer <- extract(deer_mean, deer_test[,c(4:5)])
 
-deer_test$rsf <- dat_deer$lyr1
+deer_test$rsf <- dat_deer$mean
 
 hist(deer_test$rsf[deer_test$type==1], xlim=c(0,1))
 hist(deer_test$rsf[deer_test$type==0], xlim=c(0,1))
