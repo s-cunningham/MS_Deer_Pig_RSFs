@@ -1,5 +1,6 @@
 library(tidyverse)
 library(patchwork)
+library(tagger)
 
 # Function for calculating geometric mean
 gm_mean <- function(x, na.rm=TRUE){
@@ -77,7 +78,7 @@ sims <- sims %>% as_tibble %>%
                          patch=="hm" ~ "highlymarginal",
                          patch=="m" ~ "marginal"))
 
-#### List trajectory files ####
+#### List trajectory files for Rmax sensitivity analysis ####
 files <- list.files(path="results/sensitivity_analysis/Rmax_sensitivity/", pattern=".txt", full.names=TRUE)
 
 results <- data.frame()
@@ -96,6 +97,7 @@ for (i in 1:length(files)) {
   
   # Calculate geometric mean lambda
   lmda <- gm_mean(lambda_calc(temp))
+  sqrt(prod(lmda,na.rm=TRUE))
   
   # Combine with filename
   res <- data.frame(file=str_split(files[i], pattern="/")[[1]][4], lambda=lmda,
@@ -143,6 +145,87 @@ ggplot(results) +
   ylab(expression("Finite rate of increase ("*lambda*")")) + xlab("Change in maximum growth rate (%)") +
   guides(color=guide_legend(position = "inside")) +
   theme_classic() +
+  # tag_facets() +
+  theme(strip.background=element_rect(color=NA,fill=NA),
+        panel.border=element_rect(fill=NA, color="black", linewidth=1),
+        axis.line=element_line(linewidth=0),
+        # legend.position.inside=c(0.01,0.99),
+        legend.position.inside=c(0.3,0.15),
+        legend.justification=c(0,1),
+        strip.text=element_blank(),
+        legend.title=element_blank(),
+        legend.text=element_text(size=11),
+        axis.title=element_text(size=12),
+        axis.text=element_text(size=11))
+ggsave(file="figs/lambda_rmax_sensitivity.svg")
+# Saving 9.42 x 5.22 in image
+# Saving 8.5 x 4.97 in image
+
+#### List simulation files for K sensitivity analysis ####
+files <- list.files(path="results/sensitivity_analysis/carrying_capacity_sensitivity/", pattern=".txt", full.names=TRUE)
+
+resultsK <- data.frame()
+for (i in 1:length(files)) {
+  
+  # Read File
+  temp <- read_sim(files[i], skip_rows=15)
+  
+  # Standard deviation lambda
+  lSD <- numeric()
+  uSD <- numeric()
+  for(y in 1:nrow(temp)){
+    lSD[y] <- temp$lSD[y+1]/temp$lSD[y]
+    uSD[y] <- temp$hSD[y+1]/temp$hSD[y]
+  }
+  
+  # Calculate geometric mean lambda
+  lmda <- gm_mean(lambda_calc(temp))
+  
+  # Combine with filename
+  res <- data.frame(file=str_split(files[i], pattern="/")[[1]][4], lambda=lmda,
+                    lower=gm_mean(lSD), upper=gm_mean(uSD))
+  
+  # Add to results df
+  resultsK <- bind_rows(resultsK, res)
+  
+}
+resultsK
+
+resultsK <- resultsK %>% as_tibble %>% 
+  select(file, lower, lambda, upper) %>%
+  mutate(file=gsub(".txt", "", x=file),
+         file=gsub("K", "", x=file)) %>%
+  mutate(species=str_split_i(file, "_", i=1),
+         patch=str_split_i(file, "_", i=3),
+         density=str_split_i(file, "_", i=2),
+         level=str_split_i(file, "_", i=5)) %>%
+  mutate(density=if_else(density=="14", "14.3",density)) %>%
+  rename(density_int=density) %>%
+  mutate(density=if_else(density_int=="14.3" | density_int=="8", "Low", "High")) %>%
+  select(species, patch, density, level, lower:upper) %>%
+  mutate(patch=case_when(patch=="c" ~ "core",
+                         patch=="hm" ~ "highlymarginal",
+                         patch=="m" ~ "marginal"))
+
+resultsK <- bind_rows(sims, resultsK)
+
+resultsK$level <- factor(resultsK$level, levels=c("-40","-30","-20","-10","0", "10","20","30","40"))
+resultsK$species <- factor(resultsK$species, levels=c("deer", "pigs"), labels=c("White-tailed Deer", "Wild Pigs"))
+# results$density <- factor(results$density, levels=c("Low", "High"), labels=c("Low Density", "High Density"))
+resultsK$patch <- factor(resultsK$patch, levels=c("core", "marginal"), labels=c("Core", "Core+Marginal"))
+
+resultsK <- resultsK %>% filter(patch!="highlymarginal" & density=="Low")
+
+ggplot(resultsK) +
+  # geom_vline(xintercept=5, color="gray90") +
+  geom_hline(yintercept=1, color="gray5") +
+  geom_segment(aes(x=level, y=lower, yend=upper, group=patch, color=patch), position=position_dodge(width = 0.5)) +
+  geom_point(aes(x=level, y=lambda, group=patch, color=patch), position=position_dodge(width = 0.5)) +
+  scale_color_manual(values=c("#0d0887", "#cc4778"), name="Patch Type") +
+  facet_grid(.~species) +
+  ylab(expression("Finite rate of increase ("*lambda*")")) + xlab("Change in carrying capacity (%)") +
+  guides(color=guide_legend(position = "inside")) +
+  theme_classic() +
   theme(strip.background=element_rect(color=NA,fill=NA),
         panel.border=element_rect(fill=NA, color="black", linewidth=1),
         axis.line=element_line(linewidth=0),
@@ -153,8 +236,22 @@ ggplot(results) +
         legend.text=element_text(size=11),
         axis.title=element_text(size=12),
         axis.text=element_text(size=11))
-ggsave(file="figs/lambda_rmax_sensitivity.svg")
+
+ggsave(file="figs/lambda_K_sensitivity.svg")
 # Saving 9.42 x 5.22 in image
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Separate species, plot by density
 deer <- results %>% filter(species=="White-tailed Deer") 
@@ -210,4 +307,15 @@ pig_plot <- ggplot(pigs) +
 
 deer_plot / pig_plot + plot_annotation(tag_levels="A", tag_prefix="(", tag_suffix=")") 
 
+
+###  Geometric mean the other way
+# lambda <- numeric()
+# for(y in 1:nrow(temp)){
+#   lambda[y] <- temp$Average[y+1]/temp$Average[y]
+# }
+# 
+# nthroot <- function(x,n) {
+#   (abs(x)^(1/n))*sign(x)
+# }
+# nthroot(prod(lambda, na.rm=TRUE),(length(lambda)-1))
 

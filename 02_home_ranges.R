@@ -40,7 +40,7 @@ for (i in 1:length(un.id)) {
   dat <- deer_tr %>% filter(id==un.id[i])
   
   # Filter all locations to ~4 hours
-  dat <- track_resample(dat, rate=hours(4), tolerance=minutes(5))
+  # dat <- track_resample(dat, rate=hours(4), tolerance=minutes(5))
   
   #####
   # dat <- dat %>% mutate(month=format(t_, "%m"))
@@ -125,8 +125,8 @@ short <- deer %>% mutate(month=format(timestamp, "%m")) %>% group_by(DeerID) %>%
 all <- all %>% filter(!(DeerID %in% short$DeerID))
 size <- size %>% filter(!(DeerID %in% short$DeerID))
 
-write_csv(all, "data/location_data/deer_used_avail.csv")
-write_csv(size, "data/location_data/deer_est_akde_homeranges.csv")
+write_csv(all, "data/location_data/deer_used_avail_all.csv")
+write_csv(size, "data/location_data/deer_est_akde_homeranges_all.csv")
 
 all <- read_csv("data/location_data/deer_used_avail.csv")
 

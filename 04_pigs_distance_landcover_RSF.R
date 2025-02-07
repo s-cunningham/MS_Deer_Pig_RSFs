@@ -60,6 +60,9 @@ pigs <- read_csv("data/pigs_usedavail_covariates.csv")
 pigs_rsf <- glmer(type ~ bottomlandhw + uplandforest + foodcrops + roads + streams + (1|PigID), data=pigs, family=binomial(link = "logit"))
 # pigs_rsf <- glmer(type ~ pctDecidMixed + pctCrops + pctBottomland + roads + streams + (1|PigID), data=pigs, family=binomial(link = "logit"))
 
+# Save model
+# saveRDS(pigs_rsf, "data/pigs_rsf_model.RDS")
+
 # Predict across Mississippi
 pig_layers <- c(layers["bottomlandhw"],  layers["uplandforest"], layers["foodcrops"], layers["roads"], layers["streams"])
 
@@ -95,7 +98,7 @@ pts$uci <- pigs_sd$uci
 # pts$se <- pigs_sd$se.fit
 
 # Write shapefile
-writeVector(pts, "data/landscape_data/pigs_pts_se.shp", overwrite=TRUE)
+# writeVector(pts, "data/landscape_data/pigs_pts_se.shp", overwrite=TRUE)
 # go open the point file in ArcGIS and convert it to a raster
 
 ## Convert points to raster. this is pretty memory-intensive
@@ -133,11 +136,6 @@ pigs_mean <- mask(pigs_mean, lakes, inverse=TRUE)
 pigs_uci <- resample(pigs_uci, temp_rast)
 pigs_lci <- resample(pigs_lci, temp_rast)
 pigs_mean <- resample(pigs_mean, temp_rast)
-
-# Get rid of extra space around MS
-pigs_uci <- crop(pigs_uci, ext(ms_full))
-pigs_lci <- crop(pigs_lci, ext(ms_full))
-pigs_mean <- crop(pigs_mean, ext(ms_full))
 
 # Reclassify missing data to 0
 m <- rbind(c(NA, 0))

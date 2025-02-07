@@ -51,6 +51,11 @@ deer <- bind_cols(deer, deer_xy) %>% select(DeerID:ID,X,Y,pctBottomland:pctCrops
 
 cor(deer[,6:12])
 
+# Creating a correlation matrix
+cor_matrix <- cor(deer[,6:12])
+# Visualizing the correlation matrix
+image(cor_matrix, main = "Correlation Matrix", col = colorRampPalette(c("darkgreen", "white", "red"))(20))
+
 ## Deer
 # Add a year column (split out ID)
 deer <- deer %>% separate(DeerID, into=c("id", "study", "year"), sep="_") %>%
@@ -64,7 +69,18 @@ library(lme4)
 set.seed(1)
 
 ## Run model
-m1 <- glmer(type ~ pctBottomland + pctDecid + pctEvergreen + pctWater + pctHerbaceous + pctCrops + (1|DeerID), data=deer, family=binomial(link = "logit"))
+system.time(
+  m1 <- glmer(type ~ pctBottomland + pctDecid + pctEvergreen + pctWater + pctCrops + (1|DeerID), data=deer, family=binomial(link = "logit"))
+)
+# pctHerbaceous + 
+car::vif(m1)
+
+# Visualizing the model
+plot(m1, which = 1, main = "Model Fit")
+
+
+# Save model
+# saveRDS(m1, "data/deer_rsf_model.RDS")
 
 ## Create empty raster
 temp_rast <- rast(ext(ms_full), resolution=1000) # create template raster 1 km x 1 km
@@ -159,6 +175,8 @@ writeRaster(deer_mean, "data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL.asc"
 writeRaster(deer_mean, "data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL.tif", overwrite=TRUE)
 
 #### Check range of values and points ####
+deer_mean <- rast("data/predictions/deer_glmm_rsf_FINALFINALFINALFINAL_90x90.tif")
+
 all_vals <- as.data.frame(deer_mean)
 range(all_vals$mean)
 mean(all_vals$mean)

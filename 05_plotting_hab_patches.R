@@ -10,6 +10,8 @@ ms <- vect("data/landscape_data/mississippi_ACEA.shp")
 # List patch .asc files
 patches <- list.files(path="C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/patches/",
                       pattern=".ASC", full.names=TRUE)  # note that the pattern argument is case-sensitive, and RAMAS writes ASCII files as .ASC instead of .asc like R
+
+
 # Make raster "stack"
 patches <- rast(patches)
 
@@ -36,7 +38,7 @@ for (i in 1:dim(patches)[3]) {
   filename <- paste0("results/habitat_patches/", names(patch), ".tif")
   
   # write raster
-  writeRaster(patch, filename)
+  writeRaster(patch, filename, overwrite=TRUE)
 }
 
 ## Calculate area (in hectares)
@@ -53,6 +55,8 @@ names(polylist) <- names(patches)
 
 ## Calculate area of overlap between Deer core patches and pigs
 # Need to add terra:: before the union function, it must be masked by something else
+cwd <- vect("data/landscape_data/2024CWDpositive_counties.shp")
+cwd <- project(cwd, crs(polylist[[1]]))
 
 # Core deer & core pig habitat overlap 
 ovp1 <- terra::union(polylist$deer_c_mean, polylist$pig_c_mean)
@@ -76,8 +80,21 @@ expanse(ovp5, unit="km")[[3]]
 ovp6 <- terra::union(polylist$deer_c_uci, polylist$pig_m_uci)
 expanse(ovp6, unit="km")[[3]]
 
+# Core deer & highly marginal pig habitat overlap
+ovp4 <- terra::union(polylist$deer_c_mean, polylist$pig_hm_mean)
+expanse(ovp4, unit="km")[[3]]
 
+ovp5 <- terra::union(polylist$deer_c_lci, polylist$pig_hm_lci)
+expanse(ovp5, unit="km")[[3]]
 
+ovp6 <- terra::union(polylist$deer_c_uci, polylist$pig_hm_uci)
+expanse(ovp6, unit="km")[[3]]
+
+# Deer & pig core habitat overlap within CWD+ countines
+dcwd <- crop(polylist$deer_c_mean, cwd)
+pcwd <- crop(polylist$pig_c_mean, cwd)
+ovp1p <- terra::union(dcwd, pcwd)
+sum(expanse(ovp1p, unit="km"))
 
 
 #### Create patch plot for manuscript ####
@@ -127,7 +144,7 @@ pig_patches <- ggplot() +
   theme_void() 
 
 deer_patches + pig_patches +
-  plot_annotation(tag_levels = 'A', tag_prefix="(", tag_suffix=")") +
+  plot_annotation(tag_levels = 'a', tag_prefix="(", tag_suffix=")") +
   plot_layout(guides = 'collect') & 
   theme(legend.position = 'bottom', 
         legend.text=element_text(size=11),
@@ -135,8 +152,8 @@ deer_patches + pig_patches +
 
 ggsave(file="figs/patches.svg")
 # Saving 10.6 x 9.06 in image
+# Saving 8.5 x 7.23 in image
 
 ####
-
 
 
