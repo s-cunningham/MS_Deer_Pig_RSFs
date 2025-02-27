@@ -104,6 +104,14 @@ ggplot(results) +
   theme(text = element_text(size=16),panel.border = element_blank(), axis.line = element_line(colour="black"),
         panel.grid.major = element_blank(),panel.grid.minor = element_blank()) 
 
+X <- matrix(c(3, 4,-5, 1,
+              2, 2, 2,-1,
+              1,-1, 5,-5,
+              5, 0, 0, 1), 4, 4, byrow=TRUE)
+y <- c(10, 5, 7, 4)
+sol <- solve(X, y)
+
+
 
 #### Incorporating logistic density dependence #####
 
