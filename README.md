@@ -1,2 +1,2 @@
 # MS_Deer_Pig_RSFs
-Code for resource selection functions for deer and pigs across the state of Mississippi
+Code for resource selection functions for deer and pigs across the state of Mississippi. Data not available due to data use agreements.
