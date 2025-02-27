@@ -78,10 +78,11 @@ for (i in 1:length(un.id)) {
   deer_res <- bind_rows(deer_res, dat)
   
   # Make template raster
-  trast <- make_trast(dat, res=10)
+  trast <- make_trast(dat, res=90)
 
   # Create HR
-  hr_deer <- hr_akde(dat, trast=trast, level=0.95)
+  ## Need to check whether full spatial coverage of available points in HR
+  hr_deer <- hr_akde(dat, trast=trast, level=0.999)
  
   # Calculate HR area
   area <- hr_deer %>% hr_area() %>% mutate(areakm2=area/(1000^2)) %>%
