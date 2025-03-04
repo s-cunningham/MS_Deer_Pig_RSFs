@@ -71,22 +71,27 @@ hist(npts$n)
 sum(npts$n<1000)
 
 # Keep deer with >3 months of data
-deer_time <- deer %>% group_by(DeerID) %>%
-                reframe(ts=range(timestamp)) %>%
-                mutate(time=rep(c("start","end"), 91)) %>%
-                pivot_wider(names_from="time", values_from="ts") %>%
-                mutate(duration=end-start,
-                       months=as.numeric(duration/30))
-
-keep <- deer_time %>% filter(months > 3) %>% select(DeerID) %>% as.vector()
-keep <- unlist(unname(keep))
-
-deer <- deer %>% filter(DeerID %in% keep)
+# deer_time <- deer %>% group_by(DeerID) %>%
+#                 reframe(ts=range(timestamp)) %>%
+#                 mutate(time=rep(c("start","end"), 91)) %>%
+#                 pivot_wider(names_from="time", values_from="ts") %>%
+#                 mutate(duration=end-start,
+#                        months=as.numeric(duration/30))
+# 
+# keep <- deer_time %>% filter(months > 3) %>% select(DeerID) %>% as.vector()
+# keep <- unlist(unname(keep))
+# 
+# deer <- deer %>% filter(DeerID %in% keep)
 
 
 write_csv(deer, "data/location_data/deer_filtered.csv")
 
-
+deer %>% group_by(DeerID) %>%
+          reframe(range=range(timestamp)) %>%
+          mutate(name=rep(c("start", "end"), 91)) %>%
+          pivot_wider(values_from="range") %>%
+          mutate(duration=end-start) %>% 
+          reframe(range=range(duration))
 
 #### Pigs ####
 # Read GPS data

@@ -49,13 +49,6 @@ deer <- st_drop_geometry(deer)
 deer <- bind_cols(deer, dat_deer)
 deer <- bind_cols(deer, deer_xy) %>% select(DeerID:ID,X,Y,pctBottomland:pctCrops)
 
-cor(deer[,6:12])
-
-# Creating a correlation matrix
-cor_matrix <- cor(deer[,6:12])
-# Visualizing the correlation matrix
-image(cor_matrix, main = "Correlation Matrix", col = colorRampPalette(c("darkgreen", "white", "red"))(20))
-
 ## Deer
 # Add a year column (split out ID)
 deer <- deer %>% separate(DeerID, into=c("id", "study", "year"), sep="_") %>%

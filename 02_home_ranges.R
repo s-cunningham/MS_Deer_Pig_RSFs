@@ -1,6 +1,7 @@
 library(tidyverse)
 library(amt)
 library(sf)
+library(adehabitatLT)
 
 #### Deer ####
 set.seed(1)
@@ -8,18 +9,32 @@ set.seed(1)
 deer <- read_csv("data/location_data/deer_filtered.csv") %>%
           mutate(month=as.numeric(format(timestamp, "%m")),
                  year=as.numeric(format(timestamp, "%Y"))) %>%
-          select(DeerID:study,month,year,timestamp,X,Y) %>%
-          unite("DeerID", c(1,5), sep="_") %>% # separate by year
-          filter(DeerID!="81864_Delta_2022" & DeerID!="27_Central_2020" & DeerID!="340_Central_2019" & DeerID!="27_Central_2019") %>%
-          mutate(month=as.numeric(format(timestamp, "%m")),
-                 day=as.numeric(format(timestamp, "%d"))) %>%
-          filter(!(DeerID=="87924_Delta_2021" & month<6)) %>%
-          filter(!(DeerID=="81864_Delta_2021" & month<8)) %>%
-          mutate(DeerID=case_when(DeerID!="87924_Delta_2022" ~ DeerID,
-                                  DeerID=="87924_Delta_2022" & (month<3 | month>=10) ~ "87924_Delta_2022-1", 
-                                  DeerID=="87924_Delta_2022" & (month>4 & month<9) ~ "87924_Delta_2022-2")) %>%
-          filter(!is.na(DeerID)) %>%
-          select(-month, -day)
+          dplyr::select(DeerID:study,month,year,timestamp,X,Y) %>%
+          unite("DeerID", c(1,5), sep="_") #%>% # separate by year
+          # filter(DeerID!="81864_Delta_2022" & DeerID!="27_Central_2020" & DeerID!="340_Central_2019" & DeerID!="27_Central_2019") %>%
+          # mutate(month=as.numeric(format(timestamp, "%m")),
+          #        day=as.numeric(format(timestamp, "%d"))) %>%
+          # filter(!(DeerID=="87924_Delta_2021" & month<6)) %>%
+          # filter(!(DeerID=="81864_Delta_2021" & month<8)) %>%
+          # mutate(DeerID=case_when(DeerID!="87924_Delta_2022" ~ DeerID,
+          #                         DeerID=="87924_Delta_2022" & (month<3 | month>=10) ~ "87924_Delta_2022-1", 
+          #                         DeerID=="87924_Delta_2022" & (month>4 & month<9) ~ "87924_Delta_2022-2")) %>%
+          # filter(!is.na(DeerID)) %>%
+          # dplyr::select(-month, -day)
+
+un.id <- unique(deer$DeerID)
+
+
+deer %>% group_by(DeerID, month) %>% count() 
+
+
+# Check how many months of data for each deer
+short <- deer %>% mutate(month=format(timestamp, "%m")) %>% group_by(DeerID) %>%
+  reframe(n=length(unique(month))) %>%
+  filter(n <= 1)
+
+# Remove individuals with < 3 months data
+deer <- deer %>% filter(!(DeerID %in% short$DeerID))
 
 # Create track of all individuals
 deer_tr <- make_track(deer, X, Y, timestamp, id=DeerID, crs=32616)
@@ -34,65 +49,52 @@ un.id <- unique(deer$DeerID)
 avail <- data.frame()
 deer_res <- data.frame()
 size <- data.frame()
+dist <- numeric()
 for (i in 1:length(un.id)) {
   
   # Filter to ID
   dat <- deer_tr %>% filter(id==un.id[i])
   
   # Filter all locations to ~4 hours
-  # dat <- track_resample(dat, rate=hours(4), tolerance=minutes(5))
+  dat <- track_resample(dat, rate=hours(4), tolerance=minutes(5))
   
-  #####
-  # dat <- dat %>% mutate(month=format(t_, "%m"))
-  # ggplot(dat) +
-  #   geom_path(aes(x=x_, y=y_, color=month)) +
-  #   geom_point(aes(x=x_, y=y_, color=month))
-  # 
-  # ggplot(dat) +
-  #   geom_line(aes(x=t_, y=x_)) 
-  # 
-  # dat_sf <- st_as_sf(dat, coords=c("x_", "y_"), crs=32616) %>% 
-  #               st_transform(crs=4326) %>%
-  #               st_coordinates() %>% as_tibble() %>% rename(long=X, lat=Y) 
-  # dat <- bind_cols(dat, dat_sf)
-  # 
-  # cent <- colMeans(dat[, c("long", "lat")])
-  # 
-  # dat$distance_to_center <- geosphere::distGeo(cbind(dat$long, dat$lat), cent)
-  # 
-  # plot(dat$long, dat$lat, type="p")
-  # points(cent[1], cent[2], col="red", pch=16)
- 
-  # data_filtered <- dat %>%
-  #   filter(distance_to_center < quantile(distance_to_center, 0.90))
-  # 
-  # ggplot() +
-  #   geom_point(data=dat, aes(x=long, y=lat), color="red") +
-  #   geom_point(data=data_filtered, aes(x=long, y=lat))
+  df <- as.data.frame(dat)
+  df <- as.ltraj(xy=df[,c("x_","y_")], date=df$t_, id=df$id)
+
+  test <- lavielle(df, Lmin=10, which="R2n", K=3, plotit=TRUE)
+  fp <- findpath(test, 3)
   
-  # threshold <- quantile(f20$distance_to_center, 0.90)
-  # plot(f20$longitude, f20$latitude, col = ifelse(f20$distance_to_center > threshold, "red", "black"))
-  #####
+  ## Regularize trajectories, round values
+  refda <- min(df[[1]]$date)
+  df_NA <- setNA(df, refda, 240, units="min") 
+  df <- sett0(df_NA, refda, 240, units="min")
+  
+  # Save distance between locations
+  dist <- c(dist, df[[1]]$dist)
+  
+  plot(df[[1]]$R2n, type="l")
+  
   
   # Save resampled data
   deer_res <- bind_rows(deer_res, dat)
   
   # Make template raster
-  trast <- make_trast(dat, res=90)
+  trast <- make_trast(dat, res=30)
 
   # Create HR
   ## Need to check whether full spatial coverage of available points in HR
-  hr_deer <- hr_akde(dat, trast=trast, level=0.999)
- 
+  hr_deer <- hr_mcp(dat, level=1)
+  hr_deer <- hr_akde(dat, trast=trast, levels=0.95)
+  
   # Calculate HR area
   area <- hr_deer %>% hr_area() %>% mutate(areakm2=area/(1000^2)) %>%
-              select(-level, -area) %>%
+              dplyr::select(-level, -area) %>%
               pivot_wider(names_from = "what", values_from="areakm2")
   
   # Generate random points
-  r1 <- random_points(hr_deer, n = 5*nrow(dat)) 
+  r1 <- random_points(hr_deer, n = 10*nrow(dat), type="regular") 
   plot(r1)
-  points(dat$x_, dat$y_, col="red")
+  points(dat$x_, dat$y_, col="red", pch=16)
 
   # Add ID to each location
   r1 <- r1 %>% mutate(DeerID=un.id[i])
@@ -106,35 +108,31 @@ for (i in 1:length(un.id)) {
   
 }
 
+## overall average distance
+median(dist, na.rm=TRUE)
+
+# combine all deer points
 deer_res <- deer_res %>% rename(DeerID=id, X=x_, Y=y_) %>% 
-          select(DeerID, X, Y) %>%
+          dplyr::select(DeerID, X, Y) %>%
           mutate(type=1) %>% as_tibble()
 
+# combine all deer available points
 avail <- avail %>% as_tibble() %>% 
-            select(DeerID,  x_, y_, case_) %>%
+            dplyr::select(DeerID,  x_, y_, case_) %>%
             rename(X=x_, Y=y_, type=case_) %>%
             mutate(type=as.numeric(type))
 
+# combine used and available
 all <- bind_rows(deer_res, avail)
-
-# Check how many months of data for each deer
-short <- deer %>% mutate(month=format(timestamp, "%m")) %>% group_by(DeerID) %>%
-        reframe(n=length(unique(month))) %>%
-        filter(n < 3)
-
-# Remove individuals with < 3 months data
-all <- all %>% filter(!(DeerID %in% short$DeerID))
-size <- size %>% filter(!(DeerID %in% short$DeerID))
 
 write_csv(all, "data/location_data/deer_used_avail_all.csv")
 write_csv(size, "data/location_data/deer_est_akde_homeranges_all.csv")
 
-all <- read_csv("data/location_data/deer_used_avail.csv")
-
-
-deer_sf <- all %>% filter(type==1) %>% separate("DeerID", into=c("ID", "study", "year"), remove=FALSE) %>%
-              st_as_sf(coords=c("X", "Y"), crs=32616)
-st_write(deer_sf, "data/location_data/filtered_deer_locations.shp")
+# all <- read_csv("data/location_data/deer_used_avail.csv")
+# 
+# deer_sf <- all %>% filter(type==1) %>% separate("DeerID", into=c("ID", "study", "year"), remove=FALSE) %>%
+#               st_as_sf(coords=c("X", "Y"), crs=32616)
+# st_write(deer_sf, "data/location_data/filtered_deer_locations.shp")
 
 #### Pigs ####
 set.seed(1)
@@ -142,9 +140,17 @@ set.seed(1)
 pigs <- read_csv("data/location_data/pigs_filtered.csv") %>%
   mutate(month=as.numeric(format(timestamp, "%m")),
          year=as.numeric(format(timestamp, "%Y"))) %>%
-  select(PigID:study,month,year,timestamp,X,Y) %>%
+  dplyr::select(PigID:study,month,year,timestamp,X,Y) %>%
   unite("PigID", c(1,5), sep="_") %>% # separate by year
   filter(PigID != "35493_Noxubee_2022")
+
+# Check how many months of data for each pig
+short <- pigs %>% mutate(month=format(timestamp, "%m")) %>% group_by(PigID) %>%
+  reframe(n=length(unique(month))) %>%
+  filter(n < 3)
+
+# Remove individuals with < 3 months data
+pigs <- pigs %>% filter(!(PigID %in% short$PigID))
 
 # Create track of all individuals
 pigs_tr <- make_track(pigs, X, Y, timestamp, id=PigID, crs=32616)
@@ -159,6 +165,7 @@ un.id <- unique(pigs$PigID)
 avail <- data.frame()
 pigs_res <- data.frame()
 size <- data.frame()
+dist <- numeric()
 for (i in 1:length(un.id)) {
   
   # Filter to ID
@@ -167,31 +174,33 @@ for (i in 1:length(un.id)) {
   # Filter all locations to ~4 hours
   dat <- track_resample(dat, rate=hours(4), tolerance=minutes(5))
   
-  # dat <- dat %>% mutate(month=as.numeric(format(t_, "%m")))
-  # ggplot(dat) +
-  #   geom_path(aes(x=x_, y=y_, color=month)) +
-  #   geom_point(aes(x=x_, y=y_, color=month)) 
-  # 
-  # ggplot(dat) +
-  #   geom_line(aes(x=t_, y=y_))
+  df <- as.data.frame(dat)
+  df <- as.ltraj(xy=df[,c("x_","y_")], date=df$t_, id=df$id)
   
+  ## Regularize trajectories, round values
+  refda <- min(df[[1]]$date)
+  df_NA <- setNA(df, refda, 240, units="min") # Locations every 3 hours 
+  df <- sett0(df_NA, refda, 240, units="min")
+  
+  # Save distance between locations
+  dist <- c(dist, df[[1]]$dist)
   
   # Save resampled data
   pigs_res <- bind_rows(pigs_res, dat)
   
   # Make template raster
-  trast <- make_trast(dat, res=10)
+  # trast <- make_trast(dat, res=30)
   
   # Create HR
-  hr_pigs <- hr_akde(dat, trast=trast, level=0.95)
+  hr_pigs <- hr_mcp(dat, level=1)
   
   # Calculate HR area
   area <- hr_pigs %>% hr_area() %>% mutate(areakm2=area/(1000^2)) %>%
-    select(-level, -area) %>%
+    dplyr::select(-level, -area) %>%
     pivot_wider(names_from = "what", values_from="areakm2")
   
   # Generate random points
-  r1 <- random_points(hr_pigs, n = 5*nrow(dat)) 
+  r1 <- random_points(hr_pigs, n = 10*nrow(dat)) 
   plot(r1, main=un.id[i])
   points(dat$x_, dat$y_, col="red", pch=16)
   
@@ -206,26 +215,20 @@ for (i in 1:length(un.id)) {
   size <- bind_rows(size, area)
 }
 
+## overall average distance
+median(dist, na.rm=TRUE)
+sd(dist, na.rm=TRUE)
+
 pigs_res <- pigs_res %>% rename(PigID=id, X=x_, Y=y_) %>% 
-  select(PigID, X, Y) %>%
+  dplyr::select(PigID, X, Y) %>%
   mutate(type=1) %>% as_tibble()
 
 avail <- avail %>% as_tibble() %>% 
-  select(PigID,  x_, y_, case_) %>%
+  dplyr::select(PigID,  x_, y_, case_) %>%
   rename(X=x_, Y=y_, type=case_) %>%
   mutate(type=as.numeric(type))
 
 all <- bind_rows(pigs_res, avail)
-
-# Check how many months of data for each deer
-short <- pigs %>% mutate(month=format(timestamp, "%m")) %>% group_by(PigID) %>%
-  reframe(n=length(unique(month))) %>%
-  filter(n < 3)
-
-# Remove individuals with < 3 months data
-all <- all %>% filter(!(PigID %in% short$PigID))
-size <- size %>% filter(!(PigID %in% short$PigID))
-
 
 write_csv(all, "data/location_data/pigs_used_avail.csv")
 write_csv(size, "data/location_data/pigs_est_akde_homeranges.csv")
