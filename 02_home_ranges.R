@@ -5,7 +5,59 @@ library(adehabitatLT)
 library(ctmm)
 library(patchwork)
 
+## Set ggplot theme
 theme_set(theme_bw())
+
+## Write function to subset and convert to ltraj
+# Will need this for segmenting migration
+lv_func <- function(x, id_) {
+  
+  # Subset by ID
+  temp <- x %>% 
+    # Filter by ID
+    filter(id==id_) %>%
+    # Select only columns we need to converting back to ltraj
+    dplyr::select(id:date) %>%
+    # Convert to data.frame
+    as.data.frame() %>%
+    # Make date a POSIX-formatted column
+    mutate(date = as.POSIXct(date, tz="America/Denver"))
+  
+  # Convert to ltraj
+  ltr <- as.ltraj(xy=temp[,c("x","y")], date=temp$date, id=temp$id)
+  
+  # Run lavielle
+  lv <- lavielle(ltr, Lmin=30, which="R2n", Kmax=10, plotit=TRUE)
+  
+  k_try <- chooseseg(lv, S=0.75, output="opt", draw=TRUE)
+  
+  # Plot and segment with select value of breaks
+  fp <- findpath(lv, k_try)
+  
+  # Take input from the console on number of breaks
+  print("Enter number of breaks:")
+  k <- scan(n = 1)
+  
+  # Plot and segment with select value of breaks
+  fp <- findpath(lv, k)
+  
+  # Convert to data frame
+  df <- ld(fp)
+  # remove some columns we don't need (i.e. match deer_res)
+  df <- df %>% as_tibble() %>%
+    # reorder columns
+    dplyr::select(id, x:rel.angle, burst) %>%
+    # Remove extra characters ("Segment.") so that we only have a number in the burst column
+    mutate(burst=gsub("Segment.", "", burst)) %>%
+    # Combine ID with the segment number
+    unite(key, c("id", "burst"), sep="_", remove=FALSE) %>%
+    # Reorder columns
+    dplyr::select(id, key, x:rel.angle)
+  
+  # Return segmented data
+  return(df)
+}
+
 ## Create template raster for generating random points
 
 
@@ -32,9 +84,10 @@ un.id <- unique(deer$DeerID)
 ## Loop over each ID and: 
 # 1. Resample to every 4 hours
 # 2. Calculate step lengths (and find median)
-# 3. Determine whether individuals are moving ranges throughout the year
-# 4. Build ctmm home range
-# 5. Extract available points from home range
+# 3. Check patchiness of location data
+# 4. Determine whether individuals are moving ranges throughout the year
+# 5. Build ctmm home range
+# 6. Extract available points from home range
 
 
 #### 1. and 2. Run loop to resample and calculate step lengths ####
@@ -50,9 +103,16 @@ for (i in 1:length(un.id)) {
   dat <- track_resample(dat, rate=hours(4), tolerance=minutes(5))
   s <- dat %>% summarize_sampling_rate_many(c("id"), time_unit="hour")
   tr_sum <- bind_rows(tr_sum, s)
+  
+  # Create column for only dates, count how many unique days
+  dat <- dat %>% mutate(date=as.Date(format(t_, "%Y-%m-%d"))) 
 
-  # Skip to next individual if less than 1 month of data
-  if (range(dat$t_)[2]-range(dat$t_)[1] >= 30) {
+  # How many locations on each day?
+  nobs <- dat %>% group_by(date) %>% count() %>% filter(n>=5)
+  un.days <- unique(nobs$date)
+
+  # Skip to next individual if less than 90 days of data
+  if (length(un.days) >= 90) {
     
     # Convert to ltraj
     df <- as.data.frame(dat)
@@ -97,10 +157,13 @@ for (i in 1:length(un.id)) {
   
 }
 
+# 100_central
 
-# test <- lavielle(df, Lmin=10, which="R2n", Kmax=5, plotit=TRUE)
-# fp <- findpath(test, 5)
-# 
+
+
+
+tes <- lv_func(deer_res, "297_Central")
+
 
 
 #### 4. Loop over individuals and calculate AKDE home range ####
@@ -167,7 +230,7 @@ akde <- lapply(out, function(x) x[[4]]) #the akde shape
 ids <- lapply(out, function(x) x[[1]])
 poly <- lapply(akde, function(x) try(SpatialPolygonsDataFrame.UD(x, level.UD=0.999, level=0.99)))
 
-
+saveRDS(out, "results/prelim_akdes_partial.rds")
 
 joined<- SpatialPolygons(lapply(poly, function(x){x@polygons[[3]]}), 
                          proj4string=CRS(akde[[3]]@info$projection))
