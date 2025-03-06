@@ -8,9 +8,8 @@ library(ggspatial)
 ms <- vect("data/landscape_data/mississippi_ACEA.shp")
 
 # List patch .asc files
-patches <- list.files(path="C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/RAMASoutput/patches/",
+patches <- list.files(path="C:/Users/sac793/OneDrive - Mississippi State University/Documents/DeerPigProject/CarryingCapacityPaper/RAMASoutput/patches/",
                       pattern=".ASC", full.names=TRUE)  # note that the pattern argument is case-sensitive, and RAMAS writes ASCII files as .ASC instead of .asc like R
-
 
 # Make raster "stack"
 patches <- rast(patches)
@@ -121,8 +120,8 @@ levels(pigs_mn) <- list(data.frame(ID = patch_vals,
 
 ## Plot
 deer_patches <- ggplot() +
-  geom_spatraster(data=deer_mn) +
-  scale_fill_viridis_d(option="C", direction=1, na.value="transparent", name="Patch Type:", na.translate=FALSE) +
+  geom_spatraster(data=deer_core) +
+  scale_fill_viridis_d(option="C", direction=1, name="Patch Type:", na.value="transparent", na.translate=FALSE) +
   geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.6) +
   theme_void() +
   annotation_north_arrow(
@@ -155,5 +154,18 @@ ggsave(file="figs/patches.svg")
 # Saving 8.5 x 7.23 in image
 
 ####
+deer_core <- as.polygons(patches["deer_c_mean"])
+pigs_core <- as.polygons(patches["pig_c_mean"])
 
+dc <- ggplot() +
+  geom_spatvector(data=deer_core, color="#3b528b", fill="#3b528b") +
+  geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.6) +
+  theme_void() 
 
+pc <- ggplot() +
+  geom_spatvector(data=pigs_core, color="#3b528b", fill="#3b528b") +
+  geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.6) +
+  theme_void() 
+
+dc + pc
+ggsave(file="figs/simple_prelim_core_patches.svg")
