@@ -31,6 +31,9 @@ lv_func <- function(x, id_) {
   
   k_try <- chooseseg(lv, S=0.75, output="opt", draw=TRUE)
   
+  print("Optimal breaks by chooseseg():")
+  print(k_try)
+  
   # Plot and segment with select value of breaks
   fp <- findpath(lv, k_try)
   
@@ -156,21 +159,68 @@ for (i in 1:length(un.id)) {
   print(p1 / p2)
   
 }
+## Look through plots and manually list which IDs probably will need to be segmented, as well as those that might need to be filtered by dates to remove patchy data
 
-# 100_central
+## IDs that need trimming
+temp <- deer_res %>% filter(id=="81864_Delta")
+ggplot(temp, aes(x=x, y=y, color=date)) +
+  geom_path() + geom_point() 
+ggplot(temp, aes(x=date, y=R2n, color=date)) +
+  geom_vline(xintercept=as_datetime("2018-08-31 00:00:00")) +
+  geom_path()
 
+# 152311_North
+deer_res <- deer_res %>% filter((id!="152311_North") | (id=="152311_North" & date <= "2023-12-31 23:59:59"))
 
+# 87924_Delta
+deer_res <- deer_res %>% filter((id!="87924_Delta") | (id=="87924_Delta" & (date>="2021-06-30 23:59:59" & date<="2022-09-10 23:59:59")))
 
+# 87899_Delta
+deer_res <- deer_res %>% filter((id!="87899_Delta") | (id=="87899_Delta" & date<="2022-12-01 00:00:00"))
 
-tes <- lv_func(deer_res, "297_Central")
+# 81864_Delta
+deer_res <- deer_res %>% filter((id!="81864_Delta") | (id=="81864_Delta" & (date>="2021-08-25 00:00:00" & date<="2022-02-01 00:00:00")))
 
+# 259_Central
+deer_res <- deer_res %>% filter((id!="259_Central") | (id=="259_Central" & date <= "2017-09-15 00:00:00"))
+
+# 252_Central
+deer_res <- deer_res %>% filter((id!="252_Central") | (id=="252_Central" & date <= "2017-05-01 00:00:00"))
+
+# 27_Central
+deer_res <- deer_res %>% filter((id!="27_Central") | (id=="27_Central" & (date>="2018-08-31 00:00:00" & date<="2019-03-27 23:59:59")))
+
+## List of IDs that will likely need to be segmented
+to_segment <- c("152312_North", "152308_North", "87924_Delta", "87919_Delta", "97_Central", "90_Central", "47_Central", 
+                "348_Central", "344_Central", "339_Central", "333_Central", "297_Central", "295_Central", "293_Central", 
+                "281_Central", "28_Central", "272_Central", "27_Central", "25_Central", "20_Central", "100_Central")
+
+# Subset data without deer that need to be segmented (so that we can add the segments onto it)
+deer <- deer_res %>% 
+          # Filter out NAs
+          filter(!is.na(x)) %>%
+          # Remove IDs that will be segmented
+          filter(!(id %in% to_segment)) %>%
+          # Create a 'key' column to match the output from the Lavielle function
+          mutate(burst=1) %>%
+          unite("key", c("id", "burst"), sep="_", remove=FALSE) %>%
+          dplyr::select(id, key, x:rel.angle)
+  
+## Need to do this manually, and make sure to add the segmented data to 'deer'
+s <- lv_func(deer_res, "339_Central")  
+
+# Add segmented data to full dataset
+deer <- bind_rows(deer, s)
+
+# Check if there are any IDs in the to_segment vector that are not in the deer tibble after segmenting and binding
+to_segment[!(to_segment %in% deer$id)]
 
 
 #### 4. Loop over individuals and calculate AKDE home range ####
 
 ## Set up data
 # Convert to lat/long (WGS84)
-deer_sf <- deer_res %>% 
+deer_sf <- deer %>% 
               # Remove rows without coordinates
               filter(!is.na(x)) %>% 
               # Convert to sf object
@@ -181,29 +231,30 @@ deer_sf <- deer_res %>%
 ll <- deer_sf %>% st_coordinates() %>% as_tibble() %>% 
           rename(location.long=X, location.lat=Y)
 
-deer_res <- deer_res %>% 
+deer <- deer %>% 
               filter(!is.na(x)) %>% 
               bind_cols(ll)
 
-dat <- deer_res %>%      
+dat <- deer %>%      
             # need the lat long, etc. in a specific order 
-            dplyr::select(id, location.long, location.lat, date) %>% 
+            dplyr::select(key, location.long, location.lat, date) %>% 
             # also need columns to have a specific name
-            rename(individual.local.identifier=id, timestamp=date)
+            rename(individual.local.identifier=key, timestamp=date)
 
 # Create telemetry object
 dat <- as.telemetry(dat, timeformat="%Y-%m-%d %H:%M:%S", timezone=attr(deer_res$timestamp, "tzone"), projection=NULL)
 
-## Loop over all individuals
+## Loop over all individuals / individual segments
+ids <- unique(deer$key)
 
 # Create list to save variograms and AKDEs
 out <- list()
 
 # Set progress bar of sanity because this takes long - set it to the number of ids in the dataset (min = 0, max = max number of ids)
-pb <- txtProgressBar(min = 0, max = length(un.id), style = 3)
+pb <- txtProgressBar(min = 0, max = length(ids), style = 3)
 
 # Run loop to fit AKDEs
-for (i in 1:length(un.id)) {
+for (i in 1:length(ids)) {
 
   try({ # Some will likely fail, so prevent the loop from crashing 
     setTxtProgressBar(pb, i)
