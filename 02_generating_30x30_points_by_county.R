@@ -29,11 +29,11 @@ for (i in 1:length(split_counties)) {
   filename <- paste0("data/landscape_data/county_points/", n, "_points.shp")
   
   # Buffer the county by 5 km
-  ctyB <- buffer(cty, width=5000)
+  # ctyB <- buffer(cty, width=5000)
   
   # Mask and crop raster to county
-  temp <- mask(crops, ctyB)
-  temp <- crop(temp, ctyB)
+  temp <- mask(crops, cty)
+  temp <- crop(temp, cty)
   
   # Convert to points
   pts <- as.points(temp, values=FALSE, na.rm=TRUE, na.all=FALSE)
