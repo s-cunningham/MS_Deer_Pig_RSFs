@@ -6,6 +6,7 @@
 /data/
 /figs/
 /results/
+/output/
 
 # Scratch scripts
 spare_code_rsf.R
