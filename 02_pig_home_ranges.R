@@ -61,11 +61,7 @@ lv_func <- function(x, id_) {
   return(df)
 }
 
-## Create template raster for generating random points
-
-
-#### pigs ####
-# Read in pigs location data
+#### Read in pigs location data ####
 pigs <- read_csv("data/location_data/pigs_filtered.csv") %>%
   mutate(month=as.numeric(format(timestamp, "%m")),
          year=as.numeric(format(timestamp, "%Y"))) %>%
@@ -140,7 +136,7 @@ for (i in 1:length(un.id)) {
 tr_sum <- tr_sum %>% as_tibble()
 
 
-#### 3. Determine which animals need to be split ####
+#### 4. Determine which animals need to be split ####
 pigs_res <- as_tibble(pigs_res)
 un.id <- unique(pigs_res$id)
 
@@ -160,7 +156,7 @@ for (i in 1:length(un.id)) {
 }
 ## Look through plots and manually list which IDs probably will need to be segmented, as well as those that might need to be filtered by dates to remove patchy data
 
-to_segment <- c("19219_Delta", "152316_Northern", "152318_Northern", "26620_Noxubee", "35490_Noxubee") # "26626_Noxubee", "19223_Delta",
+to_segment <- c("19219_Delta", "19223_Delta", "152316_Northern", "152318_Northern", "26620_Noxubee", "35490_Noxubee") # "26626_Noxubee", 
 
 # Subset data without pigs that need to be segmented (so that we can add the segments onto it)
 pigs <- pigs_res %>% 
@@ -176,6 +172,7 @@ pigs <- pigs_res %>%
 ## Need to do this manually, and make sure to add the segmented data to 'pigs'
 s <- lv_func(pigs_res, "35490_Noxubee")  
 
+# 19223_Delta : 2
 # 19219_Delta : 3
 # 152316_Northern : 5
 # 152318_Northern : 5
@@ -188,10 +185,18 @@ pigs <- bind_rows(pigs, s)
 # Check if there are any IDs in the to_segment vector that are not in the pigs tibble after segmenting and binding
 to_segment[!(to_segment %in% pigs$id)]
 
+## Save
+write_csv(pigs, "output/segmented_pigs.csv")
+# pigs <- read_csv("output/segmented_pigs.csv")
 
-# Count how many days in a segment, remove less than 1 month  [did not actually do]
+# how many days in each segment?
+ndays <- pigs %>% mutate(day=format(date, "%Y-%m-%d")) %>% group_by(key) %>% reframe(ndays=length(unique(day)))
+short <- ndays %>% filter(ndays <22)
 
-#### 4. Loop over individuals and calculate AKDE home range ####
+# Removed anything with less than 3 weeks of data
+pigs <- pigs %>% filter(!(key %in% short$key))
+
+#### 5. Loop over individuals and calculate AKDE home range ####
 
 ## Set up data
 # Convert to lat/long (WGS84)
@@ -217,7 +222,7 @@ dat <- pigs %>%
   rename(individual.local.identifier=key, timestamp=date)
 
 # Create telemetry object
-dat <- as.telemetry(dat, timeformat="%Y-%m-%d %H:%M:%S", timezone=attr(pigs_res$timestamp, "tzone"), projection=NULL)
+dat <- as.telemetry(dat, timeformat="%Y-%m-%d %H:%M:%S", timezone="America/Chicago")
 
 ## Loop over all individuals / individual segments
 ids <- unique(pigs$key)
@@ -231,6 +236,7 @@ size <- data.frame()
 # Set progress bar of sanity because this takes long - set it to the number of ids in the dataset (min = 0, max = max number of ids)
 pb <- txtProgressBar(min = 0, max = length(ids), style = 3)
 
+system.time(
 # Run loop to fit AKDEs
 for (i in 1:length(ids)) {
   
@@ -240,9 +246,9 @@ for (i in 1:length(ids)) {
     # Next three lines are to fit variogram and select the best movement model to fit to the data
     var <- variogram(dat[[i]]) 
     var2 <- variogram.fit(var,  name="GuessBM", interactive=F)
-    # Automated model selection
-    tt <- ctmm.select(dat[[i]], var2) 
-    
+    # Automated model selection via BIC
+    tt <- ctmm.select(dat[[i]], var2, IC="BIC") 
+
     # Fit AKDE
     UD <- akde(dat[[i]], tt, weights=TRUE) 
     
@@ -257,6 +263,7 @@ for (i in 1:length(ids)) {
     out[[i]] <- list(dat[[i]]@info$identity, var, var2, UD) 
   })
 }
+)
 saveRDS(out, "results/raw_pigs_AKDEs.rds")
 
 # Take just the AKDE
@@ -269,16 +276,177 @@ ids <- unlist(ids)
 # add IDs to size df
 size$id <- ids
 
-
 # Convert UD to sf object (multipolygons)
 poly <- lapply(akde, as.sf, level.UD=0.99)
 
 # Reproject to UTM 16N
 poly <- lapply(poly, st_transform, crs=32616)
 
-
+# combine into single df instead of list
 ud <- do.call(rbind, poly)
 
-plot(st_geometry(ud))
+# Clean up full set of polygons
+ud <- ud %>% 
+        # Separate name into important parts (key, 99%, and estimate vs CI)
+        separate(1, into=c("key", "level", "which"), sep=" ") %>%
+        # Remove rowname
+        remove_rownames() %>%
+        # Remove the level column, we know they are all 99%
+        dplyr::select(-level) %>%
+        # Now filter by rows to just the estimate (drop confidence intervals)
+        filter(which=="est") %>%
+        # Separate key into different pieces
+        separate(1, into=c("id", "study", "burst"), sep="_") %>%
+        # put id and study back together
+        unite("id", 1:2, sep="_")
+
+# Write shapefile
+# st_write(ud, "output/pig_AKDE_est.shp", append=FALSE)
+ud <- st_read("output/pig_AKDE_est.shp")
+
+#### 6. Extract available points from home range ####
+library(terra)
+
+## read a template raster (30 x 30, doesn't really matter which as long as projection is correct & has cells)
+cdl <- rast("data/landscape_data/CDL2023_MS50km_30m_nlcdproj.tif")
+
+ud <- st_transform(ud, st_crs(cdl))
+
+avail <- tibble()
+for (i in 1:nrow(ud)) {
+  
+  # Clip raster (mask & crop extent) to AKDE
+  temp <- mask(cdl, vect(ud$geometry[i]))
+  temp <- crop(cdl, vect(ud$geometry[i]))
+  
+  # Convert to points
+  pts <- as.points(temp, values=FALSE, na.rm=TRUE, na.all=FALSE)
+  
+  # Clip points to AKDE
+  pts <- crop(pts, vect(ud$geometry[i]))
+  
+  # convert back to sf
+  pts <- st_as_sf(pts)
+  
+  # convert to tibble and add identifying info, as well as a 0 for available
+  pts <- pts %>% 
+    st_coordinates() %>% 
+    as_tibble() %>%
+    mutate(id = ud$id[i],
+            burst = ud$burst[i],
+            case = 0)
+  
+  # Add to avail data frame
+  avail <- bind_rows(avail, pts)
+}
+write_csv(avail, "output/pigs_avail_pts.csv")
+
+## Now on to the used locations
+pigs_sf <- pigs %>% 
+  # Remove rows without coordinates
+  filter(!is.na(x)) %>% 
+  # Convert to sf object
+  st_as_sf(coords=c("x", "y"), crs=32616) %>%
+  # remove some columns
+  dplyr::select(id, key, geometry) %>%
+  # reproject to ud
+  st_transform(crs=st_crs(ud))
+
+# Create empty tibble to save new dataset
+used <- tibble()
+for (i in 1:nrow(ud)) {
+  
+  # Build key for each individual
+  k <- ud$id[i]
+  b <- ud$burst[i]
+  udkey <- paste0(k, "_", b)
+  
+  # Filter and convert to SpatVector
+  poly <- vect(ud$geometry[i])
+  
+  # filter to single ID and convert to SpatVector
+  temp <- pigs_sf %>% filter(key==udkey) 
+  temp <- vect(temp)
+ 
+  # Clip points to AKDE
+  temp <- crop(temp, poly)
+  
+  ## Convert back to tibble
+  xy <- temp %>% st_as_sf() %>% st_coordinates() %>% as_tibble()
+  
+  # remove geometry column
+  temp <- temp %>% st_as_sf() %>% st_drop_geometry()
+  
+  # add xy coordinates back on
+  temp <- bind_cols(temp, xy)
+  
+  # Add a 1 to indicate used points
+  temp$case <- 1
+  
+  # Add to data frame
+  used <- bind_rows(used, temp)
+}
+write_csv(used, "output/pigs_used_locs.csv")
+
+# Organize so used data matches available data
+used <- used %>%
+          # split key
+          separate("key", into=c("rm1", "rm2", "burst"), sep="_") %>%
+          # drop extra columns
+          dplyr::select(X, Y, id, burst, case)
+
+## Combine used and available points
+dat <- bind_rows(used, avail)
+
+# save data
+write_csv(dat, "output/pigs_used_avail_locations.csv")
 
 
+
+
+## Read in counties and join to AKDEs
+# read county shapefile
+counties <- st_read("data/landscape_data/county_nrcs_a_ms.shp") %>%
+  # Drop a bunch of the co
+  dplyr::select(COUNTYNAME, geometry) %>%
+  # reproject to match UD projection
+  st_transform(crs=32616)
+
+# Join to AKDEs
+counties <- counties %>% 
+                # Join AKDEs to counties
+                st_join(ud) %>%
+                # drop a few more columns
+                dplyr::select(COUNTYNAME, id, geometry) %>%
+                # Filter so we only have the counties that are joined to AKDEs
+                filter(!is.na(id)) %>%
+                # make sure we don't have duplicates (though we still technically will...just not multiples for a single individual)
+                distinct()
+            
+# plot
+plot(st_geometry(counties))
+
+## drop geometry and keep just id and county columns
+counties <- counties %>%
+              st_drop_geometry() %>%
+              # Order by ID
+              arrange(id) %>%
+              # drop rownames
+              remove_rownames() %>%
+              as_tibble()
+
+# Make a vector with unique county names
+un.co <- unique(counties$COUNTYNAME)          
+
+# Turn vector of county names into a vector of county point file names
+files <- character()
+for (i in 1:length(un.co)) {
+  files[i] <- paste0("data/landscape_data/county_points/", un.co[i], "_points.shp")
+}
+
+files <- lapply(files, st_read)
+# combine into single object instead of list
+files <- do.call(rbind, files)
+
+## Reproject AKDEs to AEA_wGS84, because it will probably be faster than projecting the county points
+ud <- ud %>% st_transform(st_crs(files))
