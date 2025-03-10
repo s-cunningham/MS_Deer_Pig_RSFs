@@ -191,7 +191,7 @@ deer_res <- deer_res %>% filter((id!="252_Central") | (id=="252_Central" & date 
 deer_res <- deer_res %>% filter((id!="27_Central") | (id=="27_Central" & (date>="2018-08-31 00:00:00" & date<="2019-03-27 23:59:59")))
 
 ## List of IDs that will likely need to be segmented
-to_segment <- c("152312_North", "152308_North", "87924_Delta", "87919_Delta", "97_Central", "90_Central", "47_Central", 
+to_segment <- c("152312_North", "152308_North", "87924_Delta", "87919_Delta", "81711_Delta", "97_Central", "90_Central", "47_Central", 
                 "348_Central", "344_Central", "339_Central", "333_Central", "297_Central", "295_Central", "293_Central", 
                 "281_Central", "28_Central", "272_Central", "27_Central", "25_Central", "20_Central", "100_Central")
 
@@ -205,9 +205,16 @@ deer <- deer_res %>%
           mutate(burst=1) %>%
           unite("key", c("id", "burst"), sep="_", remove=FALSE) %>%
           dplyr::select(id, key, x:rel.angle)
+
+## try 81711_Delta, 27_Central, and 87924_Delta again
+deer <- deer %>% filter(id!="81711_Delta" & id!="27_Central" & id!="87924_Delta")
+
   
 ## Need to do this manually, and make sure to add the segmented data to 'deer'
-s <- lv_func(deer_res, "339_Central")  
+s <- lv_func(deer_res, "81711_Delta")  
+
+s %>% mutate(day=format(date, "%Y-%m-%d")) %>% group_by(key) %>% reframe(ndays=length(unique(day)))
+# Run 81711_Delta with 8 breaks...or, stay with the optimal 5 and subset anything that doesn't have 30 or 60 days? What's the average HR crossing time?
 
 # Add segmented data to full dataset
 deer <- bind_rows(deer, s)
@@ -242,13 +249,16 @@ dat <- deer %>%
             rename(individual.local.identifier=key, timestamp=date)
 
 # Create telemetry object
-dat <- as.telemetry(dat, timeformat="%Y-%m-%d %H:%M:%S", timezone=attr(deer_res$timestamp, "tzone"), projection=NULL)
+dat <- as.telemetry(dat, timeformat="%Y-%m-%d %H:%M:%S", timezone="America/Chicago")
 
 ## Loop over all individuals / individual segments
 ids <- unique(deer$key)
 
 # Create list to save variograms and AKDEs
 out <- list()
+
+# Create empty object to store 
+size <- data.frame()
 
 # Set progress bar of sanity because this takes long - set it to the number of ids in the dataset (min = 0, max = max number of ids)
 pb <- txtProgressBar(min = 0, max = length(ids), style = 3)
@@ -262,11 +272,35 @@ for (i in 1:length(ids)) {
     # Next three lines are to fit variogram and select the best movement model to fit to the data
     var <- variogram(dat[[i]]) 
     var2 <- variogram.fit(var,  name="GuessBM", interactive=F)
+    
+    
+    ###
+    level <- 0.95 # we want to display 95% confidence intervals
+    xlim <- c(0,2 %#% "month") # to create a window of 2 months
+    SVF <- variogram(dat[[i]])
+    par(mfrow = c(1,2))
+    plot(SVF, fraction = 1, level = level)
+    abline(v = 1, col = "red", lty = 2) # adding a line at 1 month
+    plot(SVF, xlim = xlim, level = level)
+    abline(v = 1, col = "red", lty = 2)
+    ###
+    
+    # Calculate an automated model guesstimate:
+    GUESS <- ctmm.guess(dat[[i]],interactive=FALSE)
+    
+    # Automated model selection, starting from GUESS:
+    fit_ml <- ctmm.fit(dat[[i]],GUESS, method='ML')
+    fit_pHREML <- ctmm.select(dat[[i]], GUESS, method='pHREML')
+    
     # Automated model selection
     tt <- ctmm.select(dat[[i]], var2) 
     
     # Fit AKDE
     UD <- akde(dat[[i]], tt) 
+    
+    # Save area of AKDE
+    sqkm <- as.data.frame(summary(UD)$CI)
+    size <- bind_rows(size, sqkm)
     
     # Plot with points
     plot(dat[[i]], UD)
@@ -275,23 +309,46 @@ for (i in 1:length(ids)) {
     out[[i]] <- list(dat[[i]]@info$identity, var, var2, UD) 
   })
 }
+saveRDS(out, "results/raw_deer_AKDEs.rds")
 
 # Take just the AKDE
-akde <- lapply(out, function(x) x[[4]]) #the akde shape
+akde <- lapply(out, function(x) x[[4]]) 
+
+# Save the IDs
 ids <- lapply(out, function(x) x[[1]])
-poly <- lapply(akde, function(x) try(SpatialPolygonsDataFrame.UD(x, level.UD=0.999, level=0.99)))
+ids <- unlist(ids)
 
-saveRDS(out, "results/prelim_akdes_partial.rds")
+# Add IDs to size df
+size$id <- ids
 
-joined<- SpatialPolygons(lapply(poly, function(x){x@polygons[[3]]}), 
-                         proj4string=CRS(akde[[3]]@info$projection))
+# Fix units and reorganzie
+size <- size %>%
+  # Create a column for the rowname
+  rownames_to_column(var="unit") %>%
+  # Convert to tibble
+  as_tibble() %>%
+  # Extract the unit from the rowname
+  mutate(unit=str_extract(unit, pattern = "(?<=\\().*(?=\\))")) %>%
+  # Convert ha to sq km
+  mutate(low=if_else(unit=="hectares",low/100,low),
+         est=if_else(unit=="hectares",est/100,est),
+         high=if_else(unit=="hectares",high/100,high)) %>%
+  # Reorder columns
+  dplyr::select(id, low:high) 
+  # Note: all AKDEs are now in sqare kilometers
 
-plot(joined@polygons[[1]]@Polygons[[1]]@coords, type="l")
-points(dat[[3]]$x, dat[[3]]$y)
+write_csv(size, "results/deer_AKDE_sqkm.csv")
+
+# Convert UD to sf object (multipolygons)
+poly <- lapply(akde, as.sf, level.UD=0.99)
+
+# Reproject to UTM 16N
+poly <- lapply(poly, st_transform, crs=32616)
 
 
+ud <- do.call(rbind, poly)
 
-
+plot(st_geometry(ud))
 
 
 
@@ -311,14 +368,3 @@ for (i in 1:length(un.id)) {
   
 }
 
-
-
-
-#### Pigs ####
-# Read in deer location data
-pigs <- read_csv("data/location_data/pigs_filtered.csv") %>%
-  mutate(month=as.numeric(format(timestamp, "%m")),
-         year=as.numeric(format(timestamp, "%Y"))) %>%
-  dplyr::select(PigID:study,month,year,timestamp,X,Y) %>%
-  unite("PigID", c(1,5), sep="_") %>% # separate by year
-  filter(PigID != "35493_Noxubee_2022")
