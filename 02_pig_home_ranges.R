@@ -401,3 +401,6 @@ dat <- bind_rows(used, avail)
 # save data
 write_csv(dat, "output/pigs_used_avail_locations.csv")
 
+dat <- read_csv("output/pigs_used_avail_locations.csv")
+
+dat <- st_as

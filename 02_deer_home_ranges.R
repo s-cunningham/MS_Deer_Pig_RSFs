@@ -207,10 +207,10 @@ deer <- deer_res %>%
           dplyr::select(id, key, x:rel.angle)
 
 ## try 81711_Delta, 27_Central, and 87924_Delta again
-deer <- deer %>% filter(id!="27_Central") #& id!="87924_Delta", id!="81711_Delta" &
+# deer <- deer %>% filter(id!="87924_Delta") #& , id!="81711_Delta" &d!="27_Central"
 
 ## Need to do this manually, and make sure to add the segmented data to 'deer'
-s <- lv_func(deer_res, "27_Central")  
+s <- lv_func(deer_res, "100_Central")  
 
 # keep only some segments of 87924_Delta
 # s <- s %>% filter(key=="87924_Delta_1" | key=="87924_Delta_3" | key=="87924_Delta_5"| key=="87924_Delta_6" | key=="87924_Delta_7")
@@ -235,7 +235,7 @@ deer <- bind_rows(deer, s)
 # 281_Central : 3
 # 28_Central : 3
 # 272_Central : 6
-# 27_Central : 4
+# 27_Central : 9
 # 20_Central : 5
 # 100_Central : 3
 # Run 81711_Delta with 8 breaks...or, stay with the optimal 5 and subset anything that doesn't have 30 or 60 days? What's the average HR crossing time?
@@ -245,7 +245,7 @@ to_segment[!(to_segment %in% deer$id)]
 
 ## Save
 write_csv(deer, "output/segmented_deer.csv")
-deer <- read_csv("output/segmented_deer.csv")
+# deer <- read_csv("output/segmented_deer.csv")
 
 # how many days in each segment?
 ndays <- deer %>% mutate(day=format(date, "%Y-%m-%d")) %>% group_by(key) %>% reframe(ndays=length(unique(day)))

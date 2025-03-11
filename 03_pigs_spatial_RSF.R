@@ -2,6 +2,8 @@ library(tidyverse)
 library(terra)
 library(lme4)
 
+theme_set(theme_bw())
+
 #### Read Data ####
 # locations (used & available)
 pigs <- read_csv("output/pigs_used_avail_locations.csv") %>%
@@ -48,6 +50,13 @@ dat_pigs <- extract(layers, pigs_v)
 # Join extracted data back to location data frame
 pigs <- bind_cols(pigs, dat_pigs)
 
+ggplot(pigs,aes(x=water, y=case)) +
+  geom_point(alpha=0.3) +
+  geom_smooth(method = "glm", 
+              method.args = list(family = "binomial"), 
+              se = FALSE) 
+
+
 #### Run RSF ####
 cor(pigs[,c(8:16)])
 
@@ -68,34 +77,11 @@ for (i in 1:length(un.id)) {
   
   # Filter by ID
   temp <- pigs %>% filter(key==un.id[i])
-  
 
   # Run rsf (but maybe change this to LASSO)
-  rsf <- glm(case ~ bottomlandhw + decidmixed + foodcrops, data=temp, family=binomial(link = "logit"), weight=weight)
+  rsf <- glm(case ~ bottomlandhw + decidmixed + gramanoids + water + evergreen, data=temp, family=binomial(link = "logit"), weight=weight)
   summary(rsf)
-  
-  set.seed(1)
-  grid <- 10^seq(10, -2, length=100)
-  
-  x <- model.matrix(case ~ bottomlandhw + decidmixed + water + foodcrops + othercrops + barren + gramanoids, temp)[, -1]
-  y <- temp$case
-  wts <- temp$weight
-  
-  lasso.mod <- glmnet(x, y, family="binomial", alpha=1, weights=wts, lambda=grid)
-  plot(lasso.mod)
-  
-  cv.out <- cv.glmnet(x, y, family="binomial", alpha=1, weights=wts)
-  
-  bestlam <- cv.out$lambda.min
-  
-  rsf <- glmnet(x, y, family="binomial", alpha=1, weights=wts, lambda=bestlam)
-  
-  coef(rsf, s = bestlam)
-  
-  lasso.coef <- predict(rsf, type="coefficients", s=bestlam)
-  
-  lasso.coef[lasso.coef != 0]
-  
+ 
   # add model object to list
   pigs_rsf[[i]] <- rsf
   
