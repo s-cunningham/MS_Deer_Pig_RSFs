@@ -56,6 +56,11 @@ ggplot(pigs,aes(x=water, y=case)) +
               method.args = list(family = "binomial"), 
               se = FALSE) 
 
+ggplot(pigs, aes(x=bottomlandhw, y=foodcrops, color=id)) +
+  geom_point(alpha=0.1) +
+  facet_wrap(vars(case)) +
+  theme(legend.position="none")
+
 
 #### Run RSF ####
 cor(pigs[,c(8:16)])
@@ -70,8 +75,6 @@ un.id <- unique(pigs$key)
 # Create list to save models
 pigs_rsf <- list()
 
-library(glmnet)
-
 # Run loop
 for (i in 1:length(un.id)) {
   
@@ -79,14 +82,46 @@ for (i in 1:length(un.id)) {
   temp <- pigs %>% filter(key==un.id[i])
 
   # Run rsf (but maybe change this to LASSO)
-  rsf <- glm(case ~ bottomlandhw + decidmixed + gramanoids + water + evergreen, data=temp, family=binomial(link = "logit"), weight=weight)
+  rsf <- glm(case ~ bottomlandhw + decidmixed + gramanoids + barren + water, data=temp, family=binomial(link = "logit"), weight=weight)
   summary(rsf)
+  print(car::vif(rsf))
  
+  
+  #### LASSO ####
+  library(glmnet)
+  set.seed(1)
+  grid <- 10^seq(10, -2, length=100)
+  
+  x <- model.matrix(case ~ bottomlandhw + decidmixed + water + foodcrops + othercrops + barren + gramanoids, temp)[, -1]
+  y <- temp$case
+  wts <- temp$weight
+  
+  lasso.mod <- glmnet(x, y, family="binomial", alpha=0.3, weights=wts, lambda=grid, standardize=FALSE)
+  plot(lasso.mod)
+  
+  cv.out <- cv.glmnet(x, y, family="binomial", type.measure="deviance", alpha=1, weights=wts, standardize=FALSE)
+  
+  bestlam <- cv.out$lambda.min
+  
+  rsf <- glmnet(x, y, family="binomial", alpha=1, weights=wts, lambda=bestlam, standardize=FALSE)
+  
+  coef(rsf, s = bestlam)
+  
+  lasso.coef <- predict(rsf, type="coefficients", s=bestlam)
+  
+  lasso.coef[lasso.coef != 0]
+  #######
+  
+  
   # add model object to list
   pigs_rsf[[i]] <- rsf
   
 }
 
+coef(summary(pigs_rsf[[1]]))
+
+
+cfs <- lapply(pigs_rsf, coef)
 
 ggplot(temp, aes(x=foodcrops, y=case)) +
   geom_point()
