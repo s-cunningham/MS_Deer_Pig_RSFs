@@ -61,5 +61,146 @@ ggplot(deer, aes(x=bottomlandhw, y=foodcrops, color=id)) +
   facet_wrap(vars(case)) +
   theme(legend.position="none")
 
-
 cor(deer[,c(8:16)])
+
+#### Run RSF ####
+
+# create key column
+deer <- deer %>%
+  unite("key", c("id", "burst"), sep="_", remove=FALSE)
+
+## Set up to loop by individual
+un.id <- unique(deer$key)
+
+# Create list to save models
+deer_rsf <- list()
+
+# Run loop
+for (i in 1:length(un.id)) {
+  
+  # Filter by ID
+  temp <- deer %>% filter(key==un.id[i])
+  
+  # Run rsf (but maybe change this to LASSO)
+  rsf <- glm(case ~ bottomlandhw + decidmixed + gramanoids + foodcrops + developed + evergreen, data=temp, family=binomial(link = "logit"), weight=weight)
+  summary(rsf)
+  # print(car::vif(rsf))
+  
+  # add model object to list
+  deer_rsf[[i]] <- rsf
+  
+}
+
+m.covars <- c("bottomlandhw", "decidmixed", "gramanoids", "foodcrops", "developed", "evergreen")
+
+#### Summarize coefficients ####
+# get coefficients from all the models
+cfs <- lapply(deer_rsf, coef)
+
+# combine into a tibble
+cfs <- do.call(bind_rows, cfs)
+
+# rename intercept and add ID column
+cfs <- cfs %>%
+  rename(intercept=`(Intercept)`) %>%
+  mutate(id = un.id) %>%
+  select(id, intercept:evergreen)
+
+# calculate column means
+betas <- cfs %>% 
+    reframe(across(bottomlandhw:evergreen, \(x) mean(x, na.rm = TRUE)))
+
+# Extract SE for confidence intervals
+se <- lapply(deer_rsf, arm::se.coef)
+
+# combine into a tibble
+se <- do.call(bind_rows, se)
+
+# rename intercept and add ID column
+se <- se %>%
+  rename(intercept=`(Intercept)`) %>%
+  mutate(id = un.id) %>%
+  select(id, intercept:evergreen)
+
+
+#### Functional response ####
+
+# Read raster with land cover. Is already same projection as layers
+lulc <- rast("data/landscape_data/cdl23_classes.tif")
+
+# create vector of class names
+lc <- c("palatablecrops", "barren", "gramanoids", "decidmixed", "evergreen", 
+        "developed", "bottomlandhw", "water", "othercrops", "shrublands")
+
+# Set up NLCD classes and class values
+cdl_values <- c(1,2,3,4,5,6,7,8,9,10)
+lc <- c("foodcrops", "barren", "gramanoids", "decidmixed", "evergreen", 
+        "developed", "bottomlandhw", "water", "othercrops", "shrublands")
+
+# Add class names and numbers to the raster
+levels(lulc) <- list(data.frame(ID = cdl_values,
+                                landcov = lc))
+
+# extract classes at each point
+deer_lc <- extract(lulc, deer_v) 
+
+# join data so we have a tibble with points and land cover
+hr_lc <- deer %>% 
+  bind_cols(deer_lc) %>%
+  select(key, id, case, landcov)
+
+# Summarize by key...want the number of points in available for each landcover class
+hr_lc <- hr_lc %>%
+  # just want the available points
+  filter(case==0) %>%
+  # group by key
+  group_by(key, landcov) %>%
+  # summarize factor levels
+  count() 
+
+# Calculate how many points (cells) in each home range
+ncells <- deer %>% 
+  filter(case==0) %>%
+  group_by(key) %>%
+  count() %>%
+  rename(ntotal=n)
+
+# join home range cells to hr_lc
+hr_lc <- hr_lc %>%
+  left_join(ncells, by="key") %>%
+  ungroup() %>%
+  # filter so we only have the rows that were in the model
+  filter(landcov %in% m.covars) %>%
+  # calculate % of home range
+  mutate(pct=n/ntotal)
+  
+  
+# pivot to long format with a column for landcov and a column for beta (the value)
+cfs <- cfs %>% 
+  # drop the intercept
+  select(-intercept) %>%
+  # pivot
+  pivot_longer(2:7, names_to="landcov", values_to="beta") %>%
+  # rename to match other data
+  rename(key=id)
+
+# now join betas to home range info
+hr_lc <- left_join(hr_lc, cfs, by=c("key", "landcov"))
+  
+
+btmhw <- hr_lc %>% filter(landcov=="bottomlandhw")  
+  
+ggplot(btmhw, aes(x=pct, y=beta)) +
+  geom_hline(yintercept=0) +
+  geom_point() + 
+  geom_smooth(method='lm', formula= y~x)
+
+fdcrp <- hr_lc %>% filter(landcov=="foodcrops")  
+
+ggplot(fdcrp, aes(x=pct, y=beta)) +
+  geom_hline(yintercept=0) +
+  geom_point() + 
+  geom_smooth(method='lm', formula= y~x)
+
+
+

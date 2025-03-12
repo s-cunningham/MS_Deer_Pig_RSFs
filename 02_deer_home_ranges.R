@@ -377,23 +377,104 @@ ud <- ud %>%
   unite("id", 1:2, sep="_")
 
 # Write shapefile
-st_write(ud, "output/deer_AKDE_est.shp")
+st_write(ud, "output/deer_AKDE_est.shp", append=FALSE)
 
-# ud <- st_read("output/deer_AKDE_est.shp")
+#### 6. Extract available points from home range ####
+library(terra)
 
+## read a template raster (30 x 30, doesn't really matter which as long as projection is correct & has cells)
+cdl <- rast("data/landscape_data/CDL2023_MS50km_30m_nlcdproj.tif")
 
+ud <- st_transform(ud, st_crs(cdl))
 
-
-
-
-# Can plot each UD with:
-plot(out[[1]][4])
-
-
-## Loop over individuals and generate available points
-avail <- data.frame()
-for (i in 1:length(un.id)) {
+avail <- tibble()
+for (i in 1:nrow(ud)) {
   
+  # Clip raster (mask & crop extent) to AKDE
+  temp <- mask(cdl, vect(ud$geometry[i]))
+  temp <- crop(cdl, vect(ud$geometry[i]))
   
+  # Convert to points
+  pts <- as.points(temp, values=FALSE, na.rm=TRUE, na.all=FALSE)
+  
+  # Clip points to AKDE
+  pts <- crop(pts, vect(ud$geometry[i]))
+  
+  # convert back to sf
+  pts <- st_as_sf(pts)
+  
+  # convert to tibble and add identifying info, as well as a 0 for available
+  pts <- pts %>% 
+    st_coordinates() %>% 
+    as_tibble() %>%
+    mutate(id = ud$id[i],
+           burst = ud$burst[i],
+           case = 0)
+  
+  # Add to avail data frame
+  avail <- bind_rows(avail, pts)
 }
+write_csv(avail, "output/deer_avail_pts.csv")
+
+## Now on to the used locations
+deer_sf <- deer %>% 
+  # Remove rows without coordinates
+  filter(!is.na(x)) %>% 
+  # Convert to sf object
+  st_as_sf(coords=c("x", "y"), crs=32616) %>%
+  # remove some columns
+  dplyr::select(id, key, geometry) %>%
+  # reproject to ud
+  st_transform(crs=st_crs(ud))
+
+# Create empty tibble to save new dataset
+used <- tibble()
+for (i in 1:nrow(ud)) {
+  
+  # Build key for each individual
+  k <- ud$id[i]
+  b <- ud$burst[i]
+  udkey <- paste0(k, "_", b)
+  
+  # Filter and convert to SpatVector
+  poly <- vect(ud$geometry[i])
+  
+  # filter to single ID and convert to SpatVector
+  temp <- deer_sf %>% filter(key==udkey) 
+  temp <- vect(temp)
+  
+  # Clip points to AKDE
+  temp <- crop(temp, poly)
+  
+  ## Convert back to tibble
+  xy <- temp %>% st_as_sf() %>% st_coordinates() %>% as_tibble()
+  
+  # remove geometry column
+  temp <- temp %>% st_as_sf() %>% st_drop_geometry()
+  
+  # add xy coordinates back on
+  temp <- bind_cols(temp, xy)
+  
+  # Add a 1 to indicate used points
+  temp$case <- 1
+  
+  # Add to data frame
+  used <- bind_rows(used, temp)
+}
+write_csv(used, "output/deer_used_locs.csv")
+
+# Organize so used data matches available data
+used <- used %>%
+  # split key
+  separate("key", into=c("rm1", "rm2", "burst"), sep="_") %>%
+  # drop extra columns
+  dplyr::select(X, Y, id, burst, case)
+
+## Combine used and available points
+dat <- bind_rows(used, avail)
+
+# save data
+write_csv(dat, "output/deer_used_avail_locations.csv")
+
+
 
