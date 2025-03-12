@@ -18,8 +18,7 @@ rast_list <- c("data/landscape_data/bottomlandHW_210m_sum.tif",
                "data/landscape_data/evergreen_210m_sum.tif",
                "data/landscape_data/barren_210m_sum.tif", 
                "data/landscape_data/developed_210m_sum.tif",
-               "data/landscape_data/palatable_crops_210m_sum.tif",
-               "data/landscape_data/water_210m_sum.tif") # replace with water (distance)
+               "data/landscape_data/palatable_crops_210m_sum.tif") 
 layers <- rast(rast_list)
 
 # Reclassify missing data to 0
@@ -28,6 +27,21 @@ layers <- classify(layers, m)
 
 # Convert to % 
 layers <- layers / 149
+
+# read water
+water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
+water <- resample(water, layers)
+ext(water) <- ext(layers)
+
+layers <- c(layers, water)
+
+#read tree camopy cover
+tcc <- rast("data/landscape_data/nlcd_tcc2021_ms50km_range210m.tif")
+tcc <- project(tcc, crs(layers))
+tcc <- resample(tcc, layers)
+ext(tcc) <- ext(layers)
+
+layers <- c(layers, tcc)
 
 # Center and scale continuous rasters
 layers <- scale(layers)
@@ -40,7 +54,7 @@ ms_full <- project(ms_full, crs(layers))
 pigs_v <- vect(pigs, geom=c("X", "Y"), crs=crs(layers), keepgeom=FALSE)
 
 # Rename layers
-names(layers) <- c("bottomlandhw", "decidmixed", "othercrops", "gramanoids", "evergreen", "barren", "developed", "foodcrops", "water")
+names(layers) <- c("bottomlandhw", "decidmixed", "othercrops", "gramanoids", "evergreen", "barren", "developed", "foodcrops", "water", "canopy")
 
 #### Extract covariates and used and available locations ####
 
@@ -56,14 +70,14 @@ ggplot(pigs,aes(x=water, y=case)) +
               method.args = list(family = "binomial"), 
               se = FALSE) 
 
-ggplot(pigs, aes(x=bottomlandhw, y=foodcrops, color=id)) +
+ggplot(pigs, aes(x=water, y=foodcrops, color=id)) +
   geom_point(alpha=0.1) +
   facet_wrap(vars(case)) +
   theme(legend.position="none")
 
 
 #### Run RSF ####
-cor(pigs[,c(8:16)])
+cor(pigs[,c(8:17)])
 
 # create key column
 pigs <- pigs %>%
@@ -82,36 +96,10 @@ for (i in 1:length(un.id)) {
   temp <- pigs %>% filter(key==un.id[i])
 
   # Run rsf (but maybe change this to LASSO)
-  rsf <- glm(case ~ bottomlandhw + decidmixed + gramanoids + barren + water, data=temp, family=binomial(link = "logit"), weight=weight)
+  rsf <- glm(case ~ bottomlandhw + decidmixed + gramanoids + barren + water + I(water^2), data=temp, family=binomial(link = "logit"), weight=weight)
   summary(rsf)
   print(car::vif(rsf))
  
-  
-  #### LASSO ####
-  library(glmnet)
-  set.seed(1)
-  grid <- 10^seq(10, -2, length=100)
-  
-  x <- model.matrix(case ~ bottomlandhw + decidmixed + water + foodcrops + othercrops + barren + gramanoids, temp)[, -1]
-  y <- temp$case
-  wts <- temp$weight
-  
-  lasso.mod <- glmnet(x, y, family="binomial", alpha=0.3, weights=wts, lambda=grid, standardize=FALSE)
-  plot(lasso.mod)
-  
-  cv.out <- cv.glmnet(x, y, family="binomial", type.measure="deviance", alpha=1, weights=wts, standardize=FALSE)
-  
-  bestlam <- cv.out$lambda.min
-  
-  rsf <- glmnet(x, y, family="binomial", alpha=1, weights=wts, lambda=bestlam, standardize=FALSE)
-  
-  coef(rsf, s = bestlam)
-  
-  lasso.coef <- predict(rsf, type="coefficients", s=bestlam)
-  
-  lasso.coef[lasso.coef != 0]
-  #######
-  
   
   # add model object to list
   pigs_rsf[[i]] <- rsf
