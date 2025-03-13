@@ -1,6 +1,7 @@
 library(tidyverse)
 library(terra)
 library(lme4)
+library(glmnet)
 
 theme_set(theme_bw())
 
@@ -12,14 +13,15 @@ deer <- read_csv("output/deer_used_avail_locations.csv") %>%
 
 # Rasters
 rast_list <- c("data/landscape_data/bottomlandHW_180m_sum.tif",
-               "data/landscape_data/decidmixed_180m_sum.tif",
+               "data/landscape_data/deciduous_180m_sum.tif",
+               "data/landscape_data/mixed_180m_sum.tif",
+               "data/landscape_data/shrublands_180m_sum.tif",
                "data/landscape_data/othercrops_180m_sum.tif",
                "data/landscape_data/gramanoids_180m_sum.tif", 
                "data/landscape_data/evergreen_180m_sum.tif",
                "data/landscape_data/barren_180m_sum.tif", 
                "data/landscape_data/developed_180m_sum.tif",
-               "data/landscape_data/palatable_crops_180m_sum.tif",
-               "data/landscape_data/water_180m_sum.tif") # replace with water (distance)
+               "data/landscape_data/palatable_crops_180m_sum.tif") 
 layers <- rast(rast_list)
 
 # Reclassify missing data to 0
@@ -28,6 +30,13 @@ layers <- classify(layers, m)
 
 # Convert to % 
 layers <- layers / 149
+
+# read water
+water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
+water <- resample(water, layers)
+ext(water) <- ext(layers)
+
+layers <- c(layers, water)
 
 # Center and scale continuous rasters
 layers <- scale(layers)
@@ -50,17 +59,7 @@ dat_deer <- extract(layers, deer_v)
 # Join extracted data back to location data frame
 deer <- bind_cols(deer, dat_deer)
 
-ggplot(deer,aes(x=water, y=case)) +
-  geom_point(alpha=0.3) +
-  geom_smooth(method = "glm", 
-              method.args = list(family = "binomial"), 
-              se = FALSE) 
-
-ggplot(deer, aes(x=bottomlandhw, y=foodcrops, color=id)) +
-  geom_point(alpha=0.1) +
-  facet_wrap(vars(case)) +
-  theme(legend.position="none")
-
+# correlation matrix
 cor(deer[,c(8:16)])
 
 #### Run RSF ####
@@ -69,22 +68,49 @@ cor(deer[,c(8:16)])
 deer <- deer %>%
   unite("key", c("id", "burst"), sep="_", remove=FALSE)
 
+deer$burst <- as.character(deer$burst)
+
 ## Set up to loop by individual
-un.id <- unique(deer$key)
+un.id <- unique(deer$id)
 
 # Create list to save models
 deer_rsf <- list()
 
-# Run loop
+# Set up lasso lambda grid
+set.seed(1)
+grid <- 10^seq(10, -2, length=100)
+
+# Loop to run LASSO over each individual HR
 for (i in 1:length(un.id)) {
   
   # Filter by ID
-  temp <- deer %>% filter(key==un.id[i])
+  temp <- deer %>% filter(id==un.id[i])
   
-  # Run rsf (but maybe change this to LASSO)
-  rsf <- glm(case ~ bottomlandhw + decidmixed + gramanoids + foodcrops + developed + evergreen, data=temp, family=binomial(link = "logit"), weight=weight)
-  summary(rsf)
+  # # Run rsf (but maybe change this to LASSO)
+  # rsf <- glm(case ~ bottomlandhw + decidmixed + gramanoids + foodcrops + evergreen, 
+  #              data=temp, family=binomial(link = "logit"), weight=weight)
+  # summary(rsf)
   # print(car::vif(rsf))
+ 
+  # Set up data for LASSO in glmnet
+
+  x <- model.matrix(case ~ bottomlandhw + decidmixed + gramanoids + foodcrops + evergreen, temp)[, -1]
+  y <- temp$case
+  wts <- temp$weight
+
+  lasso.mod <- glmnet(x, y, family="binomial", alpha=1, weights=wts, lambda=grid)
+  plot(lasso.mod)
+
+  cv.out <- cv.glmnet(x, y, family="binomial", alpha=1, weights=wts)
+  bestlam <- cv.out$lambda.min
+
+  rsf <- glmnet(x, y, family="binomial", alpha=1, weights=wts, lambda=bestlam)
+  coef(rsf, s = bestlam)
+
+  lasso.coef <- predict(rsf, type="coefficients", s=bestlam)
+  lasso.coef[lasso.coef != 0]
+  # ### LASSO
+  
   
   # add model object to list
   deer_rsf[[i]] <- rsf
@@ -191,13 +217,14 @@ hr_lc <- left_join(hr_lc, cfs, by=c("key", "landcov"))
 btmhw <- hr_lc %>% filter(landcov=="bottomlandhw")  
   
 ggplot(btmhw, aes(x=pct, y=beta)) +
+  coord_cartesian(xlim=c(0,1)) +
   geom_hline(yintercept=0) +
   geom_point() + 
   geom_smooth(method='lm', formula= y~x)
 
-fdcrp <- hr_lc %>% filter(landcov=="foodcrops")  
+s1 <- hr_lc %>% filter(landcov=="evergreen")  
 
-ggplot(fdcrp, aes(x=pct, y=beta)) +
+ggplot(s1, aes(x=pct, y=beta)) +
   geom_hline(yintercept=0) +
   geom_point() + 
   geom_smooth(method='lm', formula= y~x)
