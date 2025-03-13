@@ -75,6 +75,9 @@ cor(pigs[,c(8:18)])
 pigs <- pigs %>%
   unite("key", c("id", "burst"), sep="_", remove=FALSE)
 
+# write file so we don't always have to wait for the rasters to do stuff
+write_csv(pigs, "output/pigs_used_avail_covariates.csv")
+
 ## Set up to loop by individual
 un.id <- unique(pigs$key)
 
