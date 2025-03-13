@@ -49,7 +49,7 @@ ms_full <- project(ms_full, crs(layers))
 deer_v <- vect(deer, geom=c("X", "Y"), crs=crs(layers), keepgeom=FALSE)
 
 # Rename layers
-names(layers) <- c("bottomlandhw", "decidmixed", "othercrops", "gramanoids", "evergreen", "barren", "developed", "foodcrops", "water")
+names(layers) <- c("bottomlandhw", "decid", "mixedfor", "shrubs", "othercrops", "gramanoids", "evergreen", "barren", "developed", "foodcrops", "water")
 
 #### Extract covariates and used and available locations ####
 
@@ -60,7 +60,7 @@ dat_deer <- extract(layers, deer_v)
 deer <- bind_cols(deer, dat_deer)
 
 # correlation matrix
-cor(deer[,c(8:16)])
+cor(deer[,c(8:18)])
 
 #### Run RSF ####
 
@@ -68,54 +68,78 @@ cor(deer[,c(8:16)])
 deer <- deer %>%
   unite("key", c("id", "burst"), sep="_", remove=FALSE)
 
-deer$burst <- as.character(deer$burst)
+# write file so we don't always have to wait for the rasters to do stuff
+write_csv(deer, "output/deer_used_avail_covariates.csv")
 
 ## Set up to loop by individual
-un.id <- unique(deer$id)
+un.id <- unique(deer$key)
 
 # Create list to save models
 deer_rsf <- list()
+
+# List to save best lambdas
+lambda_vals <- list()
+
+# list to save coefficients
+coef_list <- list()
+
+# create a list to save VIF from GLMs
+glm_vifs <- list()
 
 # Set up lasso lambda grid
 set.seed(1)
 grid <- 10^seq(10, -2, length=100)
 
+alpha.grid <- seq(0,1,0.02)
+
 # Loop to run LASSO over each individual HR
 for (i in 1:length(un.id)) {
   
   # Filter by ID
-  temp <- deer %>% filter(id==un.id[i])
+  temp <- deer %>% filter(key==un.id[i])
   
-  # # Run rsf (but maybe change this to LASSO)
-  # rsf <- glm(case ~ bottomlandhw + decidmixed + gramanoids + foodcrops + evergreen, 
-  #              data=temp, family=binomial(link = "logit"), weight=weight)
-  # summary(rsf)
-  # print(car::vif(rsf))
- 
+  # # Check VIF from regression
+  test <- glm(case ~ bottomlandhw + decid + foodcrops, data=temp, family=binomial(link = "logit"), weight=weight)
+  # glm_vifs[[i]] <- car::vif(test)
+  
+  # Checking the linearly dependent variables
+  # ld.vars <- attributes(alias(test)$Complete)$dimnames[[1]]
+  
   # Set up data for LASSO in glmnet
-
-  x <- model.matrix(case ~ bottomlandhw + decidmixed + gramanoids + foodcrops + evergreen, temp)[, -1]
+  x <- model.matrix(case ~ bottomlandhw + decid + mixedfor + evergreen + gramanoids + shrubs + foodcrops, temp)[, -1]
   y <- temp$case
   wts <- temp$weight
-
-  lasso.mod <- glmnet(x, y, family="binomial", alpha=1, weights=wts, lambda=grid)
-  plot(lasso.mod)
-
-  cv.out <- cv.glmnet(x, y, family="binomial", alpha=1, weights=wts)
-  bestlam <- cv.out$lambda.min
-
-  rsf <- glmnet(x, y, family="binomial", alpha=1, weights=wts, lambda=bestlam)
-  coef(rsf, s = bestlam)
-
-  lasso.coef <- predict(rsf, type="coefficients", s=bestlam)
-  lasso.coef[lasso.coef != 0]
-  # ### LASSO
   
+  # Run cross validation to determine optimal lambda value
+  models <- list()
+  for (j in 1:length(alpha.grid)) {
+    models[[j]] 
+    test <- cv.glmnet(x, y, family="binomial", alpha=alpha.grid[j], weights=wts, nlambda=200)
+  }
+  
+  bestlam <- cv.out$lambda.min
+  lambda_vals[[i]] <- bestlam
+  
+  # Run the LASSO with the optimal lambda and alpha
+  rsf <- glmnet(x, y, family=binomial(), alpha=1, weights=wts, lambda=bestlam)
   
   # add model object to list
   deer_rsf[[i]] <- rsf
   
+  # Extract coefficients
+  l.coef <- predict(rsf, type="coefficients", s=bestlam)
+  
+  # Save coefficients
+  coef_list[[i]] <- as.matrix(t(l.coef))
+  
 }
+
+
+coef_list <- lapply(coef_list, t)
+
+# combine into a tibble
+coef_list <- do.call(bind_rows, coef_list)
+
 
 m.covars <- c("bottomlandhw", "decidmixed", "gramanoids", "foodcrops", "developed", "evergreen")
 

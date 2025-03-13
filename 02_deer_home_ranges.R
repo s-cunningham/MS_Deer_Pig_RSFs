@@ -243,9 +243,9 @@ deer <- bind_rows(deer, s)
 # Check if there are any IDs in the to_segment vector that are not in the deer tibble after segmenting and binding
 to_segment[!(to_segment %in% deer$id)]
 
-## Save
-write_csv(deer, "output/segmented_deer.csv")
-# deer <- read_csv("output/segmented_deer.csv")
+# Save
+# write_csv(deer, "output/segmented_deer.csv")
+deer <- read_csv("output/segmented_deer.csv")
 
 # how many days in each segment?
 ndays <- deer %>% mutate(day=format(date, "%Y-%m-%d")) %>% group_by(key) %>% reframe(ndays=length(unique(day)))
@@ -302,7 +302,7 @@ for (i in 1:length(ids)) {
     setTxtProgressBar(pb, i)
     
     # Next three lines are to fit variogram and select the best movement model to fit to the data
-    var <- variogram(dat[[i]]) 
+    var <- variogram(dat[[i]], CI="Gauss") 
     var2 <- variogram.fit(var,  name="GuessBM", interactive=F)
     
     # Automated model selection

@@ -1,6 +1,6 @@
 library(tidyverse)
 library(terra)
-library(lme4)
+library(glmnet)
 
 theme_set(theme_bw())
 
@@ -12,7 +12,9 @@ pigs <- read_csv("output/pigs_used_avail_locations.csv") %>%
 
 # Rasters
 rast_list <- c("data/landscape_data/bottomlandHW_210m_sum.tif",
-               "data/landscape_data/decidmixed_210m_sum.tif",
+               "data/landscape_data/deciduous_210m_sum.tif",
+               "data/landscape_data/mixed_210m_sum.tif",
+               "data/landscape_data/shrublands_210m_sum.tif",
                "data/landscape_data/othercrops_210m_sum.tif",
                "data/landscape_data/gramanoids_210m_sum.tif", 
                "data/landscape_data/evergreen_210m_sum.tif",
@@ -36,12 +38,12 @@ ext(water) <- ext(layers)
 layers <- c(layers, water)
 
 #read tree camopy cover
-tcc <- rast("data/landscape_data/nlcd_tcc2021_ms50km_range210m.tif")
-tcc <- project(tcc, crs(layers))
-tcc <- resample(tcc, layers)
-ext(tcc) <- ext(layers)
-
-layers <- c(layers, tcc)
+# tcc <- rast("data/landscape_data/nlcd_tcc2021_ms50km_range210m.tif")
+# tcc <- project(tcc, crs(layers))
+# tcc <- resample(tcc, layers)
+# ext(tcc) <- ext(layers)
+# 
+# layers <- c(layers, tcc)
 
 # Center and scale continuous rasters
 layers <- scale(layers)
@@ -54,7 +56,7 @@ ms_full <- project(ms_full, crs(layers))
 pigs_v <- vect(pigs, geom=c("X", "Y"), crs=crs(layers), keepgeom=FALSE)
 
 # Rename layers
-names(layers) <- c("bottomlandhw", "decidmixed", "othercrops", "gramanoids", "evergreen", "barren", "developed", "foodcrops", "water", "canopy")
+names(layers) <- c("bottomlandhw", "decid", "mixedfor", "shrubs", "othercrops", "gramanoids", "evergreen", "barren", "developed", "foodcrops", "water")
 
 #### Extract covariates and used and available locations ####
 
@@ -64,24 +66,14 @@ dat_pigs <- extract(layers, pigs_v)
 # Join extracted data back to location data frame
 pigs <- bind_cols(pigs, dat_pigs)
 
-ggplot(pigs,aes(x=water, y=case)) +
-  geom_point(alpha=0.3) +
-  geom_smooth(method = "glm", 
-              method.args = list(family = "binomial"), 
-              se = FALSE) 
-
-ggplot(pigs, aes(x=water, y=foodcrops, color=id)) +
-  geom_point(alpha=0.1) +
-  facet_wrap(vars(case)) +
-  theme(legend.position="none")
-
+# Correlation matrix
+cor(pigs[,c(8:18)])
 
 #### Run RSF ####
-cor(pigs[,c(9:18)])
 
 # create key column
 pigs <- pigs %>%
-          unite("key", c("id", "burst"), sep="_", remove=FALSE)
+  unite("key", c("id", "burst"), sep="_", remove=FALSE)
 
 ## Set up to loop by individual
 un.id <- unique(pigs$key)
@@ -89,54 +81,99 @@ un.id <- unique(pigs$key)
 # Create list to save models
 pigs_rsf <- list()
 
-# Create list to save VIF
+# List to save best lambdas
+lambda_vals <- list()
+
+# list to save coefficients
+cfs <- list()
+
+# create a list to save VIF from GLMs
+glm_vifs <- list()
+
+# Set up lasso lambda grid
+set.seed(1)
+grid <- 10^seq(10, -2, length=100)
 
 # Run loop
 for (i in 1:length(un.id)) {
   
   # Filter by ID
   temp <- pigs %>% filter(key==un.id[i])
-
-  # Run rsf (but maybe change this to LASSO)
-  rsf <- glm(case ~ canopy + I(canopy^2) + water + I(water^2), data=temp, family=binomial(link = "logit"), weight=weight)
-  summary(rsf)
-  print(car::vif(rsf))
- 
+  
+  # Check VIF from regression
+  test <- glm(case ~ bottomlandhw + decid + foodcrops + water + I(water^2), data=temp, family=binomial(link = "logit"), weight=weight)
+  glm_vifs[[i]] <- car::vif(test)
+  
+  # Set up data for LASSO in glmnet
+  x <- model.matrix(case ~ bottomlandhw + decid + foodcrops + water + I(water^2), temp)[, -1]
+  y <- temp$case
+  wts <- temp$weight
+  
+  # Run cross validation to determine optimal lambda value
+  cv.out <- cv.glmnet(x, y, family="binomial", alpha=1, weights=wts)
+  bestlam <- cv.out$lambda.min
+  lambda_vals[[i]] <- bestlam
+  
+  # Run the LASSO with the optimal lambda
+  lasso.mod <- glmnet(x, y, family="binomial", alpha=1, weights=wts, lambda=bestlam)
+  
   # add model object to list
-  pigs_rsf[[i]] <- rsf
+  pigs_rsf[[i]] <- lasso.mod
+  
+  # Extract coefficients
+  l.coef <- predict(lasso.mod, type="coefficients", s=bestlam)
+  
+  # Save coefficients
+  cfs[[i]] <- as.matrix(t(l.coef))
   
 }
 
-m.covars <- c("bottomlandhw", "decidmixed", "gramanoids", "canopy", "canopy^2", "water", "water^2")
-
 #### Summarize coefficients ####
-# get coefficients from all the models
-cfs <- lapply(pigs_rsf, coef)
-
 # combine into a tibble
+cfs <- lapply(cfs, as.data.frame)
 cfs <- do.call(bind_rows, cfs)
 
-# rename intercept and add ID column
-cfs <- cfs %>%
-  rename(intercept=`(Intercept)`) %>%
-  mutate(id = un.id) %>%
-  select(id, intercept:`I(water^2)`)
-
+# rename columns and add ID
+cfs <- cfs %>% 
+  as_tibble() %>%
+  rename(water2=`I(water^2)`, intercept=`(Intercept)`) %>%
+  mutate(id=un.id) %>%
+  select(id, intercept:water2)
+  
 # calculate column means
 betas <- cfs %>% 
-  reframe(across(bottomlandhw:evergreen, \(x) mean(x, na.rm = TRUE)))
+  reframe(across(bottomlandhw:water2, \(x) mean(x, na.rm = TRUE)))
 
-# Extract SE for confidence intervals
-se <- lapply(pigs_rsf, arm::se.coef)
+exp(betas)
 
-# combine into a tibble
-se <- do.call(bind_rows, se)
 
-# rename intercept and add ID column
-se <- se %>%
-  rename(intercept=`(Intercept)`) %>%
-  mutate(id = un.id) %>%
-  select(id, intercept:evergreen)
+# # get coefficients from all the models
+# cfs <- lapply(pigs_rsf, coef)
+# 
+# # combine into a tibble
+# cfs <- do.call(bind_rows, cfs)
+# 
+# # rename intercept and add ID column
+# cfs <- cfs %>%
+#   rename(intercept=`(Intercept)`) %>%
+#   mutate(id = un.id) %>%
+#   select(id, intercept:`I(water^2)`)
+# 
+# # calculate column means
+# betas <- cfs %>% 
+#   reframe(across(bottomlandhw:evergreen, \(x) mean(x, na.rm = TRUE)))
+# 
+# # Extract SE for confidence intervals
+# se <- lapply(pigs_rsf, arm::se.coef)
+# 
+# # combine into a tibble
+# se <- do.call(bind_rows, se)
+# 
+# # rename intercept and add ID column
+# se <- se %>%
+#   rename(intercept=`(Intercept)`) %>%
+#   mutate(id = un.id) %>%
+#   select(id, intercept:evergreen)
 
 
 #### Functional response ####
