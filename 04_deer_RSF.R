@@ -15,16 +15,19 @@ deer_rsf <- list()
 lambda_vals <- list()
 
 # list to save coefficients
-coef_list <- list()
+cfs <- list()
 
-# create a list to save VIF from GLMs
-glm_vifs <- list()
+# # create a list to save VIF from GLMs
+# glm_vifs <- list()
+
+# Save GLMS with reduced variable sets
+reduced_glms <- list()
 
 # Set up lasso lambda grid
 set.seed(1)
 lam.grid <- 10^seq(20, -2, length=200)
 
-alpha.grid <- seq(0,1,0.02)
+# alpha.grid <- seq(0,1,0.02)
 
 # Loop to run LASSO over each individual HR
 for (i in 1:length(un.id)) {
@@ -32,23 +35,12 @@ for (i in 1:length(un.id)) {
   # Filter by ID
   temp <- deer %>% filter(key==un.id[i])
   
-  # # Check VIF from regression
-  # test <- glm(case ~ deciduous + evergreen + gramanoids + shrubs +foodcrops + water + I(water^2),
-              # data=temp, family=binomial(link = "logit"), weight=weight)
-  # glm_vifs[[i]] <- car::vif(test)
-  
-  # Checking the linearly dependent variables
-  # ld.vars <- attributes(alias(test)$Complete)$dimnames[[1]]
-  
   # Set up data for LASSO in glmnet
   x <- model.matrix(case ~ deciduous + evergreen + gramanoids + shrubs + foodcrops + water + I(water^2), temp)[, -1]
   y <- temp$case
   wts <- temp$weight
 
   cv.out <- cv.glmnet(x, y, family="binomial", alpha=1, weights=wts, type.measure="deviance")
-  
-  cva.out <- cva.glmnet(case ~ deciduous + evergreen + gramanoids + shrubs + foodcrops + water + I(water^2), data=temp,
-                        weights=wts, family="binomial", type.measure="deviance")
   
   bestlam <- cv.out$lambda.min
   lambda_vals[[i]] <- bestlam
@@ -63,41 +55,85 @@ for (i in 1:length(un.id)) {
   l.coef <- predict(rsf, type="coefficients", s=bestlam)
   
   # Save LASSO coefficients
-  coef_list[[i]] <- as.matrix(t(l.coef))
+  cfs[[i]] <- as.matrix(t(l.coef))
   
-  # row.names(as.matrix(l.coef)[as.matrix(l.coef)$s1>0])
-  # 
-  # # run regression model with selected covariates
-  # test2 <- glm(case ~ deciduous + evergreen + shrubs + foodcrops + water,
-  #              data=temp, family=binomial(link = "logit"), weight=weight)
+  # Extract the non-zero coefficients
+  coefs <- as.matrix(l.coef) %>% 
+    as.data.frame() %>% 
+    rownames_to_column() %>% 
+    filter(rowname!="(Intercept)" & s1!=0) %>%
+    select(rowname) %>% 
+    as.vector() %>% 
+    unname() %>%
+    unlist() %>%
+    paste(collapse=" + ")
   
+  if (str_length(coefs) > 0) {
+    # Create a formula with the non-zero coefficients  
+    mod_form <- formula(paste("case ~", coefs))
+    
+    # run regression model with selected covariates
+    test <- glm(mod_form, data=temp, family=binomial(link = "logit"), weight=weight)
+    
+    # Save GLM with the reduced covariate set
+    reduced_glms[[i]] <- test
+    
+    # glm_vifs[[i]] <- car::vif(test)
+  }
 }
 
-
-coef_list <- lapply(coef_list, t)
-
-# combine into a tibble
-coef_list <- do.call(bind_rows, coef_list)
-
-
-m.covars <- c("bottomlandhw", "decidmixed", "gramanoids", "foodcrops", "developed", "evergreen")
-
 #### Summarize coefficients ####
-# get coefficients from all the models
-cfs <- lapply(deer_rsf, coef)
-
 # combine into a tibble
+cfs <- lapply(cfs, as.data.frame)
 cfs <- do.call(bind_rows, cfs)
 
-# rename intercept and add ID column
-cfs <- cfs %>%
-  rename(intercept=`(Intercept)`) %>%
-  mutate(id = un.id) %>%
-  select(id, intercept:evergreen)
+# rename columns and add ID
+cfs <- cfs %>% 
+  as_tibble() %>%
+  rename(water2=`I(water^2)`, intercept=`(Intercept)`) %>%
+  mutate(id=un.id) %>%
+  select(id, intercept:water2)
 
 # calculate column means
 betas <- cfs %>% 
-  reframe(across(bottomlandhw:evergreen, \(x) mean(x, na.rm = TRUE)))
+  reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
+
+
+
+#### reduced GLMs ####
+# extract mean coeficients and combine into a single table
+r_glms <- lapply(reduced_glms, coef)
+r_glms <- lapply(r_glms, as.data.frame)
+r_glms <- lapply(r_glms, t)
+r_glms <- lapply(r_glms, as.data.frame)
+r_glms <- do.call(bind_rows, r_glms)
+
+r_glms <- r_glms %>% 
+  as_tibble() %>%
+  rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%
+  # drop intercept
+  select(-intercept) %>%
+  # fill with 0
+  mutate(across(deciduous:water2, \(x) coalesce(x, 0)))
+
+# how many do we have?
+nrow(r_glms)
+
+# add rows of 0s to IDs that dropped all coeficients
+zero_rows <- tibble(deciduous=rep(0,3),
+                      evergreen=rep(0,3),
+                      gramanoids=rep(0,3), 
+                      shrubs=rep(0,3),
+                      foodcrops=rep(0,3),
+                      water=rep(0,3),
+                      water2=rep(0,3))
+r_glms <- bind_rows(r_glms, zero_rows)
+
+glm_betas <- r_glms %>% 
+  reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
+
+
+
 
 
 

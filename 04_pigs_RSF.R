@@ -1,4 +1,5 @@
 library(tidyverse)
+library(caret)
 library(glmnet)
 library(glmnetUtils)
 
@@ -16,45 +17,69 @@ lambda_vals <- list()
 # list to save coefficients
 cfs <- list()
 
-# create a list to save VIF from GLMs
-glm_vifs <- list()
+# # create a list to save VIF from GLMs
+# glm_vifs <- list()
+
+# Save GLMS with reduced variable sets
+reduced_glms <- list()
 
 # Set up lasso lambda grid
 set.seed(1)
-grid <- 10^seq(10, -2, length=100)
+lam.grid <- 10^seq(20, -2, length=200)
 
-# Run loop
+# alpha.grid <- seq(0,1,0.02)
+
+# Loop to run LASSO over each individual HR
 for (i in 1:length(un.id)) {
   
   # Filter by ID
   temp <- pigs %>% filter(key==un.id[i])
   
-  # Check VIF from regression
-  test <- glm(case ~ bottomlandhw + decid + foodcrops + gramanoids + water + I(water^2), data=temp, family=binomial(link = "logit"), weight=weight)
-  glm_vifs[[i]] <- car::vif(test)
-  
   # Set up data for LASSO in glmnet
-  x <- model.matrix(case ~ bottomlandhw + decid + foodcrops + gramanoids + water + I(water^2), temp)[, -1]
+  x <- model.matrix(case ~ deciduous + evergreen + gramanoids + shrubs + foodcrops + water + I(water^2), temp)[, -1]
   y <- temp$case
   wts <- temp$weight
   
-  # Run cross validation to determine optimal lambda value
-  cv.out <- cv.glmnet(x, y, family="binomial", alpha=1, weights=wts)
+  cv.out <- cv.glmnet(x, y, family="binomial", alpha=1, weights=wts, type.measure="deviance")
+  
   bestlam <- cv.out$lambda.min
   lambda_vals[[i]] <- bestlam
   
-  # Run the LASSO with the optimal lambda
-  lasso.mod <- glmnet(x, y, family="binomial", alpha=1, weights=wts, lambda=bestlam)
+  # Run the LASSO with the optimal lambda and alpha
+  rsf <- glmnet(x, y, family="binomial", alpha=1, weights=wts, lambda=bestlam)
   
   # add model object to list
-  pigs_rsf[[i]] <- lasso.mod
+  pigs_rsf[[i]] <- rsf
   
   # Extract coefficients
-  l.coef <- predict(lasso.mod, type="coefficients", s=bestlam)
+  l.coef <- predict(rsf, type="coefficients", s=bestlam)
   
-  # Save coefficients
+  # Save LASSO coefficients
   cfs[[i]] <- as.matrix(t(l.coef))
   
+  # Extract the non-zero coefficients
+  coefs <- as.matrix(l.coef) %>% 
+    as.data.frame() %>% 
+    rownames_to_column() %>% 
+    filter(rowname!="(Intercept)" & s1!=0) %>%
+    select(rowname) %>% 
+    as.vector() %>% 
+    unname() %>%
+    unlist() %>%
+    paste(collapse=" + ")
+  
+  if (str_length(coefs) > 0) {
+    # Create a formula with the non-zero coefficients  
+    mod_form <- formula(paste("case ~", coefs))
+    
+    # run regression model with selected covariates
+    test <- glm(mod_form, data=temp, family=binomial(link = "logit"), weight=weight)
+    
+    # Save GLM with the reduced covariate set
+    reduced_glms[[i]] <- test
+    
+    # glm_vifs[[i]] <- car::vif(test)
+  }
 }
 
 #### Summarize coefficients ####
