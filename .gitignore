@@ -16,6 +16,7 @@ npp_averaging.R
 04_pigs_rsf_glmm.R
 garrett_moose_code.R
 ctmm - AKDE.R
+example_elastic_net.R
 
 # Session Data files
 .RData
