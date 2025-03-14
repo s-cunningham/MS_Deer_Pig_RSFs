@@ -1,5 +1,6 @@
 library(tidyverse)
 library(glmnet)
+library(glmnetUtils)
 
 pigs <- read_csv("output/pigs_used_avail_covariates.csv")
 
@@ -29,11 +30,11 @@ for (i in 1:length(un.id)) {
   temp <- pigs %>% filter(key==un.id[i])
   
   # Check VIF from regression
-  test <- glm(case ~ bottomlandhw + decid + foodcrops + water + I(water^2), data=temp, family=binomial(link = "logit"), weight=weight)
+  test <- glm(case ~ bottomlandhw + decid + foodcrops + gramanoids + water + I(water^2), data=temp, family=binomial(link = "logit"), weight=weight)
   glm_vifs[[i]] <- car::vif(test)
   
   # Set up data for LASSO in glmnet
-  x <- model.matrix(case ~ bottomlandhw + decid + foodcrops + water + I(water^2), temp)[, -1]
+  x <- model.matrix(case ~ bottomlandhw + decid + foodcrops + gramanoids + water + I(water^2), temp)[, -1]
   y <- temp$case
   wts <- temp$weight
   

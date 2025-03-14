@@ -1,5 +1,6 @@
 library(tidyverse)
 library(glmnet)
+library(glmnetUtils)
 
 ## Read data 
 deer <- read_csv("output/deer_used_avail_covariates.csv")
@@ -21,7 +22,7 @@ glm_vifs <- list()
 
 # Set up lasso lambda grid
 set.seed(1)
-grid <- 10^seq(10, -2, length=100)
+lam.grid <- 10^seq(20, -2, length=200)
 
 alpha.grid <- seq(0,1,0.02)
 
@@ -32,29 +33,28 @@ for (i in 1:length(un.id)) {
   temp <- deer %>% filter(key==un.id[i])
   
   # # Check VIF from regression
-  test <- glm(case ~ bottomlandhw + decid + foodcrops, data=temp, family=binomial(link = "logit"), weight=weight)
+  # test <- glm(case ~ deciduous + evergreen + gramanoids + shrubs +foodcrops + water + I(water^2),
+              # data=temp, family=binomial(link = "logit"), weight=weight)
   # glm_vifs[[i]] <- car::vif(test)
   
   # Checking the linearly dependent variables
   # ld.vars <- attributes(alias(test)$Complete)$dimnames[[1]]
   
   # Set up data for LASSO in glmnet
-  x <- model.matrix(case ~ bottomlandhw + decid + mixedfor + evergreen + gramanoids + shrubs + foodcrops, temp)[, -1]
+  x <- model.matrix(case ~ deciduous + evergreen + gramanoids + shrubs + foodcrops + water + I(water^2), temp)[, -1]
   y <- temp$case
   wts <- temp$weight
+
+  cv.out <- cv.glmnet(x, y, family="binomial", alpha=1, weights=wts, type.measure="deviance")
   
-  # Run cross validation to determine optimal lambda value
-  models <- list()
-  for (j in 1:length(alpha.grid)) {
-    models[[j]] 
-    test <- cv.glmnet(x, y, family="binomial", alpha=alpha.grid[j], weights=wts, nlambda=200)
-  }
+  cva.out <- cva.glmnet(case ~ deciduous + evergreen + gramanoids + shrubs + foodcrops + water + I(water^2), data=temp,
+                        weights=wts, family="binomial", type.measure="deviance")
   
   bestlam <- cv.out$lambda.min
   lambda_vals[[i]] <- bestlam
   
   # Run the LASSO with the optimal lambda and alpha
-  rsf <- glmnet(x, y, family=binomial(), alpha=1, weights=wts, lambda=bestlam)
+  rsf <- glmnet(x, y, family="binomial", alpha=1, weights=wts, lambda=bestlam)
   
   # add model object to list
   deer_rsf[[i]] <- rsf
@@ -62,8 +62,14 @@ for (i in 1:length(un.id)) {
   # Extract coefficients
   l.coef <- predict(rsf, type="coefficients", s=bestlam)
   
-  # Save coefficients
+  # Save LASSO coefficients
   coef_list[[i]] <- as.matrix(t(l.coef))
+  
+  # row.names(as.matrix(l.coef)[as.matrix(l.coef)$s1>0])
+  # 
+  # # run regression model with selected covariates
+  # test2 <- glm(case ~ deciduous + evergreen + shrubs + foodcrops + water,
+  #              data=temp, family=binomial(link = "logit"), weight=weight)
   
 }
 
@@ -93,17 +99,6 @@ cfs <- cfs %>%
 betas <- cfs %>% 
   reframe(across(bottomlandhw:evergreen, \(x) mean(x, na.rm = TRUE)))
 
-# Extract SE for confidence intervals
-se <- lapply(deer_rsf, arm::se.coef)
-
-# combine into a tibble
-se <- do.call(bind_rows, se)
-
-# rename intercept and add ID column
-se <- se %>%
-  rename(intercept=`(Intercept)`) %>%
-  mutate(id = un.id) %>%
-  select(id, intercept:evergreen)
 
 
 #### Functional response ####
