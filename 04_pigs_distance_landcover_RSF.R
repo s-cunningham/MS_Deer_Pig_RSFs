@@ -1,190 +1,179 @@
 library(tidyverse)
-library(lme4)
-library(terra)
-library(sf)
-library(tidyterra)
-library(ggspatial)
+library(glmnet)
 
-options(scipen=999)
+pigs <- read_csv("output/pigs_used_avail_covariates.csv")
 
-#### Load rasters for prediction ####
-ms_full <- vect("data/landscape_data/mississippi_ACEA.shp") 
-ms_buff <- vect("data/landscape_data/mississippi_ACEA_50kmbuffer.shp")
+## Set up to loop by individual
+un.id <- unique(pigs$key)
 
-pigs_buffer <- vect("data/landscape_data/PigsGPS_10kmBuffer.shp")
+# Create list to save models
+pigs_rsf <- list()
 
-lakes <- vect("data/landscape_data/ne_ms_lakes.shp")
-lakes <- project(lakes, ms_full)
+# List to save best lambdas
+lambda_vals <- list()
 
-## Load rasters
-rast_list <- c("data/landscape_data/distance_to_upland90m.tif",
-               "data/landscape_data/distance_to_decid_mixed90m.tif",
-               "data/landscape_data/distance_to_herbaceous90m.tif",
-               "data/landscape_data/distance_to_evergreen90m.tif",
-               "data/landscape_data/distance_to_bottomlandhw90m.tif",
-               "data/landscape_data/distance_to_openwater90m.tif",
-               "data/landscape_data/distance_to_allforest90m.tif")
-layers <- rast(rast_list)
+# list to save coefficients
+cfs <- list()
 
-## foodcrops
-food <- rast("data/landscape_data/distance_to_foodcrops90m.tif")
-food <- project(food, crs(layers))
-layers <- c(layers, food)
+# create a list to save VIF from GLMs
+glm_vifs <- list()
 
-# USA streams rivers (ESRI)
-streams <- rast("data/landscape_data/distance_to_rivers_streams.tif")
-streams <- resample(streams, food, method="bilinear")
-layers <- c(layers, streams)
+# Set up lasso lambda grid
+set.seed(1)
+grid <- 10^seq(10, -2, length=100)
 
-gpw <- rast("data/landscape_data/gpw_PopDensity_90m50km.tif")
-gpw <- project(gpw, crs(layers))
-gpw <- resample(gpw, layers)
-gpw <- mask(gpw, layers[[1]])
-ext(gpw) <- ext(layers)
-layers <- c(layers, gpw)
-
-roads <- rast("data/landscape_data/distance_to_roads50kmbuff.tif")
-roads <- project(roads, crs(layers))
-ext(roads) <- ext(layers)
-roads <- resample(roads, layers)
-roads <- mask(roads, layers[[1]])
-layers <- c(layers, roads)
-
-layers <- scale(layers)
-names(layers) <- c("uplandforest", "decidmixed", "grassland", "evergreen", "bottomlandhw", "water", "allforest", "foodcrops", "streams", "pop_density", "roads")
-
-## Load pig locations, add 5-fold label
-pigs <- read_csv("data/pigs_usedavail_covariates.csv")
-
-#### Pig map ####
-pigs_rsf <- glmer(type ~ bottomlandhw + uplandforest + foodcrops + roads + streams + (1|PigID), data=pigs, family=binomial(link = "logit"))
-# pigs_rsf <- glmer(type ~ pctDecidMixed + pctCrops + pctBottomland + roads + streams + (1|PigID), data=pigs, family=binomial(link = "logit"))
-
-# Save model
-# saveRDS(pigs_rsf, "data/pigs_rsf_model.RDS")
-
-# Predict across Mississippi
-pig_layers <- c(layers["bottomlandhw"],  layers["uplandforest"], layers["foodcrops"], layers["roads"], layers["streams"])
-
-# create template 1 km x 1 km raster 
-temp_rast <- rast(ext(ms_full), resolution=1000) 
-
-#### Prediction uncertainty ####
-## Get SE of predictions
-# Load points of raster cells
-pts <- vect("data/landscape_data/ms_masked_90m_pts.shp")
-pts <- project(pts, crs(layers))
-
-# Extract raster values at points (i.e., put the raster values into a data frame)
-pts_extr <- extract(pig_layers, pts)
-pts_extr <- pts_extr %>% select(-ID)
-
-# Predict standard errors. Change type to "link" so that everything is on the same (log-odds) scale, 
-# instead of generating predicted probabilities (we will do this conversion manually)
-pigs_sd <- predict(pigs_rsf, newdata=pts_extr, type="link", se.fit=TRUE, re.form=NA)
-
-# Create tibble for calculations
-pigs_sd <- data.frame(fit=pigs_sd$fit, se.fit=pigs_sd$se.fit)
-
-# Calculate confidence intervals
-pigs_sd <- pigs_sd %>% as_tibble() %>%
-  mutate(lci=boot::inv.logit(fit - (1.96 * se.fit)),
-         uci=boot::inv.logit(fit + (1.96 * se.fit))) %>%
-  mutate(fit=boot::inv.logit(fit)) 
-
-pts$fit <- pigs_sd$fit
-pts$lci <- pigs_sd$lci
-pts$uci <- pigs_sd$uci
-# pts$se <- pigs_sd$se.fit
-
-# Write shapefile
-# writeVector(pts, "data/landscape_data/pigs_pts_se.shp", overwrite=TRUE)
-# go open the point file in ArcGIS and convert it to a raster
-
-## Convert points to raster. this is pretty memory-intensive
-# The second argument is a raster that matches the resolution of the pts SpatVector (i.e., 90x90)
-pigs_uci <- rasterize(pts, layers["bottomlandhw"], field="uci", fun="mean")
-pigs_lci <- rasterize(pts, layers["bottomlandhw"], field="lci", fun="mean")
-pigs_mean <- rasterize(pts, layers["bottomlandhw"], field="fit", fun="mean")
-
-## Read back in raster from points to do some final clipping/cleaning
-# pigs_uci <- rast("data/predictions/pigs_glmm_rsf_UpperCI.tif")
-# pigs_lci <- rast("data/predictions/pigs_glmm_rsf_LowerCI.tif")
-# pigs_mean <- rast("data/predictions/pigs_glmm_rsf_mean.tif")
-
-# Crop rows of NAs
-pigs_uci <- mask(pigs_uci, ms_full)
-pigs_lci <- mask(pigs_lci, ms_full)
-pigs_mean <- mask(pigs_mean, ms_full)
-
-## Rescale
-# find min and max values
-max_hsi <- max(minmax(pigs_uci)[2], minmax(pigs_lci)[2], minmax(pigs_mean)[2])
-min_hsi <- min(minmax(pigs_uci)[1], minmax(pigs_lci)[1], minmax(pigs_mean)[1])
-
-# apply scaling
-pigs_uci <- (pigs_uci-min_hsi)/(max_hsi-min_hsi)
-pigs_lci <- (pigs_lci-min_hsi)/(max_hsi-min_hsi)
-pigs_mean <- (pigs_mean-min_hsi)/(max_hsi-min_hsi)
-
-# Mask lakes
-pigs_uci <- mask(pigs_uci, lakes, inverse=TRUE)
-pigs_lci <- mask(pigs_lci, lakes, inverse=TRUE)
-pigs_mean <- mask(pigs_mean, lakes, inverse=TRUE)
-
-# Resample to 1x1 km
-pigs_uci <- resample(pigs_uci, temp_rast)
-pigs_lci <- resample(pigs_lci, temp_rast)
-pigs_mean <- resample(pigs_mean, temp_rast)
-
-# Reclassify missing data to 0
-m <- rbind(c(NA, 0))
-pigs_uci <- classify(pigs_uci, m)
-pigs_lci <- classify(pigs_lci, m)
-pigs_mean <- classify(pigs_mean, m)
-
-## Save LCI and UCI rasters as .asc
-writeRaster(pigs_uci, "data/predictions/pigs_glmm_rsf_UpperCI.asc",NAflag=-9999, overwrite=TRUE)
-writeRaster(pigs_lci, "data/predictions/pigs_glmm_rsf_LowerCI.asc",NAflag=-9999, overwrite=TRUE)
-writeRaster(pigs_mean, "data/predictions/pigs_glmm_rsf_FINALFINALFINALFINAL.asc",NAflag=-9999, overwrite=TRUE)
-# additionally save mean predictions as .tif for plotting
-writeRaster(pigs_mean, "data/predictions/pigs_glmm_rsf_FINALFINALFINALFINAL.tif", overwrite=TRUE)
-
-#### Extract RSF predictions at each location ####
-pig_test <- pigs %>% select(PigID:Y)
-
-dat_pig <- extract(pigs_mean, pig_test[,c(4:5)])
-
-pig_test$rsf <- dat_pig$mean
-
-plot(density(pig_test$rsf[pig_test$type==0]), xlim=c(0,1))
-plot(density(pig_test$rsf[pig_test$type==1]), xlim=c(0,1))
-hist(pig_test$rsf[pig_test$type==1], xlim=c(0,1))
-hist(pig_test$rsf[pig_test$type==0], xlim=c(0,1))
-
-min(pig_test$rsf[pig_test$type==1], na.rm=TRUE)
-mean(pig_test$rsf[pig_test$type==1], na.rm=TRUE)
-
-quantile(pig_test$rsf, probs=c(0.25, 0.5, 0.75))
-
-
-thresh <- seq(0,1,by=0.01)
-res <- matrix(NA, ncol=3, nrow=length(thresh))
-res[,1] <- thresh
-for (i in 1:length(thresh)) {
+# Run loop
+for (i in 1:length(un.id)) {
   
-  actu <- factor(pig_test$type, levels=c(0,1))
-  pred <- factor(if_else(pig_test$rsf >= thresh[i], 1, 0), levels=c(0,1))
+  # Filter by ID
+  temp <- pigs %>% filter(key==un.id[i])
   
-  res[i,2] <- caret::sensitivity(pred, actu)
-  res[i,3] <- caret::specificity(pred, actu)
+  # Check VIF from regression
+  test <- glm(case ~ bottomlandhw + decid + foodcrops + water + I(water^2), data=temp, family=binomial(link = "logit"), weight=weight)
+  glm_vifs[[i]] <- car::vif(test)
+  
+  # Set up data for LASSO in glmnet
+  x <- model.matrix(case ~ bottomlandhw + decid + foodcrops + water + I(water^2), temp)[, -1]
+  y <- temp$case
+  wts <- temp$weight
+  
+  # Run cross validation to determine optimal lambda value
+  cv.out <- cv.glmnet(x, y, family="binomial", alpha=1, weights=wts)
+  bestlam <- cv.out$lambda.min
+  lambda_vals[[i]] <- bestlam
+  
+  # Run the LASSO with the optimal lambda
+  lasso.mod <- glmnet(x, y, family="binomial", alpha=1, weights=wts, lambda=bestlam)
+  
+  # add model object to list
+  pigs_rsf[[i]] <- lasso.mod
+  
+  # Extract coefficients
+  l.coef <- predict(lasso.mod, type="coefficients", s=bestlam)
+  
+  # Save coefficients
+  cfs[[i]] <- as.matrix(t(l.coef))
+  
 }
 
-res <- res %>% as.data.frame() 
-names(res) <- c("Threshold", "Sensitivity", "Specificity")
-res <- res %>% mutate(TSS = Sensitivity + Specificity - 1)
+#### Summarize coefficients ####
+# combine into a tibble
+cfs <- lapply(cfs, as.data.frame)
+cfs <- do.call(bind_rows, cfs)
 
-res %>% slice_max(TSS)
+# rename columns and add ID
+cfs <- cfs %>% 
+  as_tibble() %>%
+  rename(water2=`I(water^2)`, intercept=`(Intercept)`) %>%
+  mutate(id=un.id) %>%
+  select(id, intercept:water2)
+
+# calculate column means
+betas <- cfs %>% 
+  reframe(across(bottomlandhw:water2, \(x) mean(x, na.rm = TRUE)))
+
+exp(betas)
+
+
+# # get coefficients from all the models
+# cfs <- lapply(pigs_rsf, coef)
+# 
+# # combine into a tibble
+# cfs <- do.call(bind_rows, cfs)
+# 
+# # rename intercept and add ID column
+# cfs <- cfs %>%
+#   rename(intercept=`(Intercept)`) %>%
+#   mutate(id = un.id) %>%
+#   select(id, intercept:`I(water^2)`)
+# 
+# # calculate column means
+# betas <- cfs %>% 
+#   reframe(across(bottomlandhw:evergreen, \(x) mean(x, na.rm = TRUE)))
+# 
+# # Extract SE for confidence intervals
+# se <- lapply(pigs_rsf, arm::se.coef)
+# 
+# # combine into a tibble
+# se <- do.call(bind_rows, se)
+# 
+# # rename intercept and add ID column
+# se <- se %>%
+#   rename(intercept=`(Intercept)`) %>%
+#   mutate(id = un.id) %>%
+#   select(id, intercept:evergreen)
+
+
+#### Functional response ####
+
+# Read raster with land cover. Is already same projection as layers
+lulc <- rast("data/landscape_data/cdl23_classes.tif")
+
+# create vector of class names
+lc <- c("palatablecrops", "barren", "gramanoids", "decidmixed", "evergreen", 
+        "developed", "bottomlandhw", "water", "othercrops", "shrublands")
+
+# Set up NLCD classes and class values
+cdl_values <- c(1,2,3,4,5,6,7,8,9,10)
+lc <- c("foodcrops", "barren", "gramanoids", "decidmixed", "evergreen", 
+        "developed", "bottomlandhw", "water", "othercrops", "shrublands")
+
+# Add class names and numbers to the raster
+levels(lulc) <- list(data.frame(ID = cdl_values,
+                                landcov = lc))
+
+# extract classes at each point
+pigs_lc <- extract(lulc, pigs_v) 
+
+# join data so we have a tibble with points and land cover
+hr_lc <- pigs %>% 
+  bind_cols(pigs_lc) %>%
+  select(key, id, case, landcov)
+
+# Summarize by key...want the number of points in available for each landcover class
+hr_lc <- hr_lc %>%
+  # just want the available points
+  filter(case==0) %>%
+  # group by key
+  group_by(key, landcov) %>%
+  # summarize factor levels
+  count() 
+
+# Calculate how many points (cells) in each home range
+ncells <- pigs %>% 
+  filter(case==0) %>%
+  group_by(key) %>%
+  count() %>%
+  rename(ntotal=n)
+
+# join home range cells to hr_lc
+hr_lc <- hr_lc %>%
+  left_join(ncells, by="key") %>%
+  ungroup() %>%
+  # filter so we only have the rows that were in the model
+  filter(landcov %in% m.covars) %>%
+  # calculate % of home range
+  mutate(pct=n/ntotal)
+
+
+# pivot to long format with a column for landcov and a column for beta (the value)
+cfs <- cfs %>% 
+  # drop the intercept
+  select(-intercept) %>%
+  # pivot
+  pivot_longer(2:7, names_to="landcov", values_to="beta") %>%
+  # rename to match other data
+  rename(key=id)
+
+# now join betas to home range info
+hr_lc <- left_join(hr_lc, cfs, by=c("key", "landcov"))
+
+
+
+
+
+
+
 
 
 
