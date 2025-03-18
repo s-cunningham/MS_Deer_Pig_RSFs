@@ -61,9 +61,6 @@ lv_func <- function(x, id_) {
   return(df)
 }
 
-## Create template raster for generating random points
-
-
 #### Deer ####
 # Read in deer location data
 deer <- read_csv("data/location_data/deer_filtered.csv") %>%
@@ -322,7 +319,7 @@ for (i in 1:length(ids)) {
     out[[i]] <- list(dat[[i]]@info$identity, var, var2, UD) 
   })
 }
-saveRDS(out, "results/raw_deer_AKDEs.rds")
+saveRDS(out, "results/home_ranges/raw_deer_AKDEs.rds")
 
 # Take just the AKDE
 akde <- lapply(out, function(x) x[[4]]) 
@@ -350,7 +347,7 @@ size <- size %>%
   dplyr::select(id, low:high) 
   # Note: all AKDEs are now in sqare kilometers
 
-write_csv(size, "results/deer_AKDE_sqkm.csv")
+write_csv(size, "results/home_ranges/deer_AKDE_sqkm.csv")
 
 # Convert UD to sf object (multipolygons)
 poly <- lapply(akde, as.sf, level.UD=0.99)
@@ -380,14 +377,22 @@ ud <- ud %>%
 st_write(ud, "output/deer_AKDE_est.shp", append=FALSE)
 
 #### 6. Extract available points from home range ####
+ud <- st_read("output/deer_AKDE_est.shp")
 library(terra)
 
 ## read a template raster (30 x 30, doesn't really matter which as long as projection is correct & has cells)
 cdl <- rast("data/landscape_data/CDL2023_MS50km_30m_nlcdproj.tif")
 
+# project to match raster
 ud <- st_transform(ud, st_crs(cdl))
 
+# Create empty tibble for points
 avail <- tibble()
+
+# Create empty list to store grid cells
+cell_list <- list()
+
+## Loop over each individual
 for (i in 1:nrow(ud)) {
   
   # Clip raster (mask & crop extent) to AKDE
@@ -399,6 +404,20 @@ for (i in 1:nrow(ud)) {
   
   # Clip points to AKDE
   pts <- crop(pts, vect(ud$geometry[i]))
+
+  ## Create empty grid from temp rasters
+  # Determine number of cells
+  cells <- dim(temp)[1] * dim(temp)[2]
+  # create a unique ID for each grid cell
+  temp$cell_no <- 1:cells
+  # convert to polygons
+  pols <- as.polygons(temp[["cell_no"]])
+  # Extract the cell numbers that have a point in them
+  grid <- extract(pols, pts)[,-1]
+  # subset the polygon grid by only the cells that have points in them
+  grid <- pols[grid]
+  # Save to list
+  cell_list[[paste0(ud$id[i], "_", ud$burst[i])]] <- grid 
   
   # convert back to sf
   pts <- st_as_sf(pts)
@@ -414,7 +433,10 @@ for (i in 1:nrow(ud)) {
   # Add to avail data frame
   avail <- bind_rows(avail, pts)
 }
+# Save available points
 write_csv(avail, "output/deer_avail_pts.csv")
+# Save available cells 
+saveRDS(cell_list, "output/deer_avail_cells.csv")
 
 ## Now on to the used locations
 deer_sf <- deer %>% 

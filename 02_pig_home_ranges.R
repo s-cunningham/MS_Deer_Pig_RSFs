@@ -312,7 +312,13 @@ cdl <- rast("data/landscape_data/CDL2023_MS50km_30m_nlcdproj.tif")
 
 ud <- st_transform(ud, st_crs(cdl))
 
+# Create empty tibble for points
 avail <- tibble()
+
+# Create empty list to store grid cells
+cell_list <- list()
+
+## Loop over each individual
 for (i in 1:nrow(ud)) {
   
   # Clip raster (mask & crop extent) to AKDE
@@ -324,6 +330,20 @@ for (i in 1:nrow(ud)) {
   
   # Clip points to AKDE
   pts <- crop(pts, vect(ud$geometry[i]))
+  
+  ## Create empty grid from temp rasters
+  # Determine number of cells
+  cells <- dim(temp)[1] * dim(temp)[2]
+  # create a unique ID for each grid cell
+  temp$cell_no <- 1:cells
+  # convert to polygons
+  pols <- as.polygons(temp[["cell_no"]])
+  # Extract the cell numbers that have a point in them
+  grid <- extract(pols, pts)[,-1]
+  # subset the polygon grid by only the cells that have points in them
+  grid <- pols[grid]
+  # Save to list
+  cell_list[[paste0(ud$id[i], "_", ud$burst[i])]] <- grid 
   
   # convert back to sf
   pts <- st_as_sf(pts)
@@ -339,7 +359,10 @@ for (i in 1:nrow(ud)) {
   # Add to avail data frame
   avail <- bind_rows(avail, pts)
 }
+# Save available points
 write_csv(avail, "output/pigs_avail_pts.csv")
+# Save available cells 
+saveRDS(cell_list, "output/pigs_avail_cells.csv")
 
 ## Now on to the used locations
 pigs_sf <- pigs %>% 
