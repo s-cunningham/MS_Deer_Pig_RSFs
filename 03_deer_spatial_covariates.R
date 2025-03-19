@@ -11,10 +11,7 @@ deer <- read_csv("output/deer_used_avail_locations.csv") %>%
 
 # Rasters
 rast_list <- c("data/landscape_data/shrublands_180m_sum.tif",
-               "data/landscape_data/othercrops_180m_sum.tif",
                "data/landscape_data/gramanoids_180m_sum.tif", 
-               "data/landscape_data/barren_180m_sum.tif", 
-               "data/landscape_data/developed_180m_sum.tif",
                "data/landscape_data/palatable_crops_180m_sum.tif") 
 layers <- rast(rast_list)
 
@@ -49,7 +46,7 @@ layers <- c(layers, water)
 layers <- scale(layers)
 
 # Rename layers
-names(layers) <- c("shrubs", "othercrops", "gramanoids", "barren", "developed", "foodcrops", "evergreen", "deciduous", "water")
+names(layers) <- c("shrubs", "gramanoids", "foodcrops", "evergreen", "deciduous", "water")
 
 
 #### Extract covariates and used and available locations ####
@@ -69,7 +66,7 @@ dat_deer <- extract(layers, deer_v)
 deer <- bind_cols(deer, dat_deer)
 
 # correlation matrix
-cor(deer[,c(8:16)])
+cor(deer[,c(8:13)])
 
 # create key column
 deer <- deer %>%

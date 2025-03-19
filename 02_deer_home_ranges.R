@@ -416,8 +416,13 @@ for (i in 1:nrow(ud)) {
   grid <- extract(pols, pts)[,-1]
   # subset the polygon grid by only the cells that have points in them
   grid <- pols[grid]
-  # Save to list
-  cell_list[[paste0(ud$id[i], "_", ud$burst[i])]] <- grid 
+  
+  # Convert to sf
+  grid <- st_as_sf(grid)
+  
+  # Save as shapefile
+  filename <- paste0("output/deer_avail_cells/", ud$id[i], "_", ud$burst[i], "-avail.shp")
+  st_write(grid, filename)
   
   # convert back to sf
   pts <- st_as_sf(pts)
@@ -435,8 +440,6 @@ for (i in 1:nrow(ud)) {
 }
 # Save available points
 write_csv(avail, "output/deer_avail_pts.csv")
-# Save available cells 
-saveRDS(cell_list, "output/deer_avail_cells.csv")
 
 ## Now on to the used locations
 deer_sf <- deer %>% 

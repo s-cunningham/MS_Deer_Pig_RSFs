@@ -2,7 +2,30 @@ library(tidyverse)
 library(glmnet)
 library(glmnetUtils)
 
-## Read data 
+#### Helper functions for cva.glmnet ####
+# Copied from https://stackoverflow.com/questions/54803990/extract-the-best-parameters-from-cva-glmnet-object
+# Get alpha.
+get_alpha <- function(fit) {
+  alpha <- fit$alpha
+  error <- sapply(fit$modlist, function(mod) {min(mod$cvm)})
+  alpha[which.min(error)]
+}
+
+# Get all parameters.
+get_model_params <- function(fit) {
+  alpha <- fit$alpha
+  lambdaMin <- sapply(fit$modlist, `[[`, "lambda.min")
+  lambdaSE <- sapply(fit$modlist, `[[`, "lambda.1se")
+  error <- sapply(fit$modlist, function(mod) {min(mod$cvm)})
+  best <- which.min(error)
+  data.frame(alpha = alpha[best], lambdaMin = lambdaMin[best],
+             lambdaSE = lambdaSE[best], eror = error[best])
+}
+
+#### Read data ####
+deer <- read_csv("output/deer_used_avail_covariates.csv")
+
+## Set up to loop by individual
 deer <- read_csv("output/deer_used_avail_covariates.csv")
 
 ## Set up to loop by individual
@@ -10,9 +33,6 @@ un.id <- unique(deer$key)
 
 # Create list to save models
 deer_rsf <- list()
-
-# List to save best lambdas
-lambda_vals <- list()
 
 # list to save coefficients
 cfs <- list()
@@ -23,13 +43,9 @@ cfs <- list()
 # Save GLMS with reduced variable sets
 reduced_glms <- list()
 
-# Set up lasso lambda grid
-set.seed(1)
-lam.grid <- 10^seq(20, -2, length=200)
-
-# alpha.grid <- seq(0,1,0.02)
-
+#### Run RSF with elastic net (which might sometimes end up as a lasso or ridge) ####
 # Loop to run LASSO over each individual HR
+set.seed(1)
 for (i in 1:length(un.id)) {
   
   # Filter by ID
@@ -39,20 +55,24 @@ for (i in 1:length(un.id)) {
   x <- model.matrix(case ~ deciduous + evergreen + gramanoids + shrubs + foodcrops + water + I(water^2), temp)[, -1]
   y <- temp$case
   wts <- temp$weight
-
-  cv.out <- cv.glmnet(x, y, family="binomial", alpha=1, weights=wts, type.measure="deviance")
   
-  bestlam <- cv.out$lambda.min
-  lambda_vals[[i]] <- bestlam
+  # Run cross validation for alpha and lambda
+  cv.out <- cva.glmnet(x, y, data=temp, weights=wts, family="binomial", type.measure="deviance")
+  
+  # Extract "best" paramters
+  cv.out.p <- get_model_params(cv.out)
+  
+  # Print for status update
+  print(paste0("Alpha for ", un.id[i], " is ", cv.out.p$alpha[1]))
   
   # Run the LASSO with the optimal lambda and alpha
-  rsf <- glmnet(x, y, family="binomial", alpha=1, weights=wts, lambda=bestlam)
+  rsf <- glmnet(x, y, family="binomial", alpha=cv.out.p$alpha[1], weights=wts, lambda=cv.out.p$lambdaMin[1])
   
   # add model object to list
   deer_rsf[[i]] <- rsf
   
   # Extract coefficients
-  l.coef <- predict(rsf, type="coefficients", s=bestlam)
+  l.coef <- predict(rsf, type="coefficients", s=cv.out.p$lambdaMin[1])
   
   # Save LASSO coefficients
   cfs[[i]] <- as.matrix(t(l.coef))
@@ -98,6 +118,10 @@ cfs <- cfs %>%
 betas <- cfs %>% 
   reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
 
+exp(betas)
+
+write_csv(betas, "output/deer_lasso_betas.csv")
+
 
 
 #### reduced GLMs ####
@@ -131,6 +155,16 @@ r_glms <- bind_rows(r_glms, zero_rows)
 
 glm_betas <- r_glms %>% 
   reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
+
+
+
+
+
+
+
+
+
+
 
 
 
