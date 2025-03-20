@@ -362,7 +362,7 @@ for (i in 1:nrow(ud)) {
 # Save available points
 write_csv(avail, "output/pigs_avail_pts.csv")
 # Save available cells 
-saveRDS(cell_list, "output/pigs_avail_cells.csv")
+saveRDS(cell_list, "output/pigs_avail_cells.RDS")  ## need to run this again, I save with wrong extension
 
 ## Now on to the used locations
 pigs_sf <- pigs %>% 

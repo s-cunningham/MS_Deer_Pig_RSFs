@@ -10,12 +10,15 @@ pigs <- read_csv("output/pigs_used_avail_locations.csv") %>%
             mutate(weight=if_else(case==1, 1, 5000))
 
 # Rasters
-rast_list <- c("data/landscape_data/shrublands_210m_sum.tif",
-               "data/landscape_data/othercrops_210m_sum.tif",
-               "data/landscape_data/gramanoids_210m_sum.tif", 
-               "data/landscape_data/barren_210m_sum.tif", 
-               "data/landscape_data/developed_210m_sum.tif",
-               "data/landscape_data/palatable_crops_210m_sum.tif") 
+rast_list <- c("data/landscape_data/shrublands_180m_sum.tif",
+               "data/landscape_data/othercrops_180m_sum.tif",
+               "data/landscape_data/gramanoids_180m_sum.tif", 
+               "data/landscape_data/bottomlandHW_180m_sum.tif",
+               "data/landscape_data/decidmixed_180m_sum.tif",
+               # "data/landscape_data/herbwetlands_180_sum.tif",
+               # "data/landscape_data/allwetlands_180_sum.tif",
+               "data/landscape_data/evergreen_180m_sum.tif",
+               "data/landscape_data/palatable_crops_180m_sum.tif") 
 layers <- rast(rast_list)
 
 # Reclassify missing data to 0
@@ -23,20 +26,7 @@ m <- rbind(c(NA, 0))
 layers <- classify(layers, m)
 
 # Convert to % 
-layers <- layers / 149
-
-# Forest rasters (accounting for 50% mixed decid/evergreen)
-forest <- c("data/landscape_data/evergreenMODIFIED_210m_sum.tif",
-            "data/landscape_data/allhardwoodsMODIFIED_210m_sum.tif")
-forest <- rast(forest)
-
-# Reclassify missing data to 0
-forest <- classify(forest, m)
-
-# Convert to % 
-forest <- forest / 298
-
-layers <- c(layers, forest)
+layers <- layers / 113 #149
 
 # read water
 water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
@@ -49,7 +39,10 @@ layers <- c(layers, water)
 layers <- scale(layers)
 
 # Rename layers
-names(layers) <- c("shrubs", "othercrops", "gramanoids", "barren", "developed", "foodcrops", "evergreen", "deciduous", "water")
+names(layers) <- c("shrubs", "othercrops", "gramanoids", "bottomland", "decidmixed", "evergreen", "foodcrops", "water")
+
+# global(layers[["shrubs"]], fun="mean")
+# global(layers[["shrubs"]], fun="sd")
 
 #### Extract covariates and used and available locations ####
 
@@ -68,7 +61,7 @@ dat_pigs <- extract(layers, pigs_v)
 pigs <- bind_cols(pigs, dat_pigs)
 
 # Correlation matrix
-cor(pigs[,c(8:16)])
+cor(pigs[,c(8:15)])
 
 # create key column
 pigs <- pigs %>%
