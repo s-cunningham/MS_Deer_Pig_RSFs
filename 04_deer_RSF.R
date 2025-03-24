@@ -117,10 +117,33 @@ cfs <- cfs %>%
 # calculate column means
 betas <- cfs %>% 
   reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
-
 exp(betas)
 
 write_csv(betas, "output/deer_lasso_betas.csv")
+
+
+# calculate betas and sd for confidence interval
+betas <- cfs %>% 
+  reframe(across(deciduous:water2, list(mean=mean, sd=sd)))
+
+
+betas <- betas %>% 
+  # pivot to be longer, instead of single row for all info
+  pivot_longer(1:14, names_to="var", values_to="value") %>%
+  # Split column so that there is one for the covariate layer and one for the metric
+  separate(var, into=c("covar", "metric"), sep="_") %>%
+  # sort by metric (i.e. group means & SDs)
+  arrange(metric) %>%
+  # Expand so that means and SD are in their own columns
+  pivot_wider(id_cols=1, names_from="metric", values_from="value") %>%
+  # Calculate CIs
+  mutate(lci = mean - 1.96*(sd/sqrt(120)),
+         uci = mean + 1.96*(sd/sqrt(120)))
+
+write_csv(betas, "output/deer_lasso_betas_uncert.csv")
+
+
+
 
 
 
