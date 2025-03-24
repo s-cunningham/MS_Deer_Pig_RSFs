@@ -134,54 +134,6 @@ plot(pred)
 ## Perform linear stretch
 pred <- (pred - minmax(pred)[1])/(minmax(pred)[2] - minmax(pred)[1])
 
-#### Lower CI
-## List county rasters
-files <- list.files(path="output/deer_county_preds/", pattern="_LCI.tif", full.names=TRUE)
-
-## Read all files in as rasters
-rlist <- lapply(files, rast)
-
-## Convert to SpatRasterCollection
-rsrc <- sprc(rlist)
-
-## mosaic
-predLCI <- mosaic(rsrc)
-
-# rename layer
-names(predLCI) <- "RSF"
-
-# plot
-plot(predLCI)
-
-#### Upper CI
-## List county rasters
-files <- list.files(path="output/deer_county_preds/", pattern="_UCI.tif", full.names=TRUE)
-
-## Read all files in as rasters
-rlist <- lapply(files, rast)
-
-## Convert to SpatRasterCollection
-rsrc <- sprc(rlist)
-
-## mosaic
-predUCI <- mosaic(rsrc)
-
-# rename layer
-names(predUCI) <- "RSF"
-
-# plot
-plot(predUCI)
-
-minmax(pred)
-minmax(predLCI)
-minmax(predUCI)[2]
-
-predLCI <- (predLCI - minmax(predLCI)[1])/(minmax(predLCI)[2] - minmax(predLCI)[1])
-predUCI <- (predUCI - minmax(predUCI)[1])/(minmax(predUCI)[2] - minmax(predUCI)[1])
-
-
-
-
 ## Need to resample for RAMAS (30 m cells going to have too many rows)
 # Load template raster (cells must be *exactly* the same width/length for RAMAS)
 temp_rast <- rast("data/landscape_data/CDL2023_90mACEA_mask.tif")
@@ -246,7 +198,7 @@ used <- used %>%
   as_tibble()
 
 # Quantiles of used points
-quantile(used$RSF, probs=c(0.1,0.25, 0.5, 0.75, 1))
+quantile(used$RSF, probs=c(0.05, 0.1,0.25, 0.5, 0.75,0.95, 1))
 
 
 ## Reclassify raster and export preliminary patches (just based on thresholds)
