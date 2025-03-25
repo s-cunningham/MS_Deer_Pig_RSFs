@@ -1,3 +1,6 @@
+## Take the coefficients from the RSF and predict across Mississippi
+## Because we are using 30 x 30 m cells, we have to go county by county
+
 library(tidyverse)
 library(terra)
 library(tidyterra)
