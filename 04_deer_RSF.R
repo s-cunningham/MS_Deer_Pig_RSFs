@@ -104,44 +104,48 @@ for (i in 1:length(un.id)) {
   }
 }
 
-#### Summarize coefficients ####
-# combine into a tibble
-cfs <- lapply(cfs, as.data.frame)
-cfs <- do.call(bind_rows, cfs)
+saveRDS(reduced_glms, "output/deer_reduced_glms.RDS")
 
-# rename columns and add ID
-cfs <- cfs %>% 
+#### reduced GLMs ####
+# extract mean coeficients and combine into a single table
+r_glms <- lapply(reduced_glms, coef)
+r_glms <- lapply(r_glms, as.data.frame)
+r_glms <- lapply(r_glms, t)
+r_glms <- lapply(r_glms, as.data.frame)
+r_glms <- do.call(bind_rows, r_glms)
+
+r_glms <- r_glms %>% 
   as_tibble() %>%
-  rename(water2=`I(water^2)`, intercept=`(Intercept)`) %>%
-  mutate(id=un.id) %>%
-  select(id, intercept:water2)
+  rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%
+  # drop intercept
+  select(-intercept) %>%
+  # fill with 0
+  mutate(across(deciduous:water2, \(x) coalesce(x, 0)))
 
-# calculate column means
-betas <- cfs %>% 
+# Calculate mean across all individuals
+glm_betas <- r_glms %>% 
   reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
-exp(betas)
 
-write_csv(betas, "output/deer_lasso_betas.csv")
-
-
-# calculate betas and sd for confidence interval
-betas <- cfs %>% 
-  reframe(across(deciduous:water2, list(mean=mean, sd=sd)))
+write_csv(glm_betas, "output/deer_glm_betas.csv")
 
 
-betas <- betas %>% 
-  # pivot to be longer, instead of single row for all info
-  pivot_longer(1:14, names_to="var", values_to="value") %>%
-  # Split column so that there is one for the covariate layer and one for the metric
-  separate(var, into=c("covar", "metric"), sep="_") %>%
-  # sort by metric (i.e. group means & SDs)
-  arrange(metric) %>%
-  # Expand so that means and SD are in their own columns
-  pivot_wider(id_cols=1, names_from="metric", values_from="value") %>%
-  # Calculate CIs
-  mutate(lci = mean - 1.96*(sd/sqrt(120)),
-         uci = mean + 1.96*(sd/sqrt(120)))
+# Extract SE for confidence intervals
+se <- lapply(reduced_glms, arm::se.coef)
 
-write_csv(betas, "output/deer_lasso_betas_uncert.csv")
+# combine into a tibble
+se <- do.call(bind_rows, se)
 
+# rename intercept and add ID column
+se <- se %>%
+  rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%
+  # drop intercept
+  select(-intercept) %>%
+  # fill with 0
+  mutate(across(deciduous:water2, \(x) coalesce(x, 0)))
+
+# Calculate mean across all individuals
+glm_se <- se %>% 
+  reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
+
+write_csv(glm_se, "output/deer_glm_se.csv")
 

@@ -19,16 +19,10 @@ patches <- rast(patches)
 # Define projection
 crs(patches) <- crs(ms)
 
-# Shorten the names a bit (taking of "_patches")
-names(patches) <- gsub("_patches", "", names(patches))
-
 # Reclassify so that 0 becomes NA (backround is 0, patches are numbered starting with 1), and all patches receive same class value (1)
 # If you want to show different patches, don't do the second part
 # Replace 0 with NA
 patches <- ifel(patches == 0, NA_integer_, patches)
-
-# Reclassify all patches as 1
-patches <- ifel(patches>=1, 1, patches)
 
 # Loop over patches and write as .tif
 for (i in 1:dim(patches)[3]) {
@@ -36,23 +30,24 @@ for (i in 1:dim(patches)[3]) {
   patch <- patches[[i]]
   
   # create filename
-  filename <- paste0("results/habitat_patches/", names(patch), ".tif")
+  filename <- paste0("results/exported_patches/", names(patch), ".tif")
   
   # write raster
   writeRaster(patch, filename, overwrite=TRUE)
 }
-
-## Calculate area (in hectares)
-p_area <- expanse(patches, unit="km", transform=TRUE)
-
-# Add the layer names to the layer column
-p_area <- p_area %>% mutate(layer=names(patches))
 
 # Convert rasters to polygones
 polylist <- lapply(as.list(patches), as.polygons)
 
 # Make a named list so layers can by extracted by name
 names(polylist) <- names(patches)
+
+
+# Reclassify all patches as 1
+patches <- ifel(patches>=1, 1, patches)
+
+
+
 
 ## Calculate area of overlap between Deer core patches and pigs
 # Need to add terra:: before the union function, it must be masked by something else

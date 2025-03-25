@@ -49,7 +49,17 @@ names(layers) <- c("shrubs", "gramanoids", "foodcrops", "evergreen", "deciduous"
 # *Uses wayyyy less memory than doing the whole state at once*
 
 ## Read in coefficients
-betas <- read_csv("output/deer_lasso_betas_uncert.csv")
+# Betas
+betas <- read_csv("output/deer_glm_betas.csv") %>%
+      # Pivot so that covariates are in a in a column, and beta coefficients in another column
+      pivot_longer(1:7, names_to="covariate", values_to="beta")
+# Standard error
+se <- read_csv("output/deer_glm_se.csv") %>%
+  # Pivot so that covariates are in a in a column, and beta coefficients in another column
+  pivot_longer(1:7, names_to="covariate", values_to="se")
+
+# Join into a single data frame
+betas <- left_join(betas, se, by=c("covariate"))
 
 ## Read county shapefile
 counties <- vect("data/landscape_data/county_nrcs_a_ms.shp")
@@ -70,13 +80,13 @@ for (i in 1:length(split_counties)) {
   
   ## Mean prediction
   # Predict (w(x) = exp(x*beta))
-  pred <- exp(betas$mean[1])*cty_layers[["deciduous"]] +
-          exp(betas$mean[2])*cty_layers[["evergreen"]] +
-          exp(betas$mean[3])*cty_layers[["gramanoids"]] +
-          exp(betas$mean[4])*cty_layers[["shrubs"]] +
-          exp(betas$mean[5])*cty_layers[["foodcrops"]] +
-          exp(betas$mean[6])*cty_layers[["water"]] +
-          exp(betas$mean[7])*(cty_layers[["water"]]^2)
+  pred <- exp(betas$beta[1])*cty_layers[["deciduous"]] +
+          exp(betas$beta[2])*cty_layers[["evergreen"]] +
+          exp(betas$beta[3])*cty_layers[["gramanoids"]] +
+          exp(betas$beta[4])*cty_layers[["shrubs"]] +
+          exp(betas$beta[5])*cty_layers[["foodcrops"]] +
+          exp(betas$beta[6])*cty_layers[["water"]] +
+          exp(betas$beta[7])*(cty_layers[["water"]]^2)
   
   # create filename
   filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_mean.tif")
@@ -84,35 +94,36 @@ for (i in 1:length(split_counties)) {
   # Export county prediction raster
   writeRaster(pred, filename, overwrite=TRUE)
   
-  ## Lower CI prediction
-  pred <- exp(betas$lci[1])*cty_layers[["deciduous"]] +
-          exp(betas$lci[2])*cty_layers[["evergreen"]] +
-          exp(betas$lci[3])*cty_layers[["gramanoids"]] +
-          exp(betas$lci[4])*cty_layers[["shrubs"]] +
-          exp(betas$lci[5])*cty_layers[["foodcrops"]] +
-          exp(betas$lci[6])*cty_layers[["water"]] +
-          exp(betas$lci[7])*(cty_layers[["water"]]^2)
-  
-  # create filename
-  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
-  
-  # Export county prediction raster
-  writeRaster(pred, filename, overwrite=TRUE)
-  
-  ## Updder CI prediction
-  pred <- exp(betas$uci[1])*cty_layers[["deciduous"]] +
-          exp(betas$uci[2])*cty_layers[["evergreen"]] +
-          exp(betas$uci[3])*cty_layers[["gramanoids"]] +
-          exp(betas$uci[4])*cty_layers[["shrubs"]] +
-          exp(betas$uci[5])*cty_layers[["foodcrops"]] +
-          exp(betas$uci[6])*cty_layers[["water"]] +
-          exp(betas$uci[7])*(cty_layers[["water"]]^2)
-  
-  # create filename
-  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
-  
-  # Export county prediction raster
-  writeRaster(pred, filename, overwrite=TRUE)
+  # something not right with math
+  # # ## Lower CI prediction
+  # pred <- exp(betas$se[1]*1.96-betas$beta[1])*cty_layers[["deciduous"]] +
+  #         exp(betas$se[2]*1.96-betas$beta[2])*cty_layers[["evergreen"]] +
+  #         exp(betas$se[3]*1.96-betas$beta[3])*cty_layers[["gramanoids"]] +
+  #         exp(betas$se[4]*1.96-betas$beta[4])*cty_layers[["shrubs"]] +
+  #         exp(betas$se[5]*1.96-betas$beta[5])*cty_layers[["foodcrops"]] +
+  #         exp(betas$se[6]*1.96-betas$beta[6])*cty_layers[["water"]] +
+  #         exp(betas$se[7]*1.96-betas$beta[7])*(cty_layers[["water"]]^2)
+  # 
+  # # create filename
+  # filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
+  # 
+  # # Export county prediction raster
+  # writeRaster(pred, filename, overwrite=TRUE)
+  # 
+  # # ## Upper CI prediction
+  # pred <- exp(betas$se[1]*1.96+betas$beta[1])*cty_layers[["deciduous"]] +
+  #         exp(betas$se[2]*1.96+betas$beta[2])*cty_layers[["evergreen"]] +
+  #         exp(betas$se[3]*1.96+betas$beta[3])*cty_layers[["gramanoids"]] +
+  #         exp(betas$se[4]*1.96+betas$beta[4])*cty_layers[["shrubs"]] +
+  #         exp(betas$se[5]*1.96+betas$beta[5])*cty_layers[["foodcrops"]] +
+  #         exp(betas$se[6]*1.96+betas$beta[6])*cty_layers[["water"]] +
+  #         exp(betas$se[7]*1.96+betas$beta[7])*(cty_layers[["water"]]^2)
+  # 
+  # # create filename
+  # filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
+  # 
+  # # Export county prediction raster
+  # writeRaster(pred, filename, overwrite=TRUE)
 }
 
 #### Combine county rasters into full state ####
@@ -134,8 +145,48 @@ names(pred) <- "RSF"
 # plot
 plot(pred)
 
+# ## lower CI
+# ## List county rasters
+# files <- list.files(path="output/deer_county_preds/", pattern="_LCI.tif", full.names=TRUE)
+# 
+# ## Read all files in as rasters
+# rlist <- lapply(files, rast)
+# 
+# ## Convert to SpatRasterCollection
+# rsrc <- sprc(rlist)
+# 
+# ## mosaic
+# lci <- mosaic(rsrc)
+# 
+# # rename layer
+# names(lci) <- "RSF"
+# 
+# # plot
+# plot(lci)
+# 
+# ## upper CI
+# ## List county rasters
+# files <- list.files(path="output/deer_county_preds/", pattern="_UCI.tif", full.names=TRUE)
+# 
+# ## Read all files in as rasters
+# rlist <- lapply(files, rast)
+# 
+# ## Convert to SpatRasterCollection
+# rsrc <- sprc(rlist)
+# 
+# ## mosaic
+# uci <- mosaic(rsrc)
+# 
+# # rename layer
+# names(uci) <- "RSF"
+# 
+# # plot
+# plot(uci)
+
 ## Perform linear stretch
 pred <- (pred - minmax(pred)[1])/(minmax(pred)[2] - minmax(pred)[1])
+# pred <- (pred - minmax(pred)[1])/(minmax(pred)[2] - minmax(pred)[1])
+# pred <- (pred - minmax(pred)[1])/(minmax(pred)[2] - minmax(pred)[1])
 
 ## Need to resample for RAMAS (30 m cells going to have too many rows)
 # Load template raster (cells must be *exactly* the same width/length for RAMAS)
@@ -205,16 +256,16 @@ quantile(used$RSF, probs=c(0.05, 0.1,0.25, 0.5, 0.75,0.95, 1))
 
 
 ## Reclassify raster and export preliminary patches (just based on thresholds)
-m <- c(0, 0.82, 0,
-       0.82, 1, 1)
+m <- c(0, 0.80, 0,
+       0.80, 1, 1)
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 rc1 <- classify(deer_pred, rclmat, include.lowest=TRUE)
 plot(rc1)
 
 writeRaster(rc1, "results/predictions/deer_rsf_predicted_90m_core.tif", overwrite=TRUE)
 
-m <- c(0, 0.41, 0,
-       0.41, 1, 1)
+m <- c(0, 0.40, 0,
+       0.40, 1, 1)
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 rc1 <- classify(deer_pred, rclmat, include.lowest=TRUE)
 plot(rc1)
@@ -222,8 +273,8 @@ plot(rc1)
 writeRaster(rc1, "results/predictions/deer_rsf_predicted_90m_marginal.tif", overwrite=TRUE)
 
 
-m <- c(0, 0.246, 0,
-       0.246, 1, 1)
+m <- c(0, 0.24, 0,
+       0.24, 1, 1)
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 rc1 <- classify(deer_pred, rclmat, include.lowest=TRUE)
 plot(rc1)
