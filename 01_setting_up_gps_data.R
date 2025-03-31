@@ -70,7 +70,7 @@ npts <- deer %>% group_by(DeerID) %>% count()
 hist(npts$n)
 sum(npts$n<1000)
 
-# Keep deer with >3 months of data
+# Keep deer with >1 month of data
 # deer_time <- deer %>% group_by(DeerID) %>%
 #                 reframe(ts=range(timestamp)) %>%
 #                 mutate(time=rep(c("start","end"), 91)) %>%
@@ -78,7 +78,7 @@ sum(npts$n<1000)
 #                 mutate(duration=end-start,
 #                        months=as.numeric(duration/30))
 # 
-# keep <- deer_time %>% filter(months > 3) %>% select(DeerID) %>% as.vector()
+# keep <- deer_time %>% filter(months > 1) %>% select(DeerID) %>% as.vector()
 # keep <- unlist(unname(keep))
 # 
 # deer <- deer %>% filter(DeerID %in% keep)
@@ -86,12 +86,12 @@ sum(npts$n<1000)
 
 write_csv(deer, "data/location_data/deer_filtered.csv")
 
-deer %>% group_by(DeerID) %>%
-          reframe(range=range(timestamp)) %>%
-          mutate(name=rep(c("start", "end"), 91)) %>%
-          pivot_wider(values_from="range") %>%
-          mutate(duration=end-start) %>% 
-          reframe(range=range(duration))
+# deer %>% group_by(DeerID) %>%
+#           reframe(range=range(timestamp)) %>%
+#           mutate(name=rep(c("start", "end"), 91)) %>%
+#           pivot_wider(values_from="range") %>%
+#           mutate(duration=end-start) %>% 
+#           reframe(range=range(duration))
 
 #### Pigs ####
 # Read GPS data
@@ -129,21 +129,21 @@ npts <- pigs %>% group_by(PigID) %>% count()
 hist(npts$n)
 sum(npts$n<1000)
 
-# Keep deer with >3 months of data
-pigs_time <- pigs %>% group_by(PigID) %>%
-  reframe(ts=range(timestamp)) %>%
-  mutate(time=rep(c("start","end"), 40)) %>%
-  pivot_wider(names_from="time", values_from="ts") %>%
-  mutate(duration=end-start,
-         months=as.numeric(duration/30))
-
-keep <- pigs_time %>% filter(months > 3) %>% select(PigID) %>% as.vector()
-keep <- unlist(unname(keep))
-
-pigs <- pigs %>% filter(PigID %in% keep)
+# # Keep deer with >3 months of data
+# pigs_time <- pigs %>% group_by(PigID) %>%
+#   reframe(ts=range(timestamp)) %>%
+#   mutate(time=rep(c("start","end"), 40)) %>%
+#   pivot_wider(names_from="time", values_from="ts") %>%
+#   mutate(duration=end-start,
+#          months=as.numeric(duration/30))
+# 
+# keep <- pigs_time %>% filter(months > 1) %>% select(PigID) %>% as.vector()
+# keep <- unlist(unname(keep))
+# 
+# pigs <- pigs %>% filter(PigID %in% keep)
 
 
 write_csv(pigs, "data/location_data/pigs_filtered.csv")
 
 
-
+eastern <- pigs %>% filter(study=="Eastern")

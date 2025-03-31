@@ -57,6 +57,10 @@ betas <- read_csv("output/deer_glm_betas.csv") %>%
 se <- read_csv("output/deer_glm_se.csv") %>%
   # Pivot so that covariates are in a in a column, and beta coefficients in another column
   pivot_longer(1:7, names_to="covariate", values_to="se")
+# caluclate confidence intervales
+betas <- betas %>%
+  mutate(lci = beta - (1.96*se),
+         uci = beta + (1.96*se))
 
 # Join into a single data frame
 betas <- left_join(betas, se, by=c("covariate"))
@@ -95,35 +99,35 @@ for (i in 1:length(split_counties)) {
   writeRaster(pred, filename, overwrite=TRUE)
   
   # something not right with math
-  # # ## Lower CI prediction
-  # pred <- exp(betas$se[1]*1.96-betas$beta[1])*cty_layers[["deciduous"]] +
-  #         exp(betas$se[2]*1.96-betas$beta[2])*cty_layers[["evergreen"]] +
-  #         exp(betas$se[3]*1.96-betas$beta[3])*cty_layers[["gramanoids"]] +
-  #         exp(betas$se[4]*1.96-betas$beta[4])*cty_layers[["shrubs"]] +
-  #         exp(betas$se[5]*1.96-betas$beta[5])*cty_layers[["foodcrops"]] +
-  #         exp(betas$se[6]*1.96-betas$beta[6])*cty_layers[["water"]] +
-  #         exp(betas$se[7]*1.96-betas$beta[7])*(cty_layers[["water"]]^2)
-  # 
-  # # create filename
-  # filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
-  # 
-  # # Export county prediction raster
-  # writeRaster(pred, filename, overwrite=TRUE)
-  # 
-  # # ## Upper CI prediction
-  # pred <- exp(betas$se[1]*1.96+betas$beta[1])*cty_layers[["deciduous"]] +
-  #         exp(betas$se[2]*1.96+betas$beta[2])*cty_layers[["evergreen"]] +
-  #         exp(betas$se[3]*1.96+betas$beta[3])*cty_layers[["gramanoids"]] +
-  #         exp(betas$se[4]*1.96+betas$beta[4])*cty_layers[["shrubs"]] +
-  #         exp(betas$se[5]*1.96+betas$beta[5])*cty_layers[["foodcrops"]] +
-  #         exp(betas$se[6]*1.96+betas$beta[6])*cty_layers[["water"]] +
-  #         exp(betas$se[7]*1.96+betas$beta[7])*(cty_layers[["water"]]^2)
-  # 
-  # # create filename
-  # filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
-  # 
-  # # Export county prediction raster
-  # writeRaster(pred, filename, overwrite=TRUE)
+  # ## Lower CI prediction
+  pred <- exp(betas$lci[1])*cty_layers[["deciduous"]] +
+          exp(betas$lci[2])*cty_layers[["evergreen"]] +
+          exp(betas$lci[3])*cty_layers[["gramanoids"]] +
+          exp(betas$lci[4])*cty_layers[["shrubs"]] +
+          exp(betas$lci[5])*cty_layers[["foodcrops"]] +
+          exp(betas$lci[6])*cty_layers[["water"]] +
+          exp(betas$lci[7])*(cty_layers[["water"]]^2)
+
+  # create filename
+  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
+
+  # Export county prediction raster
+  writeRaster(pred, filename, overwrite=TRUE)
+
+  ## Upper CI prediction
+  pred <- exp(betas$uci[1])*cty_layers[["deciduous"]] +
+          exp(betas$uci[2])*cty_layers[["evergreen"]] +
+          exp(betas$uci[3])*cty_layers[["gramanoids"]] +
+          exp(betas$uci[4])*cty_layers[["shrubs"]] +
+          exp(betas$uci[5])*cty_layers[["foodcrops"]] +
+          exp(betas$uci[6])*cty_layers[["water"]] +
+          exp(betas$uci[7])*(cty_layers[["water"]]^2)
+
+  # create filename
+  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
+
+  # Export county prediction raster
+  writeRaster(pred, filename, overwrite=TRUE)
 }
 
 #### Combine county rasters into full state ####
@@ -145,43 +149,43 @@ names(pred) <- "RSF"
 # plot
 plot(pred)
 
-# ## lower CI
-# ## List county rasters
-# files <- list.files(path="output/deer_county_preds/", pattern="_LCI.tif", full.names=TRUE)
-# 
-# ## Read all files in as rasters
-# rlist <- lapply(files, rast)
-# 
-# ## Convert to SpatRasterCollection
-# rsrc <- sprc(rlist)
-# 
-# ## mosaic
-# lci <- mosaic(rsrc)
-# 
-# # rename layer
-# names(lci) <- "RSF"
-# 
-# # plot
-# plot(lci)
-# 
-# ## upper CI
-# ## List county rasters
-# files <- list.files(path="output/deer_county_preds/", pattern="_UCI.tif", full.names=TRUE)
-# 
-# ## Read all files in as rasters
-# rlist <- lapply(files, rast)
-# 
-# ## Convert to SpatRasterCollection
-# rsrc <- sprc(rlist)
-# 
-# ## mosaic
-# uci <- mosaic(rsrc)
-# 
-# # rename layer
-# names(uci) <- "RSF"
-# 
-# # plot
-# plot(uci)
+## lower CI
+## List county rasters
+files <- list.files(path="output/deer_county_preds/", pattern="_LCI.tif", full.names=TRUE)
+
+## Read all files in as rasters
+rlist <- lapply(files, rast)
+
+## Convert to SpatRasterCollection
+rsrc <- sprc(rlist)
+
+## mosaic
+lci <- mosaic(rsrc)
+
+# rename layer
+names(lci) <- "RSF"
+
+# plot
+plot(lci)
+
+# upper CI
+## List county rasters
+files <- list.files(path="output/deer_county_preds/", pattern="_UCI.tif", full.names=TRUE)
+
+## Read all files in as rasters
+rlist <- lapply(files, rast)
+
+## Convert to SpatRasterCollection
+rsrc <- sprc(rlist)
+
+## mosaic
+uci <- mosaic(rsrc)
+
+# rename layer
+names(uci) <- "RSF"
+
+# plot
+plot(uci)
 
 ## Perform linear stretch
 pred <- (pred - minmax(pred)[1])/(minmax(pred)[2] - minmax(pred)[1])

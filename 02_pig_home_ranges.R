@@ -109,8 +109,8 @@ for (i in 1:length(un.id)) {
   nobs <- dat %>% group_by(date) %>% count() %>% filter(n>=5)
   un.days <- unique(nobs$date)
   
-  # Skip to next individual if less than 90 days of data
-  if (length(un.days) >= 90) {
+  # Skip to next individual if less than 30 days of data
+  if (length(un.days) >= 30) {
     
     # Convert to ltraj
     df <- as.data.frame(dat)
@@ -134,7 +134,7 @@ for (i in 1:length(un.id)) {
 } # i
 
 tr_sum <- tr_sum %>% as_tibble()
-
+tr_sum2 <- tr_sum %>% separate(id, into=c("pigid", "study"), sep="_", remove=FALSE)
 
 #### 4. Determine which animals need to be split ####
 pigs_res <- as_tibble(pigs_res)

@@ -159,7 +159,7 @@ for (i in 1:length(un.id)) {
 ## Look through plots and manually list which IDs probably will need to be segmented, as well as those that might need to be filtered by dates to remove patchy data
 
 ## IDs that need trimming
-temp <- deer_res %>% filter(id=="81864_Delta")
+temp <- deer_res %>% filter(id=="340_Central")
 ggplot(temp, aes(x=x, y=y, color=date)) +
   geom_path() + geom_point() 
 ggplot(temp, aes(x=date, y=R2n, color=date)) +
@@ -189,8 +189,8 @@ deer_res <- deer_res %>% filter((id!="27_Central") | (id=="27_Central" & (date>=
 
 ## List of IDs that will likely need to be segmented
 to_segment <- c("152312_North", "152308_North", "87924_Delta", "87919_Delta", "81711_Delta", "97_Central", "90_Central", 
-                "47_Central",  "344_Central", "339_Central", "333_Central", "297_Central", "295_Central", "293_Central", 
-                "281_Central", "28_Central", "272_Central", "27_Central", "25_Central", "20_Central", "100_Central")
+                "47_Central", "340_Central",  "344_Central", "339_Central", "333_Central", "297_Central", "295_Central",
+                "293_Central", "281_Central", "28_Central", "272_Central", "27_Central", "25_Central", "20_Central", "100_Central")
 
 # Subset data without deer that need to be segmented (so that we can add the segments onto it)
 deer <- deer_res %>% 
@@ -204,7 +204,7 @@ deer <- deer_res %>%
           dplyr::select(id, key, x:rel.angle)
 
 ## try 81711_Delta, 27_Central, and 87924_Delta again
-# deer <- deer %>% filter(id!="87924_Delta") #& , id!="81711_Delta" &d!="27_Central"
+# deer <- deer %>% filter(id!="81711_Delta") #& ,id!="87924_Delta"  &d!="27_Central"
 
 ## Need to do this manually, and make sure to add the segmented data to 'deer'
 s <- lv_func(deer_res, "100_Central")  
@@ -219,10 +219,11 @@ deer <- bind_rows(deer, s)
 # 152308_North : 4
 # 87924_Delta : 8, keep only 1, 3, 5, 6, 7 
 # 87919_Delta : 3
-# 81711_Delta : 3 # might need to revise (see note below)
+# 81711_Delta : 10 # might need to revise (see note below)
 # 97_Central : 3
 # 90_Central : 2
 # 47_Central : 3
+# 340_Central : 4 # keep only segment 1
 # 344_Central : 7
 # 339_Central : 3
 # 333_Central : 2
@@ -235,7 +236,7 @@ deer <- bind_rows(deer, s)
 # 27_Central : 9
 # 20_Central : 5
 # 100_Central : 3
-# Run 81711_Delta with 8 breaks...or, stay with the optimal 5 and subset anything that doesn't have 30 or 60 days? What's the average HR crossing time?
+# Run 81711_Delta with 10 breaks...or, stay with the optimal 5 and subset anything that doesn't have 30 or 60 days? What's the average HR crossing time?
 
 # Check if there are any IDs in the to_segment vector that are not in the deer tibble after segmenting and binding
 to_segment[!(to_segment %in% deer$id)]
@@ -250,6 +251,14 @@ short <- ndays %>% filter(ndays <22)
 
 # Removed anything with less than 3 weeks of data
 deer <- deer %>% filter(!(key %in% short$key))
+
+# Check unique keys
+unique(deer$key)
+
+# futher manually subset 81711
+deer <- deer %>% filter(key!="81711_Delta_2" & key!="81711_Delta_4" & key!="81711_Delta_7" & key!="81711_Delta_8" & key!="81711_Delta_9")
+
+deer <- deer %>% filter(key!="87924_Delta_1" & key!="87924_Delta_3" & key!="87924_Delta_5" & key!="87924_Delta_6" & key!="87924_Delta_7")
 
 
 #### 4. Loop over individuals and calculate AKDE home range ####
