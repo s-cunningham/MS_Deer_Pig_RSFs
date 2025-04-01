@@ -57,13 +57,14 @@ betas <- read_csv("output/deer_glm_betas.csv") %>%
 se <- read_csv("output/deer_glm_se.csv") %>%
   # Pivot so that covariates are in a in a column, and beta coefficients in another column
   pivot_longer(1:7, names_to="covariate", values_to="se")
-# caluclate confidence intervales
-betas <- betas %>%
-  mutate(lci = beta - (1.96*se),
-         uci = beta + (1.96*se))
 
 # Join into a single data frame
 betas <- left_join(betas, se, by=c("covariate"))
+
+# caluclate confidence intervales
+betas <- betas %>%
+  mutate(uci = beta - (1.96*se),
+         lci = beta + (1.96*se))
 
 ## Read county shapefile
 counties <- vect("data/landscape_data/county_nrcs_a_ms.shp")
@@ -187,10 +188,21 @@ names(uci) <- "RSF"
 # plot
 plot(uci)
 
+# Check min/max of all three rasters
+minmax(pred)
+minmax(lci)
+minmax(uci)
+
 ## Perform linear stretch
 pred <- (pred - minmax(pred)[1])/(minmax(pred)[2] - minmax(pred)[1])
-# pred <- (pred - minmax(pred)[1])/(minmax(pred)[2] - minmax(pred)[1])
-# pred <- (pred - minmax(pred)[1])/(minmax(pred)[2] - minmax(pred)[1])
+lci <- (lci - minmax(lci)[1])/(minmax(lci)[2] - minmax(lci)[1])
+uci <- (uci - minmax(uci)[1])/(minmax(uci)[2] - minmax(uci)[1])
+
+plot(pred)
+plot(lci)
+plot(uci)
+
+plot(pred > lci)
 
 ## Need to resample for RAMAS (30 m cells going to have too many rows)
 # Load template raster (cells must be *exactly* the same width/length for RAMAS)
@@ -209,6 +221,30 @@ writeRaster(deer_pred, "results/predictions/deer_rsf_predicted.asc", NAflag=-999
 # additionally save mean predictions as .tif for plotting (both resampled and original 30x30m)
 writeRaster(deer_pred, "results/predictions/deer_rsf_predicted_90m.tif", overwrite=TRUE)
 writeRaster(pred, "results/predictions/deer_rsf_predicted_30m.tif", overwrite=TRUE)
+
+## LCI resample and save as ASCII
+# Resample
+deer_lci <- resample(lci, temp_rast)
+deer_lci <- crop(deer_lci, lci)
+
+# Reclassify missing data to 0
+m <- rbind(c(NA, 0))
+deer_lci <- classify(deer_lci, m)
+
+writeRaster(deer_lci, "results/predictions/deer_rsf_predicted_lci.asc", NAflag=-9999, overwrite=TRUE)
+
+## UCI resample and save as ASCII
+# Resample
+deer_uci <- resample(uci, temp_rast)
+deer_uci <- crop(deer_uci, uci)
+
+# Reclassify missing data to 0
+m <- rbind(c(NA, 0))
+deer_uci <- classify(deer_uci, m)
+
+writeRaster(deer_uci, "results/predictions/deer_rsf_predicted_uci.asc", NAflag=-9999, overwrite=TRUE)
+
+
 
 
 ## Classify out the core and marginal area from marginal and highly marginal, respectively

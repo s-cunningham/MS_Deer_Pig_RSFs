@@ -105,6 +105,7 @@ for (i in 1:length(un.id)) {
 }
 
 saveRDS(reduced_glms, "output/deer_reduced_glms.RDS")
+reduced_glms <- readRDS("output/deer_reduced_glms.RDS")
 
 #### reduced GLMs ####
 # extract mean coeficients and combine into a single table
@@ -121,6 +122,14 @@ r_glms <- r_glms %>%
   select(-intercept) %>%
   # fill with 0
   mutate(across(deciduous:water2, \(x) coalesce(x, 0)))
+
+# Add IDs 
+r_glms$id <- un.id
+
+# Drop those with unreasonable SEs (probably because the AKDE was too big)
+r_glms <- r_glms %>% 
+  filter(id!="152312_North_1" & id!="152312_North_4" & id!="272_Central_3") %>%
+  select(-id)
 
 # Calculate mean across all individuals
 glm_betas <- r_glms %>% 
@@ -142,6 +151,14 @@ se <- se %>%
   select(-intercept) %>%
   # fill with 0
   mutate(across(deciduous:water2, \(x) coalesce(x, 0)))
+
+# Add IDs 
+se$id <- un.id
+
+# Drop those with unreasonable SEs (probably because the AKDE was too big)
+se <- se %>% 
+  filter(id!="152312_North_1" & id!="152312_North_4" & id!="272_Central_3") %>%
+  select(-id)
 
 # Calculate mean across all individuals
 glm_se <- se %>% 

@@ -260,7 +260,6 @@ deer <- deer %>% filter(key!="81711_Delta_2" & key!="81711_Delta_4" & key!="8171
 
 deer <- deer %>% filter(key!="87924_Delta_1" & key!="87924_Delta_3" & key!="87924_Delta_5" & key!="87924_Delta_6" & key!="87924_Delta_7")
 
-
 #### 4. Loop over individuals and calculate AKDE home range ####
 
 ## Set up data
@@ -329,6 +328,7 @@ for (i in 1:length(ids)) {
   })
 }
 saveRDS(out, "results/home_ranges/raw_deer_AKDEs.rds")
+# out <- readRDS("results/home_ranges/raw_deer_AKDEs.rds")
 
 # Take just the AKDE
 akde <- lapply(out, function(x) x[[4]]) 
@@ -431,7 +431,7 @@ for (i in 1:nrow(ud)) {
   
   # Save as shapefile
   filename <- paste0("output/deer_avail_cells/", ud$id[i], "_", ud$burst[i], "-avail.shp")
-  st_write(grid, filename)
+  st_write(grid, filename, append=FALSE)
   
   # convert back to sf
   pts <- st_as_sf(pts)
