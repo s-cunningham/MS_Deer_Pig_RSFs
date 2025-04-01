@@ -7,19 +7,19 @@ area_RAMAS <- function(x) {
   
   # Read in .txt file
   dat <- read_table(x) %>%
-    select(Ptch, ncells, Areakm2, CoreA.) %>%
-    rename(PatchNo=Ptch)
+    select(Patch, ncells, Areakm2, CoreA.) %>%
+    rename(PatchNo=Patch)
   
   # Extract pieces from file name
-  spp <- gsub("[257]+", "", str_split(x, "[:punct:]")[[1]][4])
-  pct <- gsub("[a-z]+", "", str_split(x, "[:punct:]")[[1]][4])
+  spp <- str_split(x, "[:punct:]")[[1]][4]
+  level <- str_split(x, "[:punct:]")[[1]][6]
   patch <- str_split(x, "[:punct:]")[[1]][5] 
-  density <- str_split(x, "[:punct:]")[[1]][6] 
+  density <- str_split(x, "[:punct:]")[[1]][7] 
   
   # Add to data frame
   dat$spp <- spp
   dat$density <- density
-  dat$pct <- pct
+  dat$level <- level
   dat$patch <- patch
 
   # Rearrange columns
@@ -32,19 +32,19 @@ K_RAMAS <- function(x) {
   
   # Read in .txt file
   dat <- read_table(x) %>%
-    select(Ptch:N0) %>%
-    rename(PatchNo=Ptch)
+    select(Patch:N0) %>%
+    rename(PatchNo=Patch)
   
   # Extract pieces from file name
-  spp <- gsub("[257]+", "", str_split(x, "[:punct:]")[[1]][4])
-  pct <- gsub("[a-z]+", "", str_split(x, "[:punct:]")[[1]][4])
+  spp <- str_split(x, "[:punct:]")[[1]][4]
+  level <- str_split(x, "[:punct:]")[[1]][6]
   patch <- str_split(x, "[:punct:]")[[1]][5] 
-  density <- str_split(x, "[:punct:]")[[1]][6] 
+  density <- str_split(x, "[:punct:]")[[1]][7] 
   
   # Add to data frame
   dat$spp <- spp
   dat$density <- density
-  dat$pct <- pct
+  dat$level <- level
   dat$patch <- patch
   
   # Rearrange columns
@@ -64,7 +64,7 @@ files <- lapply(files, area_RAMAS)
 # Reduce the list to a data frame (tibble)
 area <- do.call("bind_rows", files)
 # convert density and percentage columns to numeric
-area <- area %>% mutate(across(2:3, as.numeric))
+area <- area %>% mutate(across(2, as.numeric))
 
 ## Read in carrying capacity
 # List all the files in the ramas_output folder that end in _K.txt
@@ -74,10 +74,10 @@ files <- lapply(files, K_RAMAS)
 # Reduce the list to a data frame (tibble)
 k <- do.call("bind_rows", files)
 # convert density and percentage columns to numeric
-k <- k %>% mutate(across(2:3, as.numeric))
+k <- k %>% mutate(across(2, as.numeric))
 
 ## Join K and area
-dat <- left_join(k, area, by=c("spp", "density", "pct", "patch", "PatchNo"))
+dat <- left_join(k, area, by=c("spp", "density", "level", "patch", "PatchNo"))
 
 # Drop Area and recalculate
 dat <- dat %>%
@@ -91,8 +91,8 @@ dat <- dat %>%
 #   filter(K >= 6)
 
 # Summarize K and area of reduced patch size
-dat %>% group_by(density, pct, patch) %>%
+dat %>% group_by(density, level, patch) %>%
   reframe(K=sum(K), Area=sum(Areakm2)) %>%
-  arrange(patch)
+  arrange(density, patch, level)
 
 
