@@ -10,7 +10,7 @@ theme_set(theme_bw())
 
 ## Write function to subset and convert to ltraj
 # Will need this for segmenting migration
-lv_func <- function(x, id_) {
+lv_func <- function(x, id_, lmin=30) {
   
   # Subset by ID
   temp <- x %>% 
@@ -27,7 +27,7 @@ lv_func <- function(x, id_) {
   ltr <- as.ltraj(xy=temp[,c("x","y")], date=temp$date, id=temp$id)
   
   # Run lavielle
-  lv <- lavielle(ltr, Lmin=30, which="R2n", Kmax=10, plotit=TRUE)
+  lv <- lavielle(ltr, Lmin=lmin, which="R2n", Kmax=10, plotit=TRUE)
   
   k_try <- chooseseg(lv, S=0.75, output="opt", draw=TRUE)
   
@@ -156,7 +156,16 @@ for (i in 1:length(un.id)) {
 }
 ## Look through plots and manually list which IDs probably will need to be segmented, as well as those that might need to be filtered by dates to remove patchy data
 
-to_segment <- c("19219_Delta", "19223_Delta", "152316_Northern", "152318_Northern", "26620_Noxubee", "35490_Noxubee") # "26626_Noxubee", 
+to_segment <- c("377123_Delta", "19212_Delta", "19219_Delta", "19223_Delta",
+                "152316_Northern", "152318_Northern", "26620_Noxubee", "35490_Noxubee", 
+                "35493_Noxubee", "30251_Eastern", "26641_Eastern", "26630_Eastern", "26622_Eastern") # "26626_Noxubee", 
+
+# Manually clean up erroneous points
+pigs <- pigs_res %>% filter(id!="35489_Noxubee" | (id=="35489_Noxubee" & y<3684000 & x<330000))
+pigs <- pigs_res %>% filter(id!="30252_Noxubee" | (id=="30252_Noxubee" & y>3683500 & x>329000))
+pigs <- pigs_res %>% filter(id!="152321_Northern" | (id=="152321_Northern" & y<3730000))
+pigs <- pigs_res %>% filter(id!="152317_Northern" | (id=="152317_Northern" & x<327500))
+pigs <- pigs_res %>% filter(id!="19208_Delta" | (id=="19208_Delta" & x>175000))
 
 # Subset data without pigs that need to be segmented (so that we can add the segments onto it)
 pigs <- pigs_res %>% 
@@ -170,17 +179,24 @@ pigs <- pigs_res %>%
   dplyr::select(id, key, x:rel.angle)
 
 ## Need to do this manually, and make sure to add the segmented data to 'pigs'
-s <- lv_func(pigs_res, "35490_Noxubee")  
+s <- lv_func(pigs_res, "26622_Eastern", 20)  
 
-# 19223_Delta : 2
+# Add segmented data to full dataset
+pigs <- bind_rows(pigs, s)
+
+# 377123_Delta : 3
+# 19212_Delta : 6
 # 19219_Delta : 3
+# 19223_Delta : 2
 # 152316_Northern : 5
 # 152318_Northern : 5
 # 26620_Noxubee : 2
 # 35490_Noxubee : 2
-
-# Add segmented data to full dataset
-pigs <- bind_rows(pigs, s)
+# 35493_Noxubee : 6
+# 30251_Eastern : 3
+# 26641_Eastern : 2
+# 26630_Eastern : 5
+# 26622_Eastern : 2
 
 # Check if there are any IDs in the to_segment vector that are not in the pigs tibble after segmenting and binding
 to_segment[!(to_segment %in% pigs$id)]
@@ -191,7 +207,7 @@ write_csv(pigs, "output/segmented_pigs.csv")
 
 # how many days in each segment?
 ndays <- pigs %>% mutate(day=format(date, "%Y-%m-%d")) %>% group_by(key) %>% reframe(ndays=length(unique(day)))
-short <- ndays %>% filter(ndays <22)
+short <- ndays %>% filter(ndays<22)
 
 # Removed anything with less than 3 weeks of data
 pigs <- pigs %>% filter(!(key %in% short$key))
@@ -236,7 +252,6 @@ size <- data.frame()
 # Set progress bar of sanity because this takes long - set it to the number of ids in the dataset (min = 0, max = max number of ids)
 pb <- txtProgressBar(min = 0, max = length(ids), style = 3)
 
-system.time(
 # Run loop to fit AKDEs
 for (i in 1:length(ids)) {
   
@@ -244,11 +259,12 @@ for (i in 1:length(ids)) {
     setTxtProgressBar(pb, i)
     
     # Next three lines are to fit variogram and select the best movement model to fit to the data
-    var <- variogram(dat[[i]]) 
+    var <- variogram(dat[[i]], CI="Gauss") 
     var2 <- variogram.fit(var,  name="GuessBM", interactive=F)
-    # Automated model selection via BIC
+    
+    # Automated model selection
     tt <- ctmm.select(dat[[i]], var2, IC="BIC") 
-
+    
     # Fit AKDE
     UD <- akde(dat[[i]], tt, weights=TRUE) 
     
@@ -263,8 +279,8 @@ for (i in 1:length(ids)) {
     out[[i]] <- list(dat[[i]]@info$identity, var, var2, UD) 
   })
 }
-)
-saveRDS(out, "results/raw_pigs_AKDEs.rds")
+saveRDS(out, "results/home_ranges/raw_pigs_AKDEs.rds")
+# out <- readRDS("results/home_ranges/raw_pigs_AKDEs.rds")
 
 # Take just the AKDE
 akde <- lapply(out, function(x) x[[4]]) 
@@ -273,8 +289,26 @@ akde <- lapply(out, function(x) x[[4]])
 ids <- lapply(out, function(x) x[[1]])
 ids <- unlist(ids)
 
-# add IDs to size df
+# Add IDs to size df
 size$id <- ids
+
+# Fix units and reorganzie
+size <- size %>%
+  # Create a column for the rowname
+  rownames_to_column(var="unit") %>%
+  # Convert to tibble
+  as_tibble() %>%
+  # Extract the unit from the rowname
+  mutate(unit=str_extract(unit, pattern = "(?<=\\().*(?=\\))")) %>%
+  # Convert ha to sq km
+  mutate(low=if_else(unit=="hectares",low/100,low),
+          est=if_else(unit=="hectares",est/100,est),
+          high=if_else(unit=="hectares",high/100,high)) %>%
+  # Reorder columns
+  dplyr::select(id, low:high) 
+# Note: all AKDEs are now in sqare kilometers
+
+write_csv(size, "results/home_ranges/pigs_AKDE_sqkm.csv")
 
 # Convert UD to sf object (multipolygons)
 poly <- lapply(akde, as.sf, level.UD=0.99)
@@ -287,29 +321,30 @@ ud <- do.call(rbind, poly)
 
 # Clean up full set of polygons
 ud <- ud %>% 
-        # Separate name into important parts (key, 99%, and estimate vs CI)
-        separate(1, into=c("key", "level", "which"), sep=" ") %>%
-        # Remove rowname
-        remove_rownames() %>%
-        # Remove the level column, we know they are all 99%
-        dplyr::select(-level) %>%
-        # Now filter by rows to just the estimate (drop confidence intervals)
-        filter(which=="est") %>%
-        # Separate key into different pieces
-        separate(1, into=c("id", "study", "burst"), sep="_") %>%
-        # put id and study back together
-        unite("id", 1:2, sep="_")
+  # Separate name into important parts (key, 99%, and estimate vs CI)
+  separate(1, into=c("key", "level", "which"), sep=" ") %>%
+  # Remove rowname
+  remove_rownames() %>%
+  # Remove the level column, we know they are all 99%
+  dplyr::select(-level) %>%
+  # Now filter by rows to just the estimate (drop confidence intervals)
+  filter(which=="est") %>%
+  # Separate key into different pieces
+  separate(1, into=c("id", "study", "burst"), sep="_") %>%
+  # put id and study back together
+  unite("id", 1:2, sep="_")
 
 # Write shapefile
-# st_write(ud, "output/pig_AKDE_est.shp", append=FALSE)
-ud <- st_read("output/pig_AKDE_est.shp")
-
+st_write(ud, "output/pigs_AKDE_est.shp", append=FALSE)
+  
 #### 6. Extract available points from home range ####
+ud <- st_read("output/pigs_AKDE_est.shp")
 library(terra)
 
 ## read a template raster (30 x 30, doesn't really matter which as long as projection is correct & has cells)
 cdl <- rast("data/landscape_data/CDL2023_MS50km_30m_nlcdproj.tif")
 
+# project to match raster
 ud <- st_transform(ud, st_crs(cdl))
 
 # Create empty tibble for points
@@ -342,8 +377,13 @@ for (i in 1:nrow(ud)) {
   grid <- extract(pols, pts)[,-1]
   # subset the polygon grid by only the cells that have points in them
   grid <- pols[grid]
-  # Save to list
-  cell_list[[paste0(ud$id[i], "_", ud$burst[i])]] <- grid 
+  
+  # Convert to sf
+  grid <- st_as_sf(grid)
+  
+  # Save as shapefile
+  filename <- paste0("output/pigs_avail_cells/", ud$id[i], "_", ud$burst[i], "-avail.shp")
+  st_write(grid, filename, append=FALSE)
   
   # convert back to sf
   pts <- st_as_sf(pts)
@@ -353,16 +393,14 @@ for (i in 1:nrow(ud)) {
     st_coordinates() %>% 
     as_tibble() %>%
     mutate(id = ud$id[i],
-            burst = ud$burst[i],
-            case = 0)
+           burst = ud$burst[i],
+           case = 0)
   
   # Add to avail data frame
   avail <- bind_rows(avail, pts)
 }
 # Save available points
 write_csv(avail, "output/pigs_avail_pts.csv")
-# Save available cells 
-saveRDS(cell_list, "output/pigs_avail_cells.RDS")  ## need to run this again, I save with wrong extension
 
 ## Now on to the used locations
 pigs_sf <- pigs %>% 
@@ -390,7 +428,7 @@ for (i in 1:nrow(ud)) {
   # filter to single ID and convert to SpatVector
   temp <- pigs_sf %>% filter(key==udkey) 
   temp <- vect(temp)
- 
+  
   # Clip points to AKDE
   temp <- crop(temp, poly)
   
@@ -413,10 +451,10 @@ write_csv(used, "output/pigs_used_locs.csv")
 
 # Organize so used data matches available data
 used <- used %>%
-          # split key
-          separate("key", into=c("rm1", "rm2", "burst"), sep="_") %>%
-          # drop extra columns
-          dplyr::select(X, Y, id, burst, case)
+  # split key
+  separate("key", into=c("rm1", "rm2", "burst"), sep="_") %>%
+  # drop extra columns
+  dplyr::select(X, Y, id, burst, case)
 
 ## Combine used and available points
 dat <- bind_rows(used, avail)

@@ -98,7 +98,7 @@ write_csv(deer, "data/location_data/deer_filtered.csv")
 pigs1 <- read_csv("data/location_data/Cleaned_DeltaMS_PigGPS_data.csv") %>% select(-Sex, -Temp) %>% rename(id=collar_id) %>% mutate(study="Delta")
 pigs2 <- read_csv("data/location_data/Cleaned_NorthMS_PigGPS_data.csv") %>% select(-Altitude, -Temp, -DOP) %>% mutate(study="Northern")
 pigs3 <- read_csv("data/location_data/NoxubeePigs.csv") %>% rename(id=CollarID, datetime=Date.Time) %>% select(-Temp, -Sex) %>% mutate(study="Noxubee") %>% mutate(datetime=as_datetime(datetime, format="%m/%d/%Y %H:%M"))
-pigs4 <- read_csv("data/location_data/Cleaned_EasternMS_PigGPS_data.csv") %>% select(-Altitude, -Temp, -DOP) %>% rename(id=collar_id) %>% mutate(study="Eastern")
+pigs4 <- read_csv("data/location_data/Cleaned_EasternMS_PigGPS_data_FIX.csv") %>% rename(id=collar_id) %>% mutate(study="Eastern")
 
 # Combine
 pigs <- bind_rows(pigs1, pigs2, pigs3, pigs4)
