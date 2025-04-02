@@ -22,7 +22,10 @@ get_model_params <- function(fit) {
              lambdaSE = lambdaSE[best], eror = error[best])
 }
 
-#### Read data and set up for loop ####
+#### Read data ####
+pigs <- read_csv("output/pigs_used_avail_covariates.csv")
+
+## Set up to loop by individual
 pigs <- read_csv("output/pigs_used_avail_covariates.csv")
 
 ## Set up to loop by individual
@@ -41,16 +44,15 @@ cfs <- list()
 reduced_glms <- list()
 
 #### Run RSF with elastic net (which might sometimes end up as a lasso or ridge) ####
-lam.grid <- 10^seq(20, -2, length=200)
 # Loop to run LASSO over each individual HR
 set.seed(1)
 for (i in 1:length(un.id)) {
   
   # Filter by ID
   temp <- pigs %>% filter(key==un.id[i])
-
+  
   # Set up data for LASSO in glmnet
-  x <- model.matrix(case ~ bottomland + water + I(water^2), temp)[, -1]
+  x <- model.matrix(case ~ deciduous + gramanoids + bottomland + shrubs + foodcrops + water + I(water^2), temp)[, -1]
   y <- temp$case
   wts <- temp$weight
   
@@ -59,15 +61,12 @@ for (i in 1:length(un.id)) {
   
   # Extract "best" paramters
   cv.out.p <- get_model_params(cv.out)
-
+  
   # Print for status update
   print(paste0("Alpha for ", un.id[i], " is ", cv.out.p$alpha[1]))
   
-  # cv.out <- cv.glmnet(x, y, data=temp, alpha=0, weights=wts, family="binomial", type.measure="deviance", lambda=lam.grid)
-  
   # Run the LASSO with the optimal lambda and alpha
   rsf <- glmnet(x, y, family="binomial", alpha=cv.out.p$alpha[1], weights=wts, lambda=cv.out.p$lambdaMin[1])
-  # rsf <- glmnet(x, y, family="binomial", alpha=0, weights=wts, lambda=cv.out$lambda.min)
   
   # add model object to list
   pigs_rsf[[i]] <- rsf
@@ -103,134 +102,65 @@ for (i in 1:length(un.id)) {
   }
 }
 
-#### Summarize coefficients ####
-# combine into a tibble
-cfs <- lapply(cfs, as.data.frame)
-cfs <- do.call(bind_rows, cfs)
+saveRDS(reduced_glms, "output/pigs_reduced_glms.RDS")
+reduced_glms <- readRDS("output/pigs_reduced_glms.RDS")
 
-# rename columns and add ID
-cfs <- cfs %>% 
+#### reduced GLMs ####
+# extract mean coeficients and combine into a single table
+r_glms <- lapply(reduced_glms, coef)
+r_glms <- lapply(r_glms, as.data.frame)
+r_glms <- lapply(r_glms, t)
+r_glms <- lapply(r_glms, as.data.frame)
+r_glms <- do.call(bind_rows, r_glms)
+
+r_glms <- r_glms %>% 
   as_tibble() %>%
-  rename(water2=`I(water^2)`, intercept=`(Intercept)`) %>%
-  mutate(id=un.id) %>%
-  select(id, intercept:water2)
-
-# calculate column means
-betas <- cfs %>% 
-  reframe(across(bottomland:water2, \(x) mean(x, na.rm = TRUE)))
-
-# WRite to csv
-write_csv(betas, "output/pigs_lasso_betas.csv")
-
-
-plot(cfs$decidmixed, pch=16, col="blue")
-abline(h=0)
-
-
-
-# # get coefficients from all the models
-# cfs <- lapply(pigs_rsf, coef)
-# 
-# # combine into a tibble
-# cfs <- do.call(bind_rows, cfs)
-# 
-# # rename intercept and add ID column
-# cfs <- cfs %>%
-#   rename(intercept=`(Intercept)`) %>%
-#   mutate(id = un.id) %>%
-#   select(id, intercept:`I(water^2)`)
-# 
-# # calculate column means
-# betas <- cfs %>% 
-#   reframe(across(bottomlandhw:evergreen, \(x) mean(x, na.rm = TRUE)))
-# 
-# # Extract SE for confidence intervals
-# se <- lapply(pigs_rsf, arm::se.coef)
-# 
-# # combine into a tibble
-# se <- do.call(bind_rows, se)
-# 
-# # rename intercept and add ID column
-# se <- se %>%
-#   rename(intercept=`(Intercept)`) %>%
-#   mutate(id = un.id) %>%
-#   select(id, intercept:evergreen)
-
-
-#### Functional response ####
-
-# Read raster with land cover. Is already same projection as layers
-lulc <- rast("data/landscape_data/cdl23_classes.tif")
-
-# create vector of class names
-lc <- c("palatablecrops", "barren", "gramanoids", "decidmixed", "evergreen", 
-        "developed", "bottomlandhw", "water", "othercrops", "shrublands")
-
-# Set up NLCD classes and class values
-cdl_values <- c(1,2,3,4,5,6,7,8,9,10)
-lc <- c("foodcrops", "barren", "gramanoids", "decidmixed", "evergreen", 
-        "developed", "bottomlandhw", "water", "othercrops", "shrublands")
-
-# Add class names and numbers to the raster
-levels(lulc) <- list(data.frame(ID = cdl_values,
-                                landcov = lc))
-
-# extract classes at each point
-pigs_lc <- extract(lulc, pigs_v) 
-
-# join data so we have a tibble with points and land cover
-hr_lc <- pigs %>% 
-  bind_cols(pigs_lc) %>%
-  select(key, id, case, landcov)
-
-# Summarize by key...want the number of points in available for each landcover class
-hr_lc <- hr_lc %>%
-  # just want the available points
-  filter(case==0) %>%
-  # group by key
-  group_by(key, landcov) %>%
-  # summarize factor levels
-  count() 
-
-# Calculate how many points (cells) in each home range
-ncells <- pigs %>% 
-  filter(case==0) %>%
-  group_by(key) %>%
-  count() %>%
-  rename(ntotal=n)
-
-# join home range cells to hr_lc
-hr_lc <- hr_lc %>%
-  left_join(ncells, by="key") %>%
-  ungroup() %>%
-  # filter so we only have the rows that were in the model
-  filter(landcov %in% m.covars) %>%
-  # calculate % of home range
-  mutate(pct=n/ntotal)
-
-
-# pivot to long format with a column for landcov and a column for beta (the value)
-cfs <- cfs %>% 
-  # drop the intercept
+  rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%
+  # drop intercept
   select(-intercept) %>%
-  # pivot
-  pivot_longer(2:7, names_to="landcov", values_to="beta") %>%
-  # rename to match other data
-  rename(key=id)
+  # fill with 0
+  mutate(across(deciduous:water2, \(x) coalesce(x, 0)))
 
-# now join betas to home range info
-hr_lc <- left_join(hr_lc, cfs, by=c("key", "landcov"))
+# Add IDs 
+r_glms$id <- un.id
 
+# Drop those with unreasonable SEs (probably because the AKDE was too big)
+r_glms <- r_glms %>% 
+  filter(id!="152312_North_1" & id!="152312_North_4" & id!="272_Central_3") %>%
+  select(-id)
 
+# Calculate mean across all individuals
+glm_betas <- r_glms %>% 
+  reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
 
-
-
-
-
-
-
-
-
+write_csv(glm_betas, "output/pigs_glm_betas.csv")
 
 
+# Extract SE for confidence intervals
+se <- lapply(reduced_glms, arm::se.coef)
+
+# combine into a tibble
+se <- do.call(bind_rows, se)
+
+# rename intercept and add ID column
+se <- se %>%
+  rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%
+  # drop intercept
+  select(-intercept) %>%
+  # fill with 0
+  mutate(across(deciduous:water2, \(x) coalesce(x, 0)))
+
+# Add IDs 
+se$id <- un.id
+
+# Drop those with unreasonable SEs (probably because the AKDE was too big)
+se <- se %>% 
+  filter(id!="152312_North_1" & id!="152312_North_4" & id!="272_Central_3") %>%
+  select(-id)
+
+# Calculate mean across all individuals
+glm_se <- se %>% 
+  reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
+
+write_csv(glm_se, "output/pigs_glm_se.csv")
 

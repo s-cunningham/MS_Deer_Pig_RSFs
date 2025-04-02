@@ -63,8 +63,8 @@ betas <- left_join(betas, se, by=c("covariate"))
 
 # caluclate confidence intervales
 betas <- betas %>%
-  mutate(uci = beta - (1.96*se),
-         lci = beta + (1.96*se))
+  mutate(uci = beta + (1.96*se),
+         lci = beta - (1.96*se))
 
 ## Read county shapefile
 counties <- vect("data/landscape_data/county_nrcs_a_ms.shp")
@@ -85,29 +85,33 @@ for (i in 1:length(split_counties)) {
   
   ## Mean prediction
   # Predict (w(x) = exp(x*beta))
-  pred <- exp(betas$beta[1])*cty_layers[["deciduous"]] +
-          exp(betas$beta[2])*cty_layers[["evergreen"]] +
-          exp(betas$beta[3])*cty_layers[["gramanoids"]] +
-          exp(betas$beta[4])*cty_layers[["shrubs"]] +
-          exp(betas$beta[5])*cty_layers[["foodcrops"]] +
-          exp(betas$beta[6])*cty_layers[["water"]] +
-          exp(betas$beta[7])*(cty_layers[["water"]]^2)
+  pred <- exp(betas$beta[1]*cty_layers[["deciduous"]] +
+              betas$beta[2]*cty_layers[["evergreen"]] +
+              betas$beta[3]*cty_layers[["gramanoids"]] +
+              betas$beta[4]*cty_layers[["shrubs"]] +
+              betas$beta[5]*cty_layers[["foodcrops"]] +
+              betas$beta[6]*cty_layers[["water"]] +
+              betas$beta[7]*(cty_layers[["water"]]^2))
   
   # create filename
   filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_mean.tif")
+  
+  pred <- boot::inv.logit(pred)
+  
+  pred <- (pred - minmax(pred)[1])/(minmax(pred)[2] - minmax(pred)[1])
   
   # Export county prediction raster
   writeRaster(pred, filename, overwrite=TRUE)
   
   # something not right with math
   # ## Lower CI prediction
-  pred <- exp(betas$lci[1])*cty_layers[["deciduous"]] +
-          exp(betas$lci[2])*cty_layers[["evergreen"]] +
-          exp(betas$lci[3])*cty_layers[["gramanoids"]] +
-          exp(betas$lci[4])*cty_layers[["shrubs"]] +
-          exp(betas$lci[5])*cty_layers[["foodcrops"]] +
-          exp(betas$lci[6])*cty_layers[["water"]] +
-          exp(betas$lci[7])*(cty_layers[["water"]]^2)
+  pred <- exp(betas$lci[1]*cty_layers[["deciduous"]] +
+              betas$lci[2]*cty_layers[["evergreen"]] +
+              betas$lci[3]*cty_layers[["gramanoids"]] +
+              betas$lci[4]*cty_layers[["shrubs"]] +
+              betas$lci[5]*cty_layers[["foodcrops"]] +
+              betas$lci[6]*cty_layers[["water"]] +
+              betas$lci[7]*(cty_layers[["water"]]^2))
 
   # create filename
   filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
@@ -116,13 +120,13 @@ for (i in 1:length(split_counties)) {
   writeRaster(pred, filename, overwrite=TRUE)
 
   ## Upper CI prediction
-  pred <- exp(betas$uci[1])*cty_layers[["deciduous"]] +
-          exp(betas$uci[2])*cty_layers[["evergreen"]] +
-          exp(betas$uci[3])*cty_layers[["gramanoids"]] +
-          exp(betas$uci[4])*cty_layers[["shrubs"]] +
-          exp(betas$uci[5])*cty_layers[["foodcrops"]] +
-          exp(betas$uci[6])*cty_layers[["water"]] +
-          exp(betas$uci[7])*(cty_layers[["water"]]^2)
+  pred <- exp(betas$uci[1]*cty_layers[["deciduous"]] +
+              betas$uci[2]*cty_layers[["evergreen"]] +
+              betas$uci[3]*cty_layers[["gramanoids"]] +
+              betas$uci[4]*cty_layers[["shrubs"]] +
+              betas$uci[5]*cty_layers[["foodcrops"]] +
+              betas$uci[6]*cty_layers[["water"]] +
+              betas$uci[7]*(cty_layers[["water"]]^2))
 
   # create filename
   filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")

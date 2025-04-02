@@ -91,8 +91,9 @@ dat <- dat %>%
 #   filter(K >= 6)
 
 # Summarize K and area of reduced patch size
-dat %>% group_by(density, level, patch) %>%
+res <- dat %>% group_by(density, level, patch) %>%
   reframe(K=sum(K), Area=sum(Areakm2)) %>%
   arrange(density, patch, level)
 
+write_csv(res, "results/carrying_capacity_area.csv")
 
