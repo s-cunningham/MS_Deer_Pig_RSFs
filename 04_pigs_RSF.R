@@ -1,3 +1,12 @@
+# ----------------------------------------------------------------------------------------------------------------------------
+# Name: 
+# Author: Stephanie Cunningham
+# Objective: Build resource selection function models via elastic net and estimate coefficients from a GLM
+# Input: Used and available points, with associated covariates extracted from rasters
+# Output: Coefficients (beta and SE of beta) from RSF models
+# Required packages: tidyverse, glmnet, glmnetUtils, arm
+# ----------------------------------------------------------------------------------------------------------------------------
+
 library(tidyverse)
 library(glmnet)
 library(glmnetUtils)
@@ -126,8 +135,8 @@ r_glms$id <- un.id
 
 # Drop those with unreasonable SEs (probably because the AKDE was too big)
 r_glms <- r_glms %>% 
-  filter(id!="152312_North_1" & id!="152312_North_4" & id!="272_Central_3") %>%
-  select(-id)
+  # filter(id!="152312_North_1" & id!="152312_North_4" & id!="272_Central_3") %>%
+  # select(-id)
 
 # Calculate mean across all individuals
 glm_betas <- r_glms %>% 

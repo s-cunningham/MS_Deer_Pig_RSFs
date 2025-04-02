@@ -1,5 +1,11 @@
-## Take the coefficients from the RSF and predict across Mississippi
-## Because we are using 30 x 30 m cells, we have to go county by county
+# ----------------------------------------------------------------------------------------------------------------------------
+# Name: 
+# Author: Stephanie Cunningham
+# Objective: Take the coefficients from the RSF and predict across Mississippi
+# Input: Proportional cover rasters, coefficients from RSF models
+# Output: Rasters (.tif and/or .asc) of statewide RSF predictions
+# Required packages: tidyverse, glmnet, glmnetUtils, arm
+# ----------------------------------------------------------------------------------------------------------------------------
 
 library(tidyverse)
 library(terra)
@@ -45,7 +51,7 @@ layers <- scale(layers)
 # Rename layers
 names(layers) <- c("shrubs", "gramanoids", "foodcrops", "evergreen", "deciduous", "water")
 
-#### Predict across MS counties ####
+#### --- Predict across MS counties --- ####
 # *Uses wayyyy less memory than doing the whole state at once*
 
 ## Read in coefficients

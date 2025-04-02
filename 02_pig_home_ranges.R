@@ -157,7 +157,7 @@ for (i in 1:length(un.id)) {
 ## Look through plots and manually list which IDs probably will need to be segmented, as well as those that might need to be filtered by dates to remove patchy data
 
 to_segment <- c("377123_Delta", "19212_Delta", "19219_Delta", "19223_Delta",
-                "152316_Northern", "152318_Northern", "26620_Noxubee", "35490_Noxubee", 
+                "152316_Northern", "152317_Northern", "152318_Northern", "26620_Noxubee", "35490_Noxubee", 
                 "35493_Noxubee", "30251_Eastern", "26641_Eastern", "26630_Eastern", "26622_Eastern") # "26626_Noxubee", 
 
 # Manually clean up erroneous points
@@ -185,10 +185,11 @@ s <- lv_func(pigs_res, "26622_Eastern", 20)
 pigs <- bind_rows(pigs, s)
 
 # 377123_Delta : 3
-# 19212_Delta : 6
-# 19219_Delta : 3
+# 19212_Delta : 8 #6
+# 19219_Delta : 4
 # 19223_Delta : 2
 # 152316_Northern : 5
+# 152317_Northern : 2
 # 152318_Northern : 5
 # 26620_Noxubee : 2
 # 35490_Noxubee : 2
