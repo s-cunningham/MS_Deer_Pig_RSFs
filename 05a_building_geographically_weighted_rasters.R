@@ -10,8 +10,6 @@ library(tidyverse)
 library(terra)
 library(tidyterra)
 
-# aea_crs <- "+proj=aea +lat_0=23 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
-
 # Function to find the centroid of a group of points
 find_study_area_center <- function(points_spatvector) {
   # Take just the coordinates of each point
@@ -47,17 +45,16 @@ dist_weight_raster <- function(centroid, extent, coord_ref, resolution=30, dista
 
   # mask and crop mississippi
   w <- crop(weights, ms_full, mask=TRUE)
-  
-  # Return raster
+
+    # Return raster
   return(w)
   
 }
 
-
 ## --- Building a geographically weighted raster --- ##
 
 # Read in raster as a template for CRS
-forest <- rast("data/landscape_data/allhardwoodsMODIFIED_180m_sum.tif")
+forest <- rast("data/landscape_data/allhardwoodsMODIFIED_210m_sum.tif")
 
 # Read in Mississippi shapefile
 ms_full <- vect("data/landscape_data/mississippi_ACEA.shp") 
@@ -84,26 +81,9 @@ ms_crs <- crs(forest, proj=TRUE)
 # Create rasters
 gwr <- lapply(pigs, dist_weight_raster, extent=ms_ext, coord_ref=ms_crs)
 
+gwr <- rast(gwr)
 
-r <- rast(ms_ext, resolution=30)
-# Define projection for empty raster
-crs(r) <- crs(ms_crs) 
+names(gwr) <- names(pigs)
 
-# Calculate distances from each raster cell to the centroid
-distances <- distance(r, pigs$Delta)
+writeRaster(gwr, "output/pig_studies_invdistweights.tif", overwrite=TRUE)
 
-## Convert distances to inverse weights
-# Add small value to avoid division by 0
-weights <- 1 / (distances + 0.0001)^distance_decay_factor
-
-# Normalize weights to sum to 1 if needed
-# weights <- weights / sum(weights)
-
-# Assign weights to the raster
-values(r) <- weights
-
-ggplot() +
-  geom_spatraster(data=forest) +
-  geom_spatvector(data=pigs$Delta, color="red", size=3)
-
-test <- pigs$Delta
