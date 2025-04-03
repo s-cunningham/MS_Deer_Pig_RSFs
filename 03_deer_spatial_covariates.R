@@ -5,9 +5,7 @@ theme_set(theme_bw())
 
 #### Read Data ####
 # locations (used & available)
-deer <- read_csv("output/deer_used_avail_locations.csv") %>%
-  # Add column for weight
-  mutate(weight=if_else(case==1, 1, 5000))
+deer <- read_csv("output/deer_used_avail_locations.csv") 
 
 # Rasters
 rast_list <- c("data/landscape_data/shrublands_180m_sum.tif",
@@ -43,7 +41,7 @@ ext(water) <- ext(layers)
 layers <- c(layers, water)
 
 # Center and scale continuous rasters
-layers <- scale(layers)
+# layers <- scale(layers)
 
 # Rename layers
 names(layers) <- c("shrubs", "gramanoids", "foodcrops", "evergreen", "deciduous", "water")
@@ -66,7 +64,7 @@ dat_deer <- extract(layers, deer_v)
 deer <- bind_cols(deer, dat_deer)
 
 # correlation matrix
-cor(deer[,c(8:13)])
+cor(deer[,c(7:12)])
 
 # create key column
 deer <- deer %>%

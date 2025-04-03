@@ -1,3 +1,12 @@
+# ----------------------------------------------------------------------------------------------------------------------------
+# Name: Spatial Covariate Extraction for Wild Pigs
+# Author: Stephanie Cunningham
+# Objective: Extract spatial covariates from rasters (that had been generated in ArcGIS Pro) and add to used/avail locations
+# Input: Summed cover rasters (from Cropland Data Layer), used/avail points from home range analysis
+# Output: Data frame with covariate values appended to used/avail locations
+# Required packages: tidyverse, terra
+# ----------------------------------------------------------------------------------------------------------------------------
+
 library(tidyverse)
 library(terra)
 
@@ -5,17 +14,16 @@ theme_set(theme_bw())
 
 #### Read Data ####
 # locations (used & available)
-pigs <- read_csv("output/pigs_used_avail_locations.csv") %>%
-            # Add column for weight
-            mutate(weight=if_else(case==1, 1, 5000))
+pigs <- read_csv("output/pigs_used_avail_locations.csv") 
 
 # Rasters
 rast_list <- c("data/landscape_data/shrublands_210m_sum.tif",
                "data/landscape_data/othercrops_210m_sum.tif",
                "data/landscape_data/gramanoids_210m_sum.tif", 
                "data/landscape_data/bottomlandHW_210m_sum.tif",
-               # "data/landscape_data/herbwetlands_210_sum.tif",
-               # "data/landscape_data/allwetlands_210_sum.tif",
+               "data/landscape_data/decidmixed_210m_sum.tif",
+               "data/landscape_data/evergreen_180m_sum.tif",
+               "data/landscape_data/herbwetlands_210_sum.tif",
                "data/landscape_data/palatable_crops_210m_sum.tif") 
 layers <- rast(rast_list)
 
@@ -26,19 +34,6 @@ layers <- classify(layers, m)
 # Convert to % 
 layers <- layers / 149
 
-# Forest rasters (accounting for 50% mixed decid/evergreen)
-forest <- c("data/landscape_data/evergreenMODIFIED_210m_sum.tif",
-            "data/landscape_data/allhardwoodsMODIFIED_210m_sum.tif")
-forest <- rast(forest)
-
-# Reclassify missing data to 0
-forest <- classify(forest, m)
-
-# Convert to % 
-forest <- forest / 298
-
-layers <- c(layers, forest)
-
 # read water
 water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
 water <- resample(water, layers)
@@ -46,12 +41,9 @@ ext(water) <- ext(layers)
 
 layers <- c(layers, water)
 
-# Center and scale continuous rasters
-layers <- scale(layers)
-
 # Rename layers
-names(layers) <- c("shrubs", "othercrops", "gramanoids", "bottomland", "foodcrops", "evergreen", "deciduous", "water")
-global(layers[["shrubs"]], fun="mean")
+names(layers) <- c("shrubs", "othercrops", "gramanoids", "bottomland", "decidmixed", "evergreen", "herbwetlands", "foodcrops", "water")
+# global(layers[["shrubs"]], fun="mean")
 # global(layers[["shrubs"]], fun="sd")
 
 #### Extract covariates and used and available locations ####
@@ -71,9 +63,9 @@ dat_pigs <- extract(layers, pigs_v)
 pigs <- bind_cols(pigs, dat_pigs)
 
 # Correlation matrix
-cor(pigs[,c(8:15)])
+cor(pigs[,c(7:15)])
 
-# create key column
+# create key column (unique identifier with collar id, study, and "burst" from segmentation)
 pigs <- pigs %>%
   unite("key", c("id", "burst"), sep="_", remove=FALSE)
 

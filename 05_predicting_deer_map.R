@@ -10,6 +10,39 @@
 library(tidyverse)
 library(terra)
 library(tidyterra)
+library(recipes)
+
+#### Custom Functions ####
+# Function for scaling rasters
+rast_scale <- function(raster, scaling_recipe) {
+  
+  # Extract the variable name from the raster
+  var_name <- names(raster)
+  
+  # Extract the centering and scaling values from recipe
+  center_value <- scaling_recipe$steps[[1]]$means[[var_name]]  # Assuming step_center was first
+  scale_value <- scaling_recipe$steps[[2]]$sds[[var_name]]     # Assuming step_scale was second
+  
+  # Transform the raster
+  r_centered <- raster - center_value
+  r_scaled <- r_centered / scale_value
+  
+  return(r_scaled)
+}
+
+#### 
+deer <- read_csv("output/deer_used_avail_covariates.csv") %>%
+  select(case,key,shrubs:water)
+
+## Center and scale covariates using the recipes package
+# Determine the model formula and set which values to center + scale
+scaling_recipe <- recipe(case ~ ., data=deer) %>%
+  step_center(all_numeric_predictors()) %>%
+  step_scale(all_numeric_predictors()) %>%
+  prep()
+
+# Do the actual centering and scaling of the numeric predictors
+deer <- bake(scaling_recipe, deer)
 
 #### Read in rasters ####
 # Rasters
@@ -45,11 +78,18 @@ ext(water) <- ext(layers)
 
 layers <- c(layers, water)
 
-# Center and scale continuous rasters
-layers <- scale(layers)
-
 # Rename layers
 names(layers) <- c("shrubs", "gramanoids", "foodcrops", "evergreen", "deciduous", "water")
+
+## Center/scale rasters using values from recipe
+# Convert raster stack to list of rasters
+layers <- as.list(layers)
+
+# Run raster scaling function over list of rasters
+layers <- lapply(layers, rast_scale, scaling_recipe=scaling_recipe)
+
+# Convert centered/scaled raster list back to stack
+layers <- rast(layers)
 
 #### --- Predict across MS counties --- ####
 # *Uses wayyyy less memory than doing the whole state at once*
@@ -101,10 +141,6 @@ for (i in 1:length(split_counties)) {
   
   # create filename
   filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_mean.tif")
-  
-  pred <- boot::inv.logit(pred)
-  
-  pred <- (pred - minmax(pred)[1])/(minmax(pred)[2] - minmax(pred)[1])
   
   # Export county prediction raster
   writeRaster(pred, filename, overwrite=TRUE)
@@ -258,14 +294,36 @@ writeRaster(deer_uci, "results/predictions/deer_rsf_predicted_uci.asc", NAflag=-
 
 
 ## Classify out the core and marginal area from marginal and highly marginal, respectively
-m <- c(0.82, 1, 0)
+# 0.17, 0.085, 0.51
+m <- c(0.17, 1, 1,
+       0, 0.17, NA)
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 rc1 <- classify(deer_pred, rclmat, include.lowest=TRUE)
 plot(rc1)
+writeRaster(rc1, "results/predictions/deer_rsf_predicted90m_core.tif", overwrite=TRUE)
+
+m <- c(0.085, 1, 1,
+       0, 0.085, NA)
+rclmat <- matrix(m, ncol=3, byrow=TRUE)
+rc2 <- classify(deer_pred, rclmat, include.lowest=TRUE)
+plot(rc2)
+writeRaster(rc2, "results/predictions/deer_rsf_predicted90m_mar.tif", overwrite=TRUE)
+
+m <- c(0.051, 1, 1,
+       0, 0.051, NA)
+rclmat <- matrix(m, ncol=3, byrow=TRUE)
+rc3 <- classify(deer_pred, rclmat, include.lowest=TRUE)
+plot(rc3)
+writeRaster(rc3, "results/predictions/deer_rsf_predicted90m_highlymar.tif", overwrite=TRUE)
+
+ggplot() +
+  geom_spatraster(data=rc3, aes(fill=RSF))
+
+
 # writeRaster(rc1, "results/predictions/deer_rsf_predicted90m_noCore.tif", overwrite=TRUE)
 writeRaster(rc1, "results/predictions/deer_rsf_predicted90m_noCore.asc", NAflag=-9999, overwrite=TRUE)
 
-m <- c(0.41, 1, 0)
+m <- c(0.41, 1, 1)
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 rc1 <- classify(deer_pred, rclmat, include.lowest=TRUE)
 plot(rc1)

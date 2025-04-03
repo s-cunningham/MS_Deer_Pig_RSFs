@@ -1,15 +1,16 @@
 # ----------------------------------------------------------------------------------------------------------------------------
-# Name: 
+# Name: Resource Selection functions for Pigs
 # Author: Stephanie Cunningham
-# Objective: Build resource selection function models via elastic net and estimate coefficients from a GLM
+# Objective: Run the resource selection function models for wild pigs via elastic net and estimate coefficients from a GLM
 # Input: Used and available points, with associated covariates extracted from rasters
 # Output: Coefficients (beta and SE of beta) from RSF models
-# Required packages: tidyverse, glmnet, glmnetUtils, arm
+# Required packages: tidyverse, glmnet, glmnetUtils, recipes, arm
 # ----------------------------------------------------------------------------------------------------------------------------
 
 library(tidyverse)
 library(glmnet)
 library(glmnetUtils)
+library(recipes)
 
 #### Helper functions for cva.glmnet ####
 # Copied from https://stackoverflow.com/questions/54803990/extract-the-best-parameters-from-cva-glmnet-object
@@ -32,13 +33,24 @@ get_model_params <- function(fit) {
 }
 
 #### Read data ####
-pigs <- read_csv("output/pigs_used_avail_covariates.csv")
+pigs <- read_csv("output/pigs_used_avail_covariates.csv") %>%
+  select(case,key,shrubs:water) 
+
+## Center and scale covariates using the recipes package
+# Determine the model formula and set which values to center + scale
+scaling_recipe <- recipe(case ~ ., data=pigs) %>%
+  step_center(all_numeric_predictors()) %>%
+  step_scale(all_numeric_predictors()) %>%
+  prep()
+
+# Do the actual centering and scaling of the numeric predictors
+pigs <- bake(scaling_recipe, pigs)
+
+# Add column for weight
+pigs <- pigs %>% mutate(weight=if_else(case==1, 1, 5000))
 
 ## Set up to loop by individual
-pigs <- read_csv("output/pigs_used_avail_covariates.csv")
-
-## Set up to loop by individual
-un.id <- unique(pigs$key)
+un.id <- unique(as.character(pigs$key))
 
 # Create list to save models
 pigs_rsf <- list()
@@ -61,7 +73,7 @@ for (i in 1:length(un.id)) {
   temp <- pigs %>% filter(key==un.id[i])
   
   # Set up data for LASSO in glmnet
-  x <- model.matrix(case ~ deciduous + gramanoids + bottomland + shrubs + foodcrops + water + I(water^2), temp)[, -1]
+  x <- model.matrix(case ~ decidmixed + bottomland + foodcrops + herbwetlands + shrubs + gramanoids +  water + I(water^2), temp)[, -1]
   y <- temp$case
   wts <- temp$weight
   
@@ -112,7 +124,7 @@ for (i in 1:length(un.id)) {
 }
 
 saveRDS(reduced_glms, "output/pigs_reduced_glms.RDS")
-reduced_glms <- readRDS("output/pigs_reduced_glms.RDS")
+# reduced_glms <- readRDS("output/pigs_reduced_glms.RDS")
 
 #### reduced GLMs ####
 # extract mean coeficients and combine into a single table
@@ -127,20 +139,24 @@ r_glms <- r_glms %>%
   rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%
   # drop intercept
   select(-intercept) %>%
+  # Reorder
+  select(decidmixed:gramanoids,foodcrops,water,water2) %>%
   # fill with 0
-  mutate(across(deciduous:water2, \(x) coalesce(x, 0)))
-
+  mutate(across(decidmixed:water2, \(x) coalesce(x, 0))) %>%
+  mutate(water2 = if_else(water==0, 0, water2))
+  
 # Add IDs 
 r_glms$id <- un.id
 
 # Drop those with unreasonable SEs (probably because the AKDE was too big)
-r_glms <- r_glms %>% 
-  # filter(id!="152312_North_1" & id!="152312_North_4" & id!="272_Central_3") %>%
-  # select(-id)
+r_glms <- r_glms %>%
+filter(id!="30251_Eastern_2" & id!="35493_Noxubee_6" & id!="35490_Noxubee_2" & 
+         id!="19212_Delta_2" & id!="19212_Delta_3" & id!="19219_Delta_2") %>%
+select(-id)
 
 # Calculate mean across all individuals
 glm_betas <- r_glms %>% 
-  reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
+  reframe(across(decidmixed:water2, \(x) mean(x, na.rm = TRUE)))
 
 write_csv(glm_betas, "output/pigs_glm_betas.csv")
 
@@ -156,20 +172,24 @@ se <- se %>%
   rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%
   # drop intercept
   select(-intercept) %>%
+  # Reorder
+  select(decidmixed:gramanoids,foodcrops,water,water2) %>%
   # fill with 0
-  mutate(across(deciduous:water2, \(x) coalesce(x, 0)))
+  mutate(across(decidmixed:water2, \(x) coalesce(x, 0))) %>%
+  mutate(water2 = if_else(water==0, 0, water2))
 
-# Add IDs 
+# Add IDs
 se$id <- un.id
 
 # Drop those with unreasonable SEs (probably because the AKDE was too big)
-se <- se %>% 
-  filter(id!="152312_North_1" & id!="152312_North_4" & id!="272_Central_3") %>%
+se <- se %>%
+  filter(id!="30251_Eastern_2" & id!="35493_Noxubee_6" & id!="35490_Noxubee_2" & 
+           id!="19212_Delta_2" & id!="19212_Delta_3" & id!="19219_Delta_2") %>%
   select(-id)
 
 # Calculate mean across all individuals
 glm_se <- se %>% 
-  reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
+  reframe(across(decidmixed:water2, \(x) mean(x, na.rm = TRUE)))
 
 write_csv(glm_se, "output/pigs_glm_se.csv")
 

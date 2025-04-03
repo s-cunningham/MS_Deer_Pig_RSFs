@@ -1,8 +1,16 @@
-## Run the resource selection function for deer
+# ----------------------------------------------------------------------------------------------------------------------------
+# Name: Resource Selection functions for Deer
+# Author: Stephanie Cunningham
+# Objective: Run the resource selection function models for deer via elastic net and estimate coefficients from a GLM
+# Input: Used and available points, with associated covariates extracted from rasters
+# Output: Coefficients (beta and SE of beta) from RSF models
+# Required packages: tidyverse, glmnet, glmnetUtils, recipes, arm
+# ----------------------------------------------------------------------------------------------------------------------------
 
 library(tidyverse)
 library(glmnet)
 library(glmnetUtils)
+library(recipes)
 
 #### Helper functions for cva.glmnet ####
 # Copied from https://stackoverflow.com/questions/54803990/extract-the-best-parameters-from-cva-glmnet-object
@@ -25,13 +33,24 @@ get_model_params <- function(fit) {
 }
 
 #### Read data ####
-deer <- read_csv("output/deer_used_avail_covariates.csv")
+deer <- read_csv("output/deer_used_avail_covariates.csv") %>%
+  select(case,key,shrubs:water)
+
+## Center and scale covariates using the recipes package
+# Determine the model formula and set which values to center + scale
+scaling_recipe <- recipe(case ~ ., data=deer) %>%
+  step_center(all_numeric_predictors()) %>%
+  step_scale(all_numeric_predictors()) %>%
+  prep()
+
+# Do the actual centering and scaling of the numeric predictors
+deer <- bake(scaling_recipe, deer)
+
+# Add column for weight
+deer <- deer %>% mutate(weight=if_else(case==1, 1, 5000))
 
 ## Set up to loop by individual
-deer <- read_csv("output/deer_used_avail_covariates.csv")
-
-## Set up to loop by individual
-un.id <- unique(deer$key)
+un.id <- unique(as.character(deer$key))
 
 # Create list to save models
 deer_rsf <- list()
@@ -105,7 +124,7 @@ for (i in 1:length(un.id)) {
 }
 
 saveRDS(reduced_glms, "output/deer_reduced_glms.RDS")
-reduced_glms <- readRDS("output/deer_reduced_glms.RDS")
+# reduced_glms <- readRDS("output/deer_reduced_glms.RDS")
 
 #### reduced GLMs ####
 # extract mean coeficients and combine into a single table
@@ -121,7 +140,9 @@ r_glms <- r_glms %>%
   # drop intercept
   select(-intercept) %>%
   # fill with 0
-  mutate(across(deciduous:water2, \(x) coalesce(x, 0)))
+  mutate(across(deciduous:water2, \(x) coalesce(x, 0))) %>%
+  # Make sure we don't have a coefficient for water 2 if no coefficient for water
+  mutate(water2 = if_else(water==0, 0, water2))
 
 # Add IDs 
 r_glms$id <- un.id
@@ -150,13 +171,15 @@ se <- se %>%
   # drop intercept
   select(-intercept) %>%
   # fill with 0
-  mutate(across(deciduous:water2, \(x) coalesce(x, 0)))
+  mutate(across(deciduous:water2, \(x) coalesce(x, 0))) %>%
+  # Make sure we don't have a coefficient for water 2 if no coefficient for water
+  mutate(water2 = if_else(water==0, 0, water2))
 
 # Add IDs 
 se$id <- un.id
 
 # Drop those with unreasonable SEs (probably because the AKDE was too big)
-se <- se %>% 
+se <- se %>%
   filter(id!="152312_North_1" & id!="152312_North_4" & id!="272_Central_3") %>%
   select(-id)
 
