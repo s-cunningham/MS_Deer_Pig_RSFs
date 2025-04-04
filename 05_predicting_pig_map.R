@@ -1,13 +1,31 @@
 library(tidyverse)
 library(terra)
+library(recipes)
 
 theme_set(theme_bw())
 
+#### Custom Functions ####
+# Function for scaling rasters
+rast_scale <- function(raster, scaling_recipe) {
+  
+  # Extract the variable name from the raster
+  var_name <- names(raster)
+  
+  # Extract the centering and scaling values from recipe
+  center_value <- scaling_recipe$steps[[1]]$means[[var_name]]  # Assuming step_center was first
+  scale_value <- scaling_recipe$steps[[2]]$sds[[var_name]]     # Assuming step_scale was second
+  
+  # Transform the raster
+  r_centered <- raster - center_value
+  r_scaled <- r_centered / scale_value
+  
+  return(r_scaled)
+}
+
+
 #### Read Data ####
 # locations (used & available)
-pigs <- read_csv("output/pigs_used_avail_locations.csv") %>%
-  # Add column for weight
-  mutate(weight=if_else(case==1, 1, 5000))
+pigs <- read_csv("output/pigs_used_avail_locations.csv")
 
 # Rasters
 rast_list <- c("data/landscape_data/shrublands_210m_sum.tif",
@@ -15,7 +33,7 @@ rast_list <- c("data/landscape_data/shrublands_210m_sum.tif",
                "data/landscape_data/gramanoids_210m_sum.tif", 
                "data/landscape_data/bottomlandHW_210m_sum.tif",
                "data/landscape_data/decidmixed_210m_sum.tif",
-               "data/landscape_data/evergreen_180m_sum.tif",
+               "data/landscape_data/evergreen_210m_sum.tif",
                "data/landscape_data/herbwetlands_210_sum.tif",
                "data/landscape_data/palatable_crops_210m_sum.tif") 
 layers <- rast(rast_list)
@@ -38,9 +56,31 @@ layers <- c(layers, water)
 names(layers) <- c("shrubs", "othercrops", "gramanoids", "bottomland", "decidmixed", "evergreen", "herbwetlands", "foodcrops", "water")
 
 #### Predict across MS counties ####
+pigs <- read_csv("output/pigs_used_avail_covariates.csv") %>%
+  select(case,key,shrubs:water)
+
+## Center and scale covariates using the recipes package
+# Determine the model formula and set which values to center + scale
+scaling_recipe <- recipe(case ~ ., data=pigs) %>%
+  step_center(all_numeric_predictors()) %>%
+  step_scale(all_numeric_predictors()) %>%
+  prep()
+
+# Do the actual centering and scaling of the numeric predictors
+pigs <- bake(scaling_recipe, pigs)
+
+## Center/scale rasters using values from recipe
+# Convert raster stack to list of rasters
+layers <- as.list(layers)
+
+# Run raster scaling function over list of rasters
+layers <- lapply(layers, rast_scale, scaling_recipe=scaling_recipe)
+
+# Convert centered/scaled raster list back to stack
+layers <- rast(layers)
 
 ## Read in coefficients
-betas <- read_csv("output/pigs_lasso_betas.csv")
+betas <- read_csv("output/pigs_glm_betas.csv")
 
 ## Read county shapefile
 counties <- vect("data/landscape_data/county_nrcs_a_ms.shp")
@@ -60,10 +100,15 @@ for (i in 1:length(split_counties)) {
   cty_layers <- crop(layers, cty, mask=TRUE)
 
   # Predict (w(x) = exp(x*beta))
-  pred <- exp(betas$bottomland[1])*cty_layers[["bottomland"]] +
-                # exp(betas$foodcrops[1])*cty_layers[["foodcrops"]] +
-                exp(betas$water[1])*cty_layers[["water"]] +
-                exp(betas$water2[1])*(cty_layers[["water"]]^2)
+  # decidmixed + bottomland + foodcrops + herbwetlands + shrubs + gramanoids +  water + I(water^2)
+  pred <- exp(betas$decidmixed[1]*cty_layers[["decidmixed"]] +
+              betas$bottomland[1]*cty_layers[["bottomland"]] +
+              betas$foodcrops[1]*cty_layers[["foodcrops"]] +
+              betas$herbwetlands[1]*cty_layers[["herbwetlands"]] +
+              betas$shrubs[1]*cty_layers[["shrubs"]] +
+              betas$gramanoids[1]*cty_layers[["gramanoids"]] + 
+              betas$water[1]*cty_layers[["water"]] +
+              betas$water2[1]*(cty_layers[["water"]]^2))
   
   # create filename
   filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, ".tif")

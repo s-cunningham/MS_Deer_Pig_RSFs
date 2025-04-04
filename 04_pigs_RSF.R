@@ -10,7 +10,6 @@
 library(tidyverse)
 library(glmnet)
 library(glmnetUtils)
-library(recipes)
 
 #### Helper functions for cva.glmnet ####
 # Copied from https://stackoverflow.com/questions/54803990/extract-the-best-parameters-from-cva-glmnet-object
@@ -33,24 +32,10 @@ get_model_params <- function(fit) {
 }
 
 #### Read data ####
-pigs <- read_csv("output/pigs_used_avail_covariates.csv") %>%
-  select(case,key,shrubs:water) 
-
-## Center and scale covariates using the recipes package
-# Determine the model formula and set which values to center + scale
-scaling_recipe <- recipe(case ~ ., data=pigs) %>%
-  step_center(all_numeric_predictors()) %>%
-  step_scale(all_numeric_predictors()) %>%
-  prep()
-
-# Do the actual centering and scaling of the numeric predictors
-pigs <- bake(scaling_recipe, pigs)
-
-# Add column for weight
-pigs <- pigs %>% mutate(weight=if_else(case==1, 1, 5000))
+pigs <- read_csv("output/pigs_used_avail_covariates.csv")
 
 ## Set up to loop by individual
-un.id <- unique(as.character(pigs$key))
+un.id <- unique(pigs$key)
 
 # Create list to save models
 pigs_rsf <- list()
@@ -73,7 +58,7 @@ for (i in 1:length(un.id)) {
   temp <- pigs %>% filter(key==un.id[i])
   
   # Set up data for LASSO in glmnet
-  x <- model.matrix(case ~ decidmixed + bottomland + foodcrops + herbwetlands + shrubs + gramanoids +  water + I(water^2), temp)[, -1]
+  x <- model.matrix(case ~ bottomland + deciduous + evergreen + mixed + gramanoids + shrubs + foodcrops + water + I(water^2), temp)[, -1]
   y <- temp$case
   wts <- temp$weight
   
@@ -140,9 +125,9 @@ r_glms <- r_glms %>%
   # drop intercept
   select(-intercept) %>%
   # Reorder
-  select(decidmixed:gramanoids,foodcrops,water,water2) %>%
+  select(deciduous:gramanoids,foodcrops,water,water2) %>%
   # fill with 0
-  mutate(across(decidmixed:water2, \(x) coalesce(x, 0))) %>%
+  mutate(across(deciduous:water2, \(x) coalesce(x, 0))) %>%
   mutate(water2 = if_else(water==0, 0, water2))
   
 # Add IDs 
@@ -156,7 +141,7 @@ select(-id)
 
 # Calculate mean across all individuals
 glm_betas <- r_glms %>% 
-  reframe(across(decidmixed:water2, \(x) mean(x, na.rm = TRUE)))
+  reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
 
 write_csv(glm_betas, "output/pigs_glm_betas.csv")
 
@@ -173,9 +158,9 @@ se <- se %>%
   # drop intercept
   select(-intercept) %>%
   # Reorder
-  select(decidmixed:gramanoids,foodcrops,water,water2) %>%
+  select(deciduous:gramanoids,foodcrops,water,water2) %>%
   # fill with 0
-  mutate(across(decidmixed:water2, \(x) coalesce(x, 0))) %>%
+  mutate(across(deciduous:water2, \(x) coalesce(x, 0))) %>%
   mutate(water2 = if_else(water==0, 0, water2))
 
 # Add IDs
@@ -189,7 +174,7 @@ se <- se %>%
 
 # Calculate mean across all individuals
 glm_se <- se %>% 
-  reframe(across(decidmixed:water2, \(x) mean(x, na.rm = TRUE)))
+  reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
 
 write_csv(glm_se, "output/pigs_glm_se.csv")
 

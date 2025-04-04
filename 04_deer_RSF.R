@@ -33,24 +33,10 @@ get_model_params <- function(fit) {
 }
 
 #### Read data ####
-deer <- read_csv("output/deer_used_avail_covariates.csv") %>%
-  select(case,key,shrubs:water)
-
-## Center and scale covariates using the recipes package
-# Determine the model formula and set which values to center + scale
-scaling_recipe <- recipe(case ~ ., data=deer) %>%
-  step_center(all_numeric_predictors()) %>%
-  step_scale(all_numeric_predictors()) %>%
-  prep()
-
-# Do the actual centering and scaling of the numeric predictors
-deer <- bake(scaling_recipe, deer)
-
-# Add column for weight
-deer <- deer %>% mutate(weight=if_else(case==1, 1, 5000))
+deer <- read_csv("output/deer_used_avail_covariates.csv")
 
 ## Set up to loop by individual
-un.id <- unique(as.character(deer$key))
+un.id <- unique(deer$key)
 
 # Create list to save models
 deer_rsf <- list()
@@ -73,7 +59,7 @@ for (i in 1:length(un.id)) {
   temp <- deer %>% filter(key==un.id[i])
   
   # Set up data for LASSO in glmnet
-  x <- model.matrix(case ~ deciduous + evergreen + bottomland + gramanoids + shrubs + foodcrops + water + I(water^2), temp)[, -1]
+  x <- model.matrix(case ~ deciduous + evergreen + mixed + bottomland + herbwetl + gramanoids + shrubs + foodcrops + water + I(water^2), temp)[, -1]
   y <- temp$case
   wts <- temp$weight
   
@@ -140,7 +126,7 @@ r_glms <- r_glms %>%
   # drop intercept
   select(-intercept) %>%
   # fill with 0
-  mutate(across(deciduous:water2, \(x) coalesce(x, 0))) %>%
+  mutate(across(deciduous:evergreen, \(x) coalesce(x, 0))) %>%
   # Make sure we don't have a coefficient for water 2 if no coefficient for water
   mutate(water2 = if_else(water==0, 0, water2))
 
@@ -149,13 +135,19 @@ r_glms$id <- un.id
 
 # Drop those with unreasonable SEs (probably because the AKDE was too big)
 r_glms <- r_glms %>% 
-  filter(id!="152311_North_1" & id!="152314_North_1" & id!="81711_Delta_1" &
-           id!="81711_Delta_3" & id!="81711_Delta_5") %>%
+  filter(id!="272_Central_3" & id!="152312_North_1" & id!="152312_North_4" & id!="297_Central_6" & id!="81864_Delta_1") %>%
+  # filter(id!="152312_North_1" & id!="152312_North_3" & id!="152312_North_4" & id!="81711_Delta_3" &
+  #          id!="81711_Delta_6" & id!="81711_Delta_5" & id!="87899_Delta_1" & id!="81864_Delta_1" & 
+  #          id!="272_Central_3") %>%
+  # filter(id!="152312_North_1" & id!="152312_North_3" & id!="152312_North_4" & id!="81711_Delta_3" &
+  #          id!="81711_Delta_6" & id!="81711_Delta_5" & id!="87899_Delta_1" & id!="81864_Delta_1" & 
+  #          id!="272_Central_3" & id!="100_Central_2" & id!="97_Central_2" & id!="100_Central_1" &
+  #          id!="297_Central_6" & id!="255_Central_3" & id!="152308_North_3" & id!="272_Central_3" & id!="81177_Delta_5") %>%
   select(-id)
 
 # Calculate mean across all individuals
 glm_betas <- r_glms %>% 
-  reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
+  reframe(across(deciduous:evergreen, \(x) mean(x, na.rm = TRUE)))
 
 write_csv(glm_betas, "output/deer_glm_betas.csv")
 
@@ -168,7 +160,7 @@ se <- do.call(bind_rows, se)
 
 # rename intercept and add ID column
 se <- se %>%
-  rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%
+  rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%  
   # drop intercept
   select(-intercept) %>%
   # fill with 0
@@ -181,8 +173,11 @@ se$id <- un.id
 
 # Drop those with unreasonable SEs (probably because the AKDE was too big)
 se <- se %>%
-  filter(id!="152311_North_1" & id!="152314_North_1" & id!="81711_Delta_1" &
-           id!="81711_Delta_3" & id!="81711_Delta_5") %>%
+  filter(id!="272_Central_3" & id!="152312_North_1" & id!="152312_North_4" & id!="297_Central_6" & id!="81864_Delta_1") %>%
+  # filter(id!="152312_North_1" & id!="152312_North_3" & id!="152312_North_4" & id!="81711_Delta_3" &
+  #          id!="81711_Delta_6" & id!="81711_Delta_5" & id!="87899_Delta_1"  & 
+  #          & id!="100_Central_2" & id!="97_Central_2" & id!="100_Central_1" &
+  #          id!="297_Central_6" & id!="255_Central_3" & id!="152308_North_3" & id!="272_Central_3" & id!="81177_Delta_5") %>%
   select(-id)
 
 # Calculate mean across all individuals

@@ -10,39 +10,6 @@
 library(tidyverse)
 library(terra)
 library(tidyterra)
-library(recipes)
-
-#### Custom Functions ####
-# Function for scaling rasters
-rast_scale <- function(raster, scaling_recipe) {
-  
-  # Extract the variable name from the raster
-  var_name <- names(raster)
-  
-  # Extract the centering and scaling values from recipe
-  center_value <- scaling_recipe$steps[[1]]$means[[var_name]]  # Assuming step_center was first
-  scale_value <- scaling_recipe$steps[[2]]$sds[[var_name]]     # Assuming step_scale was second
-  
-  # Transform the raster
-  r_centered <- raster - center_value
-  r_scaled <- r_centered / scale_value
-  
-  return(r_scaled)
-}
-
-#### 
-deer <- read_csv("output/deer_used_avail_covariates.csv") %>%
-  select(case,key,shrubs:water)
-
-## Center and scale covariates using the recipes package
-# Determine the model formula and set which values to center + scale
-scaling_recipe <- recipe(case ~ ., data=deer) %>%
-  step_center(all_numeric_predictors()) %>%
-  step_scale(all_numeric_predictors()) %>%
-  prep()
-
-# Do the actual centering and scaling of the numeric predictors
-deer <- bake(scaling_recipe, deer)
 
 #### Read in rasters ####
 # Rasters
@@ -78,31 +45,24 @@ ext(water) <- ext(layers)
 
 layers <- c(layers, water)
 
+# Center and scale continuous rasters
+layers <- scale(layers)
+
 # Rename layers
 names(layers) <- c("shrubs", "gramanoids", "foodcrops", "evergreen", "deciduous", "water")
 
-## Center/scale rasters using values from recipe
-# Convert raster stack to list of rasters
-layers <- as.list(layers)
-
-# Run raster scaling function over list of rasters
-layers <- lapply(layers, rast_scale, scaling_recipe=scaling_recipe)
-
-# Convert centered/scaled raster list back to stack
-layers <- rast(layers)
-
-#### --- Predict across MS counties --- ####
+#### Predict across MS counties ####
 # *Uses wayyyy less memory than doing the whole state at once*
 
 ## Read in coefficients
 # Betas
 betas <- read_csv("output/deer_glm_betas.csv") %>%
-      # Pivot so that covariates are in a in a column, and beta coefficients in another column
-      pivot_longer(1:7, names_to="covariate", values_to="beta")
+  # Pivot so that covariates are in a in a column, and beta coefficients in another column
+  pivot_longer(1:ncol(.), names_to="covariate", values_to="beta")
 # Standard error
 se <- read_csv("output/deer_glm_se.csv") %>%
   # Pivot so that covariates are in a in a column, and beta coefficients in another column
-  pivot_longer(1:7, names_to="covariate", values_to="se")
+  pivot_longer(1:ncol(.), names_to="covariate", values_to="se")
 
 # Join into a single data frame
 betas <- left_join(betas, se, by=c("covariate"))
@@ -132,54 +92,55 @@ for (i in 1:length(split_counties)) {
   ## Mean prediction
   # Predict (w(x) = exp(x*beta))
   pred <- exp(betas$beta[1]*cty_layers[["deciduous"]] +
-              betas$beta[2]*cty_layers[["evergreen"]] +
-              betas$beta[3]*cty_layers[["gramanoids"]] +
-              betas$beta[4]*cty_layers[["shrubs"]] +
-              betas$beta[5]*cty_layers[["foodcrops"]] +
-              betas$beta[6]*cty_layers[["water"]] +
-              betas$beta[7]*(cty_layers[["water"]]^2))
+                betas$beta[2]*cty_layers[["evergreen"]] +
+                betas$beta[3]*cty_layers[["gramanoids"]] +
+                betas$beta[4]*cty_layers[["shrubs"]] +
+                betas$beta[5]*cty_layers[["foodcrops"]] +
+                betas$beta[6]*cty_layers[["water"]] +
+                betas$beta[7]*(cty_layers[["water"]]^2))
   
   # create filename
   filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_mean.tif")
+
+  # Export county prediction raster
+  writeRaster(pred, filename, overwrite=TRUE)
   
-  # Export county prediction raster
-  writeRaster(pred, filename, overwrite=TRUE)
-  
-  # something not right with math
-  # ## Lower CI prediction
-  pred <- exp(betas$lci[1]*cty_layers[["deciduous"]] +
-              betas$lci[2]*cty_layers[["evergreen"]] +
-              betas$lci[3]*cty_layers[["gramanoids"]] +
-              betas$lci[4]*cty_layers[["shrubs"]] +
-              betas$lci[5]*cty_layers[["foodcrops"]] +
-              betas$lci[6]*cty_layers[["water"]] +
-              betas$lci[7]*(cty_layers[["water"]]^2))
-
-  # create filename
-  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
-
-  # Export county prediction raster
-  writeRaster(pred, filename, overwrite=TRUE)
-
-  ## Upper CI prediction
-  pred <- exp(betas$uci[1]*cty_layers[["deciduous"]] +
-              betas$uci[2]*cty_layers[["evergreen"]] +
-              betas$uci[3]*cty_layers[["gramanoids"]] +
-              betas$uci[4]*cty_layers[["shrubs"]] +
-              betas$uci[5]*cty_layers[["foodcrops"]] +
-              betas$uci[6]*cty_layers[["water"]] +
-              betas$uci[7]*(cty_layers[["water"]]^2))
-
-  # create filename
-  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
-
-  # Export county prediction raster
-  writeRaster(pred, filename, overwrite=TRUE)
+  # # something not right with math
+  # # ## Lower CI prediction
+  # pred <- exp(betas$lci[1]*cty_layers[["deciduous"]] +
+  #               betas$lci[2]*cty_layers[["evergreen"]] +
+  #               betas$lci[3]*cty_layers[["gramanoids"]] +
+  #               betas$lci[4]*cty_layers[["shrubs"]] +
+  #               betas$lci[5]*cty_layers[["foodcrops"]] +
+  #               betas$lci[6]*cty_layers[["water"]] +
+  #               betas$lci[7]*(cty_layers[["water"]]^2))
+  # 
+  # # create filename
+  # filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
+  # 
+  # # Export county prediction raster
+  # writeRaster(pred, filename, overwrite=TRUE)
+  # 
+  # ## Upper CI prediction
+  # pred <- exp(betas$uci[1]*cty_layers[["deciduous"]] +
+  #               betas$uci[2]*cty_layers[["evergreen"]] +
+  #               betas$uci[3]*cty_layers[["gramanoids"]] +
+  #               betas$uci[4]*cty_layers[["shrubs"]] +
+  #               betas$uci[5]*cty_layers[["foodcrops"]] +
+  #               betas$uci[6]*cty_layers[["water"]] +
+  #               betas$uci[7]*(cty_layers[["water"]]^2))
+  # 
+  # # create filename
+  # filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
+  # 
+  # # Export county prediction raster
+  # writeRaster(pred, filename, overwrite=TRUE)
 }
+
 
 #### Combine county rasters into full state ####
 ## List county rasters
-files <- list.files(path="output/deer_county_preds/", pattern="_mean.tif", full.names=TRUE)
+files <- list.files(path="output/deer_county_preds/", pattern="_mean.tif$", full.names=TRUE)
 
 ## Read all files in as rasters
 rlist <- lapply(files, rast)

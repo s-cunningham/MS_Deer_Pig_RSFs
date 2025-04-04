@@ -5,16 +5,20 @@ theme_set(theme_bw())
 
 #### Read Data ####
 # locations (used & available)
-deer <- read_csv("output/deer_used_avail_locations.csv") 
+deer <- read_csv("output/deer_used_avail_locations.csv") %>%
+  # Add column for weight
+  mutate(weight=if_else(case==1, 1, 5000))
 
 # Rasters
-rast_list <- c("data/landscape_data/shrubs_27cellsr_sum.tif",
-               "data/landscape_data/gramanoids_27cellsr_sum.tif", 
-               "data/landscape_data/foodcrops_27cellsr_sum.tif", 
-               "data/landscape_data/deciduous_27cellsr_sum.tif",
-               "data/landscape_data/mixed_27cellsr_sum.tif",
-               "data/landscape_data/evergreen_27cellsr_sum.tif", 
-               "data/landscape_data/bottomland_27cellsr_sum.tif") 
+rast_list <- c("data/landscape_data/evergreen_180m_sum.tif",
+               "data/landscape_data/deciduous_180m_sum.tif",
+               "data/landscape_data/mixed_180m_sum.tif",
+               "data/landscape_data/shrublands_180m_sum.tif",
+               "data/landscape_data/othercrops_180m_sum.tif",
+               "data/landscape_data/gramanoids_180m_sum.tif", 
+               "data/landscape_data/bottomlandHW_180m_sum.tif",
+               "data/landscape_data/herbwetlands_180_sum.tif",
+               "data/landscape_data/palatable_crops_180m_sum.tif") 
 layers <- rast(rast_list)
 
 # Reclassify missing data to 0
@@ -22,7 +26,7 @@ m <- rbind(c(NA, 0))
 layers <- classify(layers, m)
 
 # Convert to % 
-layers <- layers / 2289
+layers <- layers / 113
 
 # read water
 water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
@@ -31,9 +35,12 @@ ext(water) <- ext(layers)
 
 layers <- c(layers, water)
 
-# Rename layers
-names(layers) <- c("shrubs", "gramanoids", "foodcrops", "deciduous", "mixed", "evergreen", "bottomland", "water")
+# Center and scale continuous rasters
+layers <- scale(layers)
 
+# Rename layers
+names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops",
+                   "gramanoids", "bottomland", "herbwetl", "foodcrops", "water")
 
 #### Extract covariates and used and available locations ####
 
@@ -52,7 +59,7 @@ dat_deer <- extract(layers, deer_v)
 deer <- bind_cols(deer, dat_deer)
 
 # correlation matrix
-cor(deer[,c(7:14)])
+cor(deer[,c(8:17)])
 
 # create key column
 deer <- deer %>%
@@ -60,6 +67,3 @@ deer <- deer %>%
 
 # write file so we don't always have to wait for the rasters to do stuff
 write_csv(deer, "output/deer_used_avail_covariates.csv")
-
-
-

@@ -14,15 +14,18 @@ theme_set(theme_bw())
 
 #### Read Data ####
 # locations (used & available)
-pigs <- read_csv("output/pigs_used_avail_locations.csv") 
+pigs <- read_csv("output/pigs_used_avail_locations.csv") %>%
+  # Add column for weight
+  mutate(weight=if_else(case==1, 1, 5000))
 
 # Rasters
-rast_list <- c("data/landscape_data/shrublands_210m_sum.tif",
+rast_list <- c("data/landscape_data/evergreen_210m_sum.tif",
+               "data/landscape_data/deciduous_210m_sum.tif",
+               "data/landscape_data/mixed_210m_sum.tif",
+               "data/landscape_data/shrublands_210m_sum.tif",
                "data/landscape_data/othercrops_210m_sum.tif",
                "data/landscape_data/gramanoids_210m_sum.tif", 
                "data/landscape_data/bottomlandHW_210m_sum.tif",
-               "data/landscape_data/decidmixed_210m_sum.tif",
-               "data/landscape_data/evergreen_180m_sum.tif",
                "data/landscape_data/herbwetlands_210_sum.tif",
                "data/landscape_data/palatable_crops_210m_sum.tif") 
 layers <- rast(rast_list)
@@ -41,8 +44,11 @@ ext(water) <- ext(layers)
 
 layers <- c(layers, water)
 
+# Center and scale continuous rasters
+layers <- scale(layers)
+
 # Rename layers
-names(layers) <- c("shrubs", "othercrops", "gramanoids", "bottomland", "decidmixed", "evergreen", "herbwetlands", "foodcrops", "water")
+names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops", "gramanoids", "bottomland", "herbwetl", "foodcrops", "water")
 # global(layers[["shrubs"]], fun="mean")
 # global(layers[["shrubs"]], fun="sd")
 
@@ -63,9 +69,9 @@ dat_pigs <- extract(layers, pigs_v)
 pigs <- bind_cols(pigs, dat_pigs)
 
 # Correlation matrix
-cor(pigs[,c(7:15)])
+cor(pigs[,c(8:15)])
 
-# create key column (unique identifier with collar id, study, and "burst" from segmentation)
+# create key column
 pigs <- pigs %>%
   unite("key", c("id", "burst"), sep="_", remove=FALSE)
 
