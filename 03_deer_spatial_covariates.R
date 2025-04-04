@@ -8,9 +8,13 @@ theme_set(theme_bw())
 deer <- read_csv("output/deer_used_avail_locations.csv") 
 
 # Rasters
-rast_list <- c("data/landscape_data/shrublands_180m_sum.tif",
-               "data/landscape_data/gramanoids_180m_sum.tif", 
-               "data/landscape_data/palatable_crops_180m_sum.tif") 
+rast_list <- c("data/landscape_data/shrubs_27cellsr_sum.tif",
+               "data/landscape_data/gramanoids_27cellsr_sum.tif", 
+               "data/landscape_data/foodcrops_27cellsr_sum.tif", 
+               "data/landscape_data/deciduous_27cellsr_sum.tif",
+               "data/landscape_data/mixed_27cellsr_sum.tif",
+               "data/landscape_data/evergreen_27cellsr_sum.tif", 
+               "data/landscape_data/bottomland_27cellsr_sum.tif") 
 layers <- rast(rast_list)
 
 # Reclassify missing data to 0
@@ -18,20 +22,7 @@ m <- rbind(c(NA, 0))
 layers <- classify(layers, m)
 
 # Convert to % 
-layers <- layers / 113
-
-# Forest rasters (accounting for 50% mixed decid/evergreen)
-forest <- c("data/landscape_data/evergreenMODIFIED_180m_sum.tif",
-            "data/landscape_data/allhardwoodsMODIFIED_180m_sum.tif")
-forest <- rast(forest)
-
-# Reclassify missing data to 0
-forest <- classify(forest, m)
-
-# Convert to % 
-forest <- forest / 226
-
-layers <- c(layers, forest)
+layers <- layers / 2289
 
 # read water
 water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
@@ -40,11 +31,8 @@ ext(water) <- ext(layers)
 
 layers <- c(layers, water)
 
-# Center and scale continuous rasters
-# layers <- scale(layers)
-
 # Rename layers
-names(layers) <- c("shrubs", "gramanoids", "foodcrops", "evergreen", "deciduous", "water")
+names(layers) <- c("shrubs", "gramanoids", "foodcrops", "deciduous", "mixed", "evergreen", "bottomland", "water")
 
 
 #### Extract covariates and used and available locations ####
@@ -64,7 +52,7 @@ dat_deer <- extract(layers, deer_v)
 deer <- bind_cols(deer, dat_deer)
 
 # correlation matrix
-cor(deer[,c(7:12)])
+cor(deer[,c(7:14)])
 
 # create key column
 deer <- deer %>%
@@ -72,3 +60,6 @@ deer <- deer %>%
 
 # write file so we don't always have to wait for the rasters to do stuff
 write_csv(deer, "output/deer_used_avail_covariates.csv")
+
+
+

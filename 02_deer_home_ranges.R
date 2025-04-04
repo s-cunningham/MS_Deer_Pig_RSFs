@@ -429,9 +429,15 @@ for (i in 1:nrow(ud)) {
   # Convert to sf
   grid <- st_as_sf(grid)
   
+  key <- paste0(ud$id[i], "_", ud$burst[i])
+  
+  print(ggplot() +
+    geom_sf(data=grid) +
+    ggtitle(key))
+    
   # Save as shapefile
   filename <- paste0("output/deer_avail_cells/", ud$id[i], "_", ud$burst[i], "-avail.shp")
-  st_write(grid, filename, append=FALSE)
+  # st_write(grid, filename, append=FALSE)
   
   # convert back to sf
   pts <- st_as_sf(pts)

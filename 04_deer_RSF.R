@@ -73,7 +73,7 @@ for (i in 1:length(un.id)) {
   temp <- deer %>% filter(key==un.id[i])
   
   # Set up data for LASSO in glmnet
-  x <- model.matrix(case ~ deciduous + evergreen + gramanoids + shrubs + foodcrops + water + I(water^2), temp)[, -1]
+  x <- model.matrix(case ~ deciduous + evergreen + bottomland + gramanoids + shrubs + foodcrops + water + I(water^2), temp)[, -1]
   y <- temp$case
   wts <- temp$weight
   
@@ -149,7 +149,8 @@ r_glms$id <- un.id
 
 # Drop those with unreasonable SEs (probably because the AKDE was too big)
 r_glms <- r_glms %>% 
-  filter(id!="152312_North_1" & id!="152312_North_4" & id!="272_Central_3") %>%
+  filter(id!="152311_North_1" & id!="152314_North_1" & id!="81711_Delta_1" &
+           id!="81711_Delta_3" & id!="81711_Delta_5") %>%
   select(-id)
 
 # Calculate mean across all individuals
@@ -180,7 +181,8 @@ se$id <- un.id
 
 # Drop those with unreasonable SEs (probably because the AKDE was too big)
 se <- se %>%
-  filter(id!="152312_North_1" & id!="152312_North_4" & id!="272_Central_3") %>%
+  filter(id!="152311_North_1" & id!="152314_North_1" & id!="81711_Delta_1" &
+           id!="81711_Delta_3" & id!="81711_Delta_5") %>%
   select(-id)
 
 # Calculate mean across all individuals
