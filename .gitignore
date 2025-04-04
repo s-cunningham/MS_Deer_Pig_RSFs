@@ -20,6 +20,7 @@ example_elastic_net.R
 visualizing_pig_land_cover.R
 scratch_paper.R
 glmm_HR_predict.R
+randomforest_faffing_v2.R
 
 # Session Data files
 .RData
