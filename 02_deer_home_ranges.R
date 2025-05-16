@@ -10,7 +10,7 @@ theme_set(theme_bw())
 
 ## Write function to subset and convert to ltraj
 # Will need this for segmenting migration
-lv_func <- function(x, id_) {
+lv_func <- function(x, id_, lmin=30) {
   
   # Subset by ID
   temp <- x %>% 
@@ -27,7 +27,7 @@ lv_func <- function(x, id_) {
   ltr <- as.ltraj(xy=temp[,c("x","y")], date=temp$date, id=temp$id)
   
   # Run lavielle
-  lv <- lavielle(ltr, Lmin=30, which="R2n", Kmax=10, plotit=TRUE)
+  lv <- lavielle(ltr, Lmin=lmin, which="R2n", Kmax=10, plotit=TRUE)
   
   k_try <- chooseseg(lv, S=0.75, output="opt", draw=TRUE)
   
@@ -46,7 +46,7 @@ lv_func <- function(x, id_) {
   
   # Convert to data frame
   df <- ld(fp)
-  # remove some columns we don't need (i.e. match deer_res)
+  # remove some columns we don't need (i.e. match pigs_res)
   df <- df %>% as_tibble() %>%
     # reorder columns
     dplyr::select(id, x:rel.angle, burst) %>%
@@ -159,7 +159,7 @@ for (i in 1:length(un.id)) {
 ## Look through plots and manually list which IDs probably will need to be segmented, as well as those that might need to be filtered by dates to remove patchy data
 
 ## IDs that need trimming
-temp <- deer_res %>% filter(id=="340_Central")
+temp <- deer_res %>% filter(id=="100_Central")
 ggplot(temp, aes(x=x, y=y, color=date)) +
   geom_path() + geom_point() 
 ggplot(temp, aes(x=date, y=R2n, color=date)) +
@@ -188,9 +188,8 @@ deer_res <- deer_res %>% filter((id!="252_Central") | (id=="252_Central" & date 
 deer_res <- deer_res %>% filter((id!="27_Central") | (id=="27_Central" & (date>="2018-08-31 00:00:00" & date<="2019-03-27 23:59:59")))
 
 ## List of IDs that will likely need to be segmented
-to_segment <- c("152312_North", "152308_North", "87924_Delta", "87919_Delta", "81711_Delta", "97_Central", "90_Central", 
-                "47_Central", "340_Central",  "344_Central", "339_Central", "333_Central", "297_Central", "295_Central",
-                "293_Central", "281_Central", "28_Central", "272_Central", "27_Central", "25_Central", "20_Central", "100_Central")
+to_segment <- c("87924_Delta", "87898_Delta", "81864_Delta", "81711_Delta", "90_Central", 
+                "293_Central", "297_Central", "344_Central", "339_Central", "20_Central")
 
 # Subset data without deer that need to be segmented (so that we can add the segments onto it)
 deer <- deer_res %>% 
@@ -207,7 +206,7 @@ deer <- deer_res %>%
 # deer <- deer %>% filter(id!="81711_Delta") #& ,id!="87924_Delta"  &d!="27_Central"
 
 ## Need to do this manually, and make sure to add the segmented data to 'deer'
-s <- lv_func(deer_res, "100_Central")  
+s <- lv_func(deer_res, "81864_Delta", 10)  
 
 # keep only some segments of 87924_Delta
 # s <- s %>% filter(key=="87924_Delta_1" | key=="87924_Delta_3" | key=="87924_Delta_5"| key=="87924_Delta_6" | key=="87924_Delta_7")
@@ -235,7 +234,6 @@ deer <- bind_rows(deer, s)
 # 272_Central : 6
 # 27_Central : 9
 # 20_Central : 5
-# 100_Central : 3
 # Run 81711_Delta with 10 breaks...or, stay with the optimal 5 and subset anything that doesn't have 30 or 60 days? What's the average HR crossing time?
 
 # Check if there are any IDs in the to_segment vector that are not in the deer tibble after segmenting and binding
@@ -247,7 +245,7 @@ deer <- read_csv("output/segmented_deer.csv")
 
 # how many days in each segment?
 ndays <- deer %>% mutate(day=format(date, "%Y-%m-%d")) %>% group_by(key) %>% reframe(ndays=length(unique(day)))
-short <- ndays %>% filter(ndays <22)
+short <- ndays %>% filter(ndays <60)
 
 # Removed anything with less than 3 weeks of data
 deer <- deer %>% filter(!(key %in% short$key))
@@ -281,7 +279,7 @@ deer <- deer %>%
 
 dat <- deer %>%      
             # need the lat long, etc. in a specific order 
-            dplyr::select(key, location.long, location.lat, date) %>% 
+            dplyr::select(id, location.long, location.lat, date) %>% 
             # also need columns to have a specific name
             rename(individual.local.identifier=key, timestamp=date)
 

@@ -35,9 +35,25 @@ get_model_params <- function(fit) {
 #### Read data ####
 deer <- read_csv("output/deer_used_avail_covariates.csv")
 
+# Center and scale covariates
+deer[,9:19] <- scale(deer[,9:19])
+
 ## Set up to loop by individual
 un.id <- unique(deer$key)
 
+# Check ratio of used:available for each deer
+ua <- deer %>% 
+  select(key, case) %>% 
+  group_by(key, case) %>%
+  count() %>%
+  ungroup() %>%
+  pivot_wider(names_from="case", values_from="n") %>%
+  mutate(used_avail=`1`/`0`,
+         npts=`1`+`0`) %>%
+  select(key, npts, used_avail)
+
+
+#### Run the RSF ####
 # Create list to save models
 deer_rsf <- list()
 
@@ -45,10 +61,15 @@ deer_rsf <- list()
 cfs <- list()
 
 # # create a list to save VIF from GLMs
-# glm_vifs <- list()
+glm_vifs <- list()
 
 # Save GLMS with reduced variable sets
 reduced_glms <- list()
+glm_names <- character()
+
+# Create vector to indicate when warnings are thrown
+fail <- numeric(length(un.id))
+lasso_fail <- numeric(length(un.id))
 
 #### Run RSF with elastic net (which might sometimes end up as a lasso or ridge) ####
 # Loop to run LASSO over each individual HR
@@ -59,12 +80,16 @@ for (i in 1:length(un.id)) {
   temp <- deer %>% filter(key==un.id[i])
   
   # Set up data for LASSO in glmnet
-  x <- model.matrix(case ~ deciduous + evergreen + mixed + bottomland + herbwetl + gramanoids + shrubs + foodcrops + water + I(water^2), temp)[, -1]
+  x <- model.matrix(case ~ deciduous + evergreen + bottomland + gramanoids + shrubs + foodcrops + developed, temp)[, -1]
   y <- temp$case
   wts <- temp$weight
   
   # Run cross validation for alpha and lambda
-  cv.out <- cva.glmnet(x, y, data=temp, weights=wts, family="binomial", type.measure="deviance")
+  tryCatch(cv.out <- cva.glmnet(x, y, data=temp, weights=wts, family="binomial", type.measure="deviance"),
+           warning = function(w) {
+             print(w)
+             lasso_fail[i] <<- 1
+           })
   
   # Extract "best" paramters
   cv.out.p <- get_model_params(cv.out)
@@ -73,8 +98,8 @@ for (i in 1:length(un.id)) {
   print(paste0("Alpha for ", un.id[i], " is ", cv.out.p$alpha[1]))
   
   # Run the LASSO with the optimal lambda and alpha
-  rsf <- glmnet(x, y, family="binomial", alpha=cv.out.p$alpha[1], weights=wts, lambda=cv.out.p$lambdaMin[1])
-  
+  rsf <- glmnet(x, y, family="binomial", alpha=cv.out.p$alpha[1], weights=wts, lambda=cv.out.p$lambdaMin[1]) #l
+
   # add model object to list
   deer_rsf[[i]] <- rsf
   
@@ -99,90 +124,84 @@ for (i in 1:length(un.id)) {
     # Create a formula with the non-zero coefficients  
     mod_form <- formula(paste("case ~", coefs))
     
-    # run regression model with selected covariates
-    test <- glm(mod_form, data=temp, family=binomial(link = "logit"), weight=weight)
+    # run regression model with selected covariates    
+    tryCatch(test <- glm(mod_form, data=temp, family=binomial(link = "logit"), weight=weight),
+             warning = function(w) {
+               print(w)
+               fail[i] <<- 1
+             })
+    
+    # test2 <- arm::bayesglm(mod_form, data=temp, family=binomial(link = "logit"), weight=weight)
     
     # Save GLM with the reduced covariate set
     reduced_glms[[i]] <- test
     
-    # glm_vifs[[i]] <- car::vif(test)
+    glm_names <- c(glm_names, un.id[i])
+    glm_vifs[[i]] <- car::vif(test)
   }
 }
+
+# add names to list
 
 saveRDS(reduced_glms, "output/deer_reduced_glms.RDS")
 # reduced_glms <- readRDS("output/deer_reduced_glms.RDS")
 
+glm_summary <- lapply(reduced_glms, summary)
+
 #### reduced GLMs ####
-# extract mean coeficients and combine into a single table
-r_glms <- lapply(reduced_glms, coef)
-r_glms <- lapply(r_glms, as.data.frame)
-r_glms <- lapply(r_glms, t)
-r_glms <- lapply(r_glms, as.data.frame)
-r_glms <- do.call(bind_rows, r_glms)
-
-r_glms <- r_glms %>% 
-  as_tibble() %>%
-  rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%
-  # drop intercept
-  select(-intercept) %>%
-  # fill with 0
-  mutate(across(deciduous:evergreen, \(x) coalesce(x, 0))) %>%
-  # Make sure we don't have a coefficient for water 2 if no coefficient for water
-  mutate(water2 = if_else(water==0, 0, water2))
-
-# Add IDs 
-r_glms$id <- un.id
-
-# Drop those with unreasonable SEs (probably because the AKDE was too big)
-r_glms <- r_glms %>% 
-  filter(id!="272_Central_3" & id!="152312_North_1" & id!="152312_North_4" & id!="297_Central_6" & id!="81864_Delta_1") %>%
-  # filter(id!="152312_North_1" & id!="152312_North_3" & id!="152312_North_4" & id!="81711_Delta_3" &
-  #          id!="81711_Delta_6" & id!="81711_Delta_5" & id!="87899_Delta_1" & id!="81864_Delta_1" & 
-  #          id!="272_Central_3") %>%
-  # filter(id!="152312_North_1" & id!="152312_North_3" & id!="152312_North_4" & id!="81711_Delta_3" &
-  #          id!="81711_Delta_6" & id!="81711_Delta_5" & id!="87899_Delta_1" & id!="81864_Delta_1" & 
-  #          id!="272_Central_3" & id!="100_Central_2" & id!="97_Central_2" & id!="100_Central_1" &
-  #          id!="297_Central_6" & id!="255_Central_3" & id!="152308_North_3" & id!="272_Central_3" & id!="81177_Delta_5") %>%
-  select(-id)
-
-# Calculate mean across all individuals
-glm_betas <- r_glms %>% 
-  reframe(across(deciduous:evergreen, \(x) mean(x, na.rm = TRUE)))
-
-write_csv(glm_betas, "output/deer_glm_betas.csv")
-
-
-# Extract SE for confidence intervals
-se <- lapply(reduced_glms, arm::se.coef)
+## Extract SE for confidence intervals
+se <- lapply(reduced_glms, arm::se.coef)   # is ordering right??
 
 # combine into a tibble
 se <- do.call(bind_rows, se)
 
 # rename intercept and add ID column
 se <- se %>%
-  rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%  
+  rename(intercept=`(Intercept)`) %>%  
   # drop intercept
   select(-intercept) %>%
   # fill with 0
-  mutate(across(deciduous:water2, \(x) coalesce(x, 0))) %>%
-  # Make sure we don't have a coefficient for water 2 if no coefficient for water
-  mutate(water2 = if_else(water==0, 0, water2))
+  mutate(across(deciduous:developed, \(x) coalesce(x, 0)))
 
 # Add IDs 
-se$id <- un.id
+se$id <- glm_names
 
-# Drop those with unreasonable SEs (probably because the AKDE was too big)
-se <- se %>%
-  filter(id!="272_Central_3" & id!="152312_North_1" & id!="152312_North_4" & id!="297_Central_6" & id!="81864_Delta_1") %>%
-  # filter(id!="152312_North_1" & id!="152312_North_3" & id!="152312_North_4" & id!="81711_Delta_3" &
-  #          id!="81711_Delta_6" & id!="81711_Delta_5" & id!="87899_Delta_1"  & 
-  #          & id!="100_Central_2" & id!="97_Central_2" & id!="100_Central_1" &
-  #          id!="297_Central_6" & id!="255_Central_3" & id!="152308_North_3" & id!="272_Central_3" & id!="81177_Delta_5") %>%
-  select(-id)
+# Drop those with bad models
+se <- se[which(fail==0),]
 
 # Calculate mean across all individuals
 glm_se <- se %>% 
-  reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
+  reframe(across(deciduous:developed, \(x) mean(x, na.rm = TRUE)))
 
 write_csv(glm_se, "output/deer_glm_se.csv")
+
+
+
+## extract mean beta coeficients and combine into a single table
+r_glms <- lapply(reduced_glms, coef)
+r_glms <- lapply(r_glms, as.data.frame)
+r_glms <- lapply(r_glms, t)
+r_glms <- lapply(r_glms, as.data.frame)
+r_glms <- do.call(bind_rows, r_glms)
+
+# Add IDs 
+r_glms$id <- glm_names
+
+r_glms <- r_glms %>% 
+  as_tibble() %>%
+  rename(intercept=`(Intercept)`) %>%
+  # drop intercept
+  select(-intercept) %>%
+  # fill with 0
+  mutate(across(deciduous:developed, \(x) coalesce(x, 0))) 
+
+# Drop those with bad models
+r_glms <- r_glms[which(fail==0),]
+
+# Calculate mean across all individuals
+glm_betas <- r_glms %>% 
+  reframe(across(deciduous:developed, \(x) mean(x, na.rm = TRUE)))
+
+write_csv(glm_betas, "output/deer_glm_betas.csv")
+
 

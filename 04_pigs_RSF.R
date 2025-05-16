@@ -34,8 +34,20 @@ get_model_params <- function(fit) {
 #### Read data ####
 pigs <- read_csv("output/pigs_used_avail_covariates.csv")
 
+pigs %>% group_by(case) %>% reframe(mean_fc=mean(foodcrops), mean_bl=mean(bottomland))
+
+ggplot(pigs) +
+  geom_density(aes(x=foodcrops, group=case, color=factor(case), fill=factor(case)), alpha=0.4)
+
+ggplot(pigs) +
+  geom_density(aes(x=bottomland, group=case, color=factor(case), fill=factor(case)), alpha=0.4)
+
+
+# Center and scale covariates
+pigs[,7:17] <- scale(pigs[,7:17])
+
 ## Set up to loop by individual
-un.id <- unique(pigs$key)
+un.id <- unique(pigs$id)
 
 # Create list to save models
 pigs_rsf <- list()
@@ -44,10 +56,14 @@ pigs_rsf <- list()
 cfs <- list()
 
 # # create a list to save VIF from GLMs
-# glm_vifs <- list()
+glm_vifs <- list()
 
 # Save GLMS with reduced variable sets
 reduced_glms <- list()
+
+# Create vector to indicate when warnings are thrown
+fail <- numeric(length(un.id))
+lasso_fail <- numeric(length(un.id))
 
 #### Run RSF with elastic net (which might sometimes end up as a lasso or ridge) ####
 # Loop to run LASSO over each individual HR
@@ -55,25 +71,29 @@ set.seed(1)
 for (i in 1:length(un.id)) {
   
   # Filter by ID
-  temp <- pigs %>% filter(key==un.id[i])
+  temp <- pigs %>% filter(id==un.id[i])
   
   # Set up data for LASSO in glmnet
-  x <- model.matrix(case ~ bottomland + deciduous + evergreen + mixed + gramanoids + shrubs + foodcrops + water + I(water^2), temp)[, -1]
+  x <- model.matrix(case ~ bottomland + deciduous + shrubs + gramanoids + developed + water + I(water^2), temp)[, -1]
   y <- temp$case
   wts <- temp$weight
   
   # Run cross validation for alpha and lambda
-  cv.out <- cva.glmnet(x, y, data=temp, weights=wts, family="binomial", type.measure="deviance")
-  
+  tryCatch(cv.out <- cva.glmnet(x, y, data=temp, weights=wts, family="binomial", type.measure="deviance"),
+           warning = function(w) {
+             print(w)
+             lasso_fail[i] <<- 1
+           })
+
   # Extract "best" paramters
   cv.out.p <- get_model_params(cv.out)
-  
+
   # Print for status update
   print(paste0("Alpha for ", un.id[i], " is ", cv.out.p$alpha[1]))
   
   # Run the LASSO with the optimal lambda and alpha
   rsf <- glmnet(x, y, family="binomial", alpha=cv.out.p$alpha[1], weights=wts, lambda=cv.out.p$lambdaMin[1])
-  
+
   # add model object to list
   pigs_rsf[[i]] <- rsf
   
@@ -98,13 +118,16 @@ for (i in 1:length(un.id)) {
     # Create a formula with the non-zero coefficients  
     mod_form <- formula(paste("case ~", coefs))
     
-    # run regression model with selected covariates
-    test <- glm(mod_form, data=temp, family=binomial(link = "logit"), weight=weight)
+    tryCatch(test <- arm::bayesglm(mod_form, data=temp, family=binomial(link = "logit"), weight=weight),
+             warning = function(w) {
+               print(w)
+               fail[i] <<- 1
+             })
     
     # Save GLM with the reduced covariate set
     reduced_glms[[i]] <- test
     
-    # glm_vifs[[i]] <- car::vif(test)
+    glm_vifs[[i]] <- car::vif(test)
   }
 }
 
@@ -112,39 +135,6 @@ saveRDS(reduced_glms, "output/pigs_reduced_glms.RDS")
 # reduced_glms <- readRDS("output/pigs_reduced_glms.RDS")
 
 #### reduced GLMs ####
-# extract mean coeficients and combine into a single table
-r_glms <- lapply(reduced_glms, coef)
-r_glms <- lapply(r_glms, as.data.frame)
-r_glms <- lapply(r_glms, t)
-r_glms <- lapply(r_glms, as.data.frame)
-r_glms <- do.call(bind_rows, r_glms)
-
-r_glms <- r_glms %>% 
-  as_tibble() %>%
-  rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%
-  # drop intercept
-  select(-intercept) %>%
-  # Reorder
-  select(deciduous:gramanoids,foodcrops,water,water2) %>%
-  # fill with 0
-  mutate(across(deciduous:water2, \(x) coalesce(x, 0))) %>%
-  mutate(water2 = if_else(water==0, 0, water2))
-  
-# Add IDs 
-r_glms$id <- un.id
-
-# Drop those with unreasonable SEs (probably because the AKDE was too big)
-r_glms <- r_glms %>%
-filter(id!="30251_Eastern_2" & id!="35493_Noxubee_6" & id!="35490_Noxubee_2" & 
-         id!="19212_Delta_2" & id!="19212_Delta_3" & id!="19219_Delta_2") %>%
-select(-id)
-
-# Calculate mean across all individuals
-glm_betas <- r_glms %>% 
-  reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
-
-write_csv(glm_betas, "output/pigs_glm_betas.csv")
-
 
 # Extract SE for confidence intervals
 se <- lapply(reduced_glms, arm::se.coef)
@@ -158,9 +148,9 @@ se <- se %>%
   # drop intercept
   select(-intercept) %>%
   # Reorder
-  select(deciduous:gramanoids,foodcrops,water,water2) %>%
+  select(bottomland:water2) %>%
   # fill with 0
-  mutate(across(deciduous:water2, \(x) coalesce(x, 0))) %>%
+  mutate(across(bottomland:water2, \(x) coalesce(x, 0))) %>%
   mutate(water2 = if_else(water==0, 0, water2))
 
 # Add IDs
@@ -168,13 +158,49 @@ se$id <- un.id
 
 # Drop those with unreasonable SEs (probably because the AKDE was too big)
 se <- se %>%
-  filter(id!="30251_Eastern_2" & id!="35493_Noxubee_6" & id!="35490_Noxubee_2" & 
-           id!="19212_Delta_2" & id!="19212_Delta_3" & id!="19219_Delta_2") %>%
+  filter(id!="30251_Eastern_2" & id!="35493_Noxubee_2" & id!="35490_Noxubee_2" & id!="30252_Noxubee_1" &
+           id!="19212_Delta_2" & id!="19219_Delta_3" & id!="19219_Delta_2" & id!="35493_Noxubee_6") %>%
   select(-id)
 
 # Calculate mean across all individuals
 glm_se <- se %>% 
-  reframe(across(deciduous:water2, \(x) mean(x, na.rm = TRUE)))
+  reframe(across(bottomland:water2, \(x) mean(x, na.rm = TRUE)))
 
 write_csv(glm_se, "output/pigs_glm_se.csv")
+
+
+# extract mean coeficients and combine into a single table
+r_glms <- lapply(reduced_glms, coef)
+r_glms <- lapply(r_glms, as.data.frame)
+r_glms <- lapply(r_glms, t)
+r_glms <- lapply(r_glms, as.data.frame)
+r_glms <- do.call(bind_rows, r_glms)
+
+r_glms <- r_glms %>% 
+  as_tibble() %>%
+  rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%
+  # drop intercept
+  select(-intercept) %>%
+  # Reorder
+  select(bottomland:water2) %>%
+  # fill with 0
+  mutate(across(bottomland:water2, \(x) coalesce(x, 0))) %>%
+  mutate(water2 = if_else(water==0, 0, water2))
+  
+# Add IDs 
+r_glms$id <- un.id
+
+# Drop those with unreasonable SEs (probably because the AKDE was too big)
+r_glms <- r_glms %>%
+  filter(id!="30251_Eastern_2" & id!="35493_Noxubee_2" & id!="35490_Noxubee_2" & id!="30252_Noxubee_1" &
+           id!="19212_Delta_2" & id!="19219_Delta_3" & id!="19219_Delta_2" & id!="35493_Noxubee_6") %>%
+select(-id)
+
+# Calculate mean across all individuals
+glm_betas <- r_glms %>% 
+  reframe(across(bottomland:water2, \(x) mean(x, na.rm = TRUE)))
+
+write_csv(glm_betas, "output/pigs_glm_betas.csv")
+
+
 

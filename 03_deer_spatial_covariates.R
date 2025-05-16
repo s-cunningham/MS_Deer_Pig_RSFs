@@ -18,7 +18,9 @@ rast_list <- c("data/landscape_data/evergreen_180m_sum.tif",
                "data/landscape_data/gramanoids_180m_sum.tif", 
                "data/landscape_data/bottomlandHW_180m_sum.tif",
                "data/landscape_data/herbwetlands_180_sum.tif",
-               "data/landscape_data/palatable_crops_180m_sum.tif") 
+               "data/landscape_data/palatable_crops_180m_sum.tif",
+               "data/landscape_data/developed_180m_sum.tif") 
+
 layers <- rast(rast_list)
 
 # Reclassify missing data to 0
@@ -36,11 +38,11 @@ ext(water) <- ext(layers)
 layers <- c(layers, water)
 
 # Center and scale continuous rasters
-layers <- scale(layers)
+# layers <- scale(layers)
 
 # Rename layers
 names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops",
-                   "gramanoids", "bottomland", "herbwetl", "foodcrops", "water")
+                   "gramanoids", "bottomland", "herbwetl", "foodcrops", "developed", "water")
 
 #### Extract covariates and used and available locations ####
 
@@ -59,7 +61,7 @@ dat_deer <- extract(layers, deer_v)
 deer <- bind_cols(deer, dat_deer)
 
 # correlation matrix
-cor(deer[,c(8:17)])
+cor(deer[,c(8:18)])
 
 # create key column
 deer <- deer %>%

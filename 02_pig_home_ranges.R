@@ -66,7 +66,7 @@ pigs <- read_csv("data/location_data/pigs_filtered.csv") %>%
   mutate(month=as.numeric(format(timestamp, "%m")),
          year=as.numeric(format(timestamp, "%Y"))) %>%
   dplyr::select(PigID:study,month,year,timestamp,X,Y)# %>%
-  # filter(PigID != "35493_Noxubee_2022")
+# filter(PigID != "35493_Noxubee_2022")
 
 pigs %>% group_by(study) %>% reframe(range=range(timestamp))
 
@@ -136,84 +136,17 @@ for (i in 1:length(un.id)) {
 tr_sum <- tr_sum %>% as_tibble()
 tr_sum2 <- tr_sum %>% separate(id, into=c("pigid", "study"), sep="_", remove=FALSE)
 
-#### 4. Determine which animals need to be split ####
-pigs_res <- as_tibble(pigs_res)
-un.id <- unique(pigs_res$id)
-
-for (i in 1:length(un.id)) {
-  
-  temp <- pigs_res %>% filter(id==un.id[i])
-  
-  p1 <- ggplot(temp, aes(x=x, y=y, color=date)) +
-    geom_path() + geom_point() +
-    ggtitle(un.id[i])
-  
-  p2 <- ggplot(temp, aes(x=date, y=R2n, color=date)) +
-    geom_path()
-  
-  print(p1 / p2)
-  
-}
-## Look through plots and manually list which IDs probably will need to be segmented, as well as those that might need to be filtered by dates to remove patchy data
-
-to_segment <- c("377123_Delta", "19212_Delta", "19219_Delta", "19223_Delta",
-                "152316_Northern", "152317_Northern", "152318_Northern", "26620_Noxubee", "35490_Noxubee", 
-                "35493_Noxubee", "30251_Eastern", "26641_Eastern", "26630_Eastern", "26622_Eastern") # "26626_Noxubee", 
-
-# Manually clean up erroneous points
-pigs <- pigs_res %>% filter(id!="35489_Noxubee" | (id=="35489_Noxubee" & y<3684000 & x<330000))
-pigs <- pigs_res %>% filter(id!="30252_Noxubee" | (id=="30252_Noxubee" & y>3683500 & x>329000))
-pigs <- pigs_res %>% filter(id!="152321_Northern" | (id=="152321_Northern" & y<3730000))
-pigs <- pigs_res %>% filter(id!="152317_Northern" | (id=="152317_Northern" & x<327500))
-pigs <- pigs_res %>% filter(id!="19208_Delta" | (id=="19208_Delta" & x>175000))
-
-# Subset data without pigs that need to be segmented (so that we can add the segments onto it)
 pigs <- pigs_res %>% 
   # Filter out NAs
-  filter(!is.na(x)) %>%
-  # Remove IDs that will be segmented
-  filter(!(id %in% to_segment)) %>%
-  # Create a 'key' column to match the output from the Lavielle function
-  mutate(burst=1) %>%
-  unite("key", c("id", "burst"), sep="_", remove=FALSE) %>%
-  dplyr::select(id, key, x:rel.angle)
-
-## Need to do this manually, and make sure to add the segmented data to 'pigs'
-s <- lv_func(pigs_res, "26622_Eastern", 20)  
-
-# Add segmented data to full dataset
-pigs <- bind_rows(pigs, s)
-
-# 377123_Delta : 3
-# 19212_Delta : 8 #6
-# 19219_Delta : 4
-# 19223_Delta : 2
-# 152316_Northern : 5
-# 152317_Northern : 2
-# 152318_Northern : 5
-# 26620_Noxubee : 2
-# 35490_Noxubee : 2
-# 35493_Noxubee : 6
-# 30251_Eastern : 3
-# 26641_Eastern : 2
-# 26630_Eastern : 5
-# 26622_Eastern : 2
-
-# Check if there are any IDs in the to_segment vector that are not in the pigs tibble after segmenting and binding
-to_segment[!(to_segment %in% pigs$id)]
-
-## Save
-write_csv(pigs, "output/segmented_pigs.csv")
-# pigs <- read_csv("output/segmented_pigs.csv")
+  filter(!is.na(x)) 
 
 # how many days in each segment?
-ndays <- pigs %>% mutate(day=format(date, "%Y-%m-%d")) %>% group_by(key) %>% reframe(ndays=length(unique(day)))
-short <- ndays %>% filter(ndays<22)
+ndays <- pigs %>% mutate(day=format(date, "%Y-%m-%d")) %>% group_by(id) %>% reframe(ndays=length(unique(day)))
+short <- ndays %>% filter(ndays<60)
 
 # Removed anything with less than 3 weeks of data
-pigs <- pigs %>% filter(!(key %in% short$key))
+pigs <- pigs %>% filter(!(id %in% short$id))
 
-#### 5. Loop over individuals and calculate AKDE home range ####
 
 ## Set up data
 # Convert to lat/long (WGS84)
@@ -234,15 +167,15 @@ pigs <- pigs %>%
 
 dat <- pigs %>%      
   # need the lat long, etc. in a specific order 
-  dplyr::select(key, location.long, location.lat, date) %>% 
+  dplyr::select(id, location.long, location.lat, date) %>% 
   # also need columns to have a specific name
-  rename(individual.local.identifier=key, timestamp=date)
+  rename(individual.local.identifier=id, timestamp=date)
 
 # Create telemetry object
 dat <- as.telemetry(dat, timeformat="%Y-%m-%d %H:%M:%S", timezone="America/Chicago")
 
 ## Loop over all individuals / individual segments
-ids <- unique(pigs$key)
+ids <- unique(pigs$id)
 
 # Create list to save variograms and AKDEs
 out <- list()
@@ -252,6 +185,7 @@ size <- data.frame()
 
 # Set progress bar of sanity because this takes long - set it to the number of ids in the dataset (min = 0, max = max number of ids)
 pb <- txtProgressBar(min = 0, max = length(ids), style = 3)
+
 
 # Run loop to fit AKDEs
 for (i in 1:length(ids)) {
@@ -280,8 +214,8 @@ for (i in 1:length(ids)) {
     out[[i]] <- list(dat[[i]]@info$identity, var, var2, UD) 
   })
 }
+
 saveRDS(out, "results/home_ranges/raw_pigs_AKDEs.rds")
-# out <- readRDS("results/home_ranges/raw_pigs_AKDEs.rds")
 
 # Take just the AKDE
 akde <- lapply(out, function(x) x[[4]]) 
@@ -303,8 +237,8 @@ size <- size %>%
   mutate(unit=str_extract(unit, pattern = "(?<=\\().*(?=\\))")) %>%
   # Convert ha to sq km
   mutate(low=if_else(unit=="hectares",low/100,low),
-          est=if_else(unit=="hectares",est/100,est),
-          high=if_else(unit=="hectares",high/100,high)) %>%
+         est=if_else(unit=="hectares",est/100,est),
+         high=if_else(unit=="hectares",high/100,high)) %>%
   # Reorder columns
   dplyr::select(id, low:high) 
 # Note: all AKDEs are now in sqare kilometers
@@ -323,21 +257,21 @@ ud <- do.call(rbind, poly)
 # Clean up full set of polygons
 ud <- ud %>% 
   # Separate name into important parts (key, 99%, and estimate vs CI)
-  separate(1, into=c("key", "level", "which"), sep=" ") %>%
+  separate(1, into=c("id", "level", "which"), sep=" ") %>%
   # Remove rowname
   remove_rownames() %>%
   # Remove the level column, we know they are all 99%
   dplyr::select(-level) %>%
   # Now filter by rows to just the estimate (drop confidence intervals)
-  filter(which=="est") %>%
-  # Separate key into different pieces
-  separate(1, into=c("id", "study", "burst"), sep="_") %>%
-  # put id and study back together
-  unite("id", 1:2, sep="_")
+  filter(which=="est") #%>%
+# Separate id into different pieces
+# separate(1, into=c("id", "study", "burst"), sep="_") %>%
+# put id and study back together
+# unite("id", 1:2, sep="_")
 
 # Write shapefile
 st_write(ud, "output/pigs_AKDE_est.shp", append=FALSE)
-  
+
 #### 6. Extract available points from home range ####
 ud <- st_read("output/pigs_AKDE_est.shp")
 library(terra)
@@ -410,7 +344,7 @@ pigs_sf <- pigs %>%
   # Convert to sf object
   st_as_sf(coords=c("x", "y"), crs=32616) %>%
   # remove some columns
-  dplyr::select(id, key, geometry) %>%
+  dplyr::select(id, geometry) %>%
   # reproject to ud
   st_transform(crs=st_crs(ud))
 
@@ -418,16 +352,11 @@ pigs_sf <- pigs %>%
 used <- tibble()
 for (i in 1:nrow(ud)) {
   
-  # Build key for each individual
-  k <- ud$id[i]
-  b <- ud$burst[i]
-  udkey <- paste0(k, "_", b)
-  
   # Filter and convert to SpatVector
   poly <- vect(ud$geometry[i])
   
   # filter to single ID and convert to SpatVector
-  temp <- pigs_sf %>% filter(key==udkey) 
+  temp <- pigs_sf %>% filter(id==ud$id[i]) 
   temp <- vect(temp)
   
   # Clip points to AKDE
@@ -453,13 +382,15 @@ write_csv(used, "output/pigs_used_locs.csv")
 # Organize so used data matches available data
 used <- used %>%
   # split key
-  separate("key", into=c("rm1", "rm2", "burst"), sep="_") %>%
+  # separate("key", into=c("rm1", "rm2", "burst"), sep="_") %>%
   # drop extra columns
-  dplyr::select(X, Y, id, burst, case)
+  dplyr::select(X, Y, id, case)
 
 ## Combine used and available points
+avail <- avail %>% dplyr::select(-burst)
 dat <- bind_rows(used, avail)
 
 # save data
 write_csv(dat, "output/pigs_used_avail_locations.csv")
+
 

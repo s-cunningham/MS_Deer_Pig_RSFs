@@ -27,7 +27,8 @@ rast_list <- c("data/landscape_data/evergreen_210m_sum.tif",
                "data/landscape_data/gramanoids_210m_sum.tif", 
                "data/landscape_data/bottomlandHW_210m_sum.tif",
                "data/landscape_data/herbwetlands_210_sum.tif",
-               "data/landscape_data/palatable_crops_210m_sum.tif") 
+               "data/landscape_data/palatable_crops_210m_sum.tif",
+               "data/landscape_data/developed_210m_sum.tif") 
 layers <- rast(rast_list)
 
 # Reclassify missing data to 0
@@ -45,10 +46,10 @@ ext(water) <- ext(layers)
 layers <- c(layers, water)
 
 # Center and scale continuous rasters
-layers <- scale(layers)
+# layers <- scale(layers)
 
 # Rename layers
-names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops", "gramanoids", "bottomland", "herbwetl", "foodcrops", "water")
+names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops", "gramanoids", "bottomland", "herbwetl", "foodcrops", "developed", "water")
 # global(layers[["shrubs"]], fun="mean")
 # global(layers[["shrubs"]], fun="sd")
 
@@ -72,8 +73,8 @@ pigs <- bind_cols(pigs, dat_pigs)
 cor(pigs[,c(8:15)])
 
 # create key column
-pigs <- pigs %>%
-  unite("key", c("id", "burst"), sep="_", remove=FALSE)
+# pigs <- pigs %>%
+#   unite("key", c("id", "burst"), sep="_", remove=FALSE)
 
 # write file so we don't always have to wait for the rasters to do stuff
 write_csv(pigs, "output/pigs_used_avail_covariates.csv")
