@@ -34,14 +34,7 @@ get_model_params <- function(fit) {
 #### Read data ####
 pigs <- read_csv("output/pigs_used_avail_covariates.csv")
 
-pigs %>% group_by(case) %>% reframe(mean_fc=mean(foodcrops), mean_bl=mean(bottomland))
-
-ggplot(pigs) +
-  geom_density(aes(x=foodcrops, group=case, color=factor(case), fill=factor(case)), alpha=0.4)
-
-ggplot(pigs) +
-  geom_density(aes(x=bottomland, group=case, color=factor(case), fill=factor(case)), alpha=0.4)
-
+pigs %>% group_by(id, case) %>% count() %>% print(n=72)
 
 # Center and scale covariates
 pigs[,7:19] <- scale(pigs[,7:19])
@@ -74,7 +67,7 @@ for (i in 1:length(un.id)) {
   temp <- pigs %>% filter(id==un.id[i])
   
   # Set up data for LASSO in glmnet
-  x <- model.matrix(case ~ bottomland + deciduous + evergreen + shrubs + gramanoids + developed + water + I(water^2), temp)[, -1]
+  x <- model.matrix(case ~ bottomland + foodcrops + shrubs + developed + water + I(water^2), temp)[, -1]
   y <- temp$case
   wts <- temp$weight
   
@@ -106,7 +99,11 @@ for (i in 1:length(un.id)) {
   # Extract the non-zero coefficients
   coefs <- as.matrix(l.coef) %>% 
     as.data.frame() %>% 
-    rownames_to_column() %>% 
+    rownames_to_column() 
+  # Check if both water and water2 are 0...if water is 0, but water2 is not, fill water2 with 0
+  coefs$s1[coefs$rowname=="I(water^2)"] <- if_else(coefs$s1[coefs$rowname=="water"]==0,0, coefs$s1[coefs$rowname=="I(water^2)"])
+  # Drop coefficients == 0  
+  coefs <- coefs %>%  
     filter(rowname!="(Intercept)" & s1!=0) %>%
     select(rowname) %>% 
     as.vector() %>% 
@@ -124,6 +121,10 @@ for (i in 1:length(un.id)) {
                fail[i] <<- 1
              })
     
+    test <- logistf::logistf(mod_form, data=temp, weights=weight)
+    test <- glm(mod_form, data=temp, weights=weight, family=binomial(link = "logit"))
+    
+    
     # Save GLM with the reduced covariate set
     reduced_glms[[i]] <- test
     
@@ -134,7 +135,7 @@ for (i in 1:length(un.id)) {
 saveRDS(reduced_glms, "output/pigs_reduced_glms.RDS")
 # reduced_glms <- readRDS("output/pigs_reduced_glms.RDS")
 
-#### reduced GLMs ####
+#### Summarizing coefficients ####
 
 # Extract SE for confidence intervals
 se <- lapply(reduced_glms, arm::se.coef)

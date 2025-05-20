@@ -147,6 +147,15 @@ short <- ndays %>% filter(ndays<30)
 # Removed anything with less than 3 weeks of data
 pigs <- pigs %>% filter(!(id %in% short$id))
 
+# Ending up with some HRs that are likely much too large
+temp <- pigs %>% filter(id=="152317_Northern")
+ggplot(temp, aes(x=x, y=y, color=date)) +
+  geom_path() + geom_point() 
+ggplot(temp, aes(x=date, y=R2n, color=date)) +
+  geom_vline(xintercept=as_datetime("2018-08-31 00:00:00")) +
+  geom_path()
+
+
 
 ## Set up data
 # Convert to lat/long (WGS84)
@@ -186,6 +195,7 @@ size <- data.frame()
 # Set progress bar of sanity because this takes long - set it to the number of ids in the dataset (min = 0, max = max number of ids)
 pb <- txtProgressBar(min = 0, max = length(ids), style = 3)
 
+# out <- readRDS("results/home_ranges/raw_pigs_AKDEs.rds")
 
 # Run loop to fit AKDEs
 for (i in 1:length(ids)) {
@@ -216,6 +226,7 @@ for (i in 1:length(ids)) {
 }
 
 saveRDS(out, "results/home_ranges/raw_pigs_AKDEs.rds")
+
 
 # Take just the AKDE
 akde <- lapply(out, function(x) x[[4]]) 

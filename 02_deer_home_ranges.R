@@ -206,10 +206,10 @@ deer_res <- deer_res %>% filter(id!="252_Central" | (id=="252_Central" & x>19800
 deer_res <- deer_res %>% filter(id!="19_Central" | (id=="19_Central" & x>201000))
 deer_res <- deer_res %>% filter(id!="27_Central" | (id=="27_Central" & date <= "2019-01-01 23:59:59"))
 deer_res <- deer_res %>% filter(id!="100_Central" | (id=="100_Central" & x<198000))
-
+deer_res <- deer_res %>% filter(id!="252_Central" | (id=="252_Central" & x>198000))
 
 ## IDs that need trimming
-temp <- deer_res %>% filter(id=="97_Central")
+temp <- deer_res %>% filter(id=="87900_Delta")
 ggplot(temp, aes(x=x, y=y, color=date)) +
   geom_path() + geom_point() 
 ggplot(temp, aes(x=date, y=R2n, color=date)) +
@@ -342,7 +342,7 @@ for (i in 1:length(ids)) {
     out[[i]] <- list(dat[[i]]@info$identity, var, var2, UD) 
   })
 }
-saveRDS(out, "results/home_ranges/raw_deer_AKDEs.rds")
+saveRDS(out, "results/home_ranges/raw_deer_AKDEs.rds") # Maybe can restart...with 43
 # out <- readRDS("results/home_ranges/raw_deer_AKDEs.rds")
 
 # Take just the AKDE
