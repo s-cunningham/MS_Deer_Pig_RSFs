@@ -137,35 +137,16 @@ for (i in 1:length(un.id)) {
 
 tr_sum <- tr_sum %>% as_tibble()
 
+## Check distribution of how far they move in 4 hours
+quantile(deer_res$dist, probs=c(0.9, 0.95, 0.99), na.rm=TRUE)
 
-#### 3. Determine which animals need to be split ####
-deer_res <- as_tibble(deer_res)
-un.id <- unique(deer_res$id)
+# Filter 99th percentiles 
+deer_res <- deer_res %>% filter(dist < (1415.3430*2))
 
-for (i in 1:length(un.id)) {
-  
-  temp <- deer_res %>% filter(id==un.id[i])
+# Check
+hist(deer_res$dist)
 
-  p1 <- ggplot(temp, aes(x=x, y=y, color=date)) +
-    geom_path() + geom_point() +
-    ggtitle(un.id[i])
-  
-  p2 <- ggplot(temp, aes(x=date, y=R2n, color=date)) +
-         geom_path()
-  
-  print(p1 / p2)
-  
-}
-## Look through plots and manually list which IDs probably will need to be segmented, as well as those that might need to be filtered by dates to remove patchy data
-
-## IDs that need trimming
-temp <- deer_res %>% filter(id=="100_Central")
-ggplot(temp, aes(x=x, y=y, color=date)) +
-  geom_path() + geom_point() 
-ggplot(temp, aes(x=date, y=R2n, color=date)) +
-  geom_vline(xintercept=as_datetime("2018-08-31 00:00:00")) +
-  geom_path()
-
+## Some manual filtering
 # 152311_North
 deer_res <- deer_res %>% filter((id!="152311_North") | (id=="152311_North" & date <= "2023-12-31 23:59:59"))
 
@@ -187,9 +168,58 @@ deer_res <- deer_res %>% filter((id!="252_Central") | (id=="252_Central" & date 
 # 27_Central
 deer_res <- deer_res %>% filter((id!="27_Central") | (id=="27_Central" & (date>="2018-08-31 00:00:00" & date<="2019-03-27 23:59:59")))
 
+#### 3. Determine which animals need to be split ####
+deer_res <- as_tibble(deer_res)
+un.id <- unique(deer_res$id)
+## Look through plots and manually list which IDs probably will need to be segmented, as well as those that might need to be filtered by dates to remove patchy data
+for (i in 1:length(un.id)) {
+  
+  temp <- deer_res %>% filter(id==un.id[i])
+
+  p1 <- ggplot(temp, aes(x=x, y=y, color=date)) +
+    geom_path() + geom_point() +
+    ggtitle(un.id[i])
+  
+  p2 <- ggplot(temp, aes(x=date, y=R2n, color=date)) +
+         geom_path()
+  
+  print(p1 / p2)
+  
+}
+
+
+## Filter 
+deer_res <- deer_res %>% filter(id!="152311_North" | (id=="152311_North" & x>326000) | (id=="152311_North" & x<324500))
+deer_res <- deer_res %>% filter(id!="152310_North" | (id=="152310_North" & x<326000))
+deer_res <- deer_res %>% filter(id!="87919_Delta" | (id=="87919_Delta" & x>130000))
+deer_res <- deer_res %>% filter(id!="87864_Delta" | (id=="87864_Delta" & x>130000))
+deer_res <- deer_res %>% filter(id!="47_Central" | (id=="47_Central" & R2n>6E06))
+deer_res <- deer_res %>% filter(id!="348_Central" | (id=="348_Central" & x<197000))
+deer_res <- deer_res %>% filter(id!="340_Central" | (id=="340_Central" & date <= "2019-01-01 23:59:59"))
+deer_res <- deer_res %>% filter(id!="321_Central" | (id=="321_Central" & x<202000) | (id=="321_Central" & y>3613000))
+deer_res <- deer_res %>% filter(id!="295_Central" | (id=="295_Central" & x>205000))
+deer_res <- deer_res %>% filter(id!="281_Central" | (id=="281_Central" & y>3609000))
+deer_res <- deer_res %>% filter(id!="277_Central" | (id=="277_Central" & x<202500))
+deer_res <- deer_res %>% filter(id!="273_Central" | (id=="273_Central" & x<201000))
+deer_res <- deer_res %>% filter(id!="262_Central" | (id=="262_Central" & x<204000))
+deer_res <- deer_res %>% filter(id!="252_Central" | (id=="252_Central" & x>198000))
+deer_res <- deer_res %>% filter(id!="19_Central" | (id=="19_Central" & x>201000))
+deer_res <- deer_res %>% filter(id!="27_Central" | (id=="27_Central" & date <= "2019-01-01 23:59:59"))
+deer_res <- deer_res %>% filter(id!="100_Central" | (id=="100_Central" & x<198000))
+
+
+## IDs that need trimming
+temp <- deer_res %>% filter(id=="97_Central")
+ggplot(temp, aes(x=x, y=y, color=date)) +
+  geom_path() + geom_point() 
+ggplot(temp, aes(x=date, y=R2n, color=date)) +
+  geom_vline(xintercept=as_datetime("2018-08-31 00:00:00")) +
+  geom_path()
+
+
 ## List of IDs that will likely need to be segmented
-to_segment <- c("87924_Delta", "87898_Delta", "81864_Delta", "81711_Delta", "90_Central", 
-                "293_Central", "297_Central", "344_Central", "339_Central", "20_Central")
+to_segment <- c("87924_Delta", "81711_Delta", "90_Central", "97_Central", "344_Central",
+                "339_Central", "297_Central", "293_Central", "344_Central", "20_Central")
 
 # Subset data without deer that need to be segmented (so that we can add the segments onto it)
 deer <- deer_res %>% 
@@ -202,61 +232,47 @@ deer <- deer_res %>%
           unite("key", c("id", "burst"), sep="_", remove=FALSE) %>%
           dplyr::select(id, key, x:rel.angle)
 
-## try 81711_Delta, 27_Central, and 87924_Delta again
-# deer <- deer %>% filter(id!="81711_Delta") #& ,id!="87924_Delta"  &d!="27_Central"
-
 ## Need to do this manually, and make sure to add the segmented data to 'deer'
-s <- lv_func(deer_res, "81864_Delta", 10)  
+s <- lv_func(deer_res, "20_Central", 30)
 
 # keep only some segments of 87924_Delta
-# s <- s %>% filter(key=="87924_Delta_1" | key=="87924_Delta_3" | key=="87924_Delta_5"| key=="87924_Delta_6" | key=="87924_Delta_7")
+# s <- s %>% filter(key=="87924_Delta_1" | key=="87924_Delta_3" | key=="87924_Delta_4"| key=="87924_Delta_5") 
+# s <- s %>% filter(key!="81711_Delta_4") 
+# s <- s %>% filter(key!="97_Central_2") %>% mutate(key=if_else(key=="97_Central_3", "97_Central_2", key))
+# s <- s %>% filter(key!="293_Central_2")
+
 
 # Add segmented data to full dataset
 deer <- bind_rows(deer, s)
 
-# 152312_North : 4
-# 152308_North : 4
-# 87924_Delta : 8, keep only 1, 3, 5, 6, 7 
-# 87919_Delta : 3
-# 81711_Delta : 10 # might need to revise (see note below)
-# 97_Central : 3
-# 90_Central : 2
-# 47_Central : 3
-# 340_Central : 4 # keep only segment 1
-# 344_Central : 7
-# 339_Central : 3
-# 333_Central : 2
-# 297_Central : 8
-# 295_Central : 3
-# 293_Central : 5
-# 281_Central : 3
-# 28_Central : 3
-# 272_Central : 6
-# 27_Central : 9
-# 20_Central : 5
-# Run 81711_Delta with 10 breaks...or, stay with the optimal 5 and subset anything that doesn't have 30 or 60 days? What's the average HR crossing time?
+# 87924_Delta: 5
+# 81711_Delta: 5
+# 90_Central: 2
+# 344_central: 5
+# 297_Central: 8
 
 # Check if there are any IDs in the to_segment vector that are not in the deer tibble after segmenting and binding
 to_segment[!(to_segment %in% deer$id)]
 
+# Manually remove some points that seem like they aren't connected
+deer <- deer %>% filter(key!="87924_Delta_3" | (key=="87924_Delta_3" & x>157500))
+deer <- deer %>% filter(key!="87924_Delta_4" | (key=="87924_Delta_4" & x<155000))
+deer <- deer %>% filter(key!="87924_Delta_5" | (key=="87924_Delta_5" & x>151000))
+
+
 # Save
-# write_csv(deer, "output/segmented_deer.csv")
-deer <- read_csv("output/segmented_deer.csv")
+write_csv(deer, "output/segmented_deer.csv")
+# deer <- read_csv("output/segmented_deer.csv")
 
 # how many days in each segment?
 ndays <- deer %>% mutate(day=format(date, "%Y-%m-%d")) %>% group_by(key) %>% reframe(ndays=length(unique(day)))
-short <- ndays %>% filter(ndays <60)
+short <- ndays %>% filter(ndays <30)
 
 # Removed anything with less than 3 weeks of data
 deer <- deer %>% filter(!(key %in% short$key))
 
 # Check unique keys
 unique(deer$key)
-
-# futher manually subset 81711
-deer <- deer %>% filter(key!="81711_Delta_2" & key!="81711_Delta_4" & key!="81711_Delta_7" & key!="81711_Delta_8" & key!="81711_Delta_9")
-
-deer <- deer %>% filter(key!="87924_Delta_1" & key!="87924_Delta_3" & key!="87924_Delta_5" & key!="87924_Delta_6" & key!="87924_Delta_7")
 
 #### 4. Loop over individuals and calculate AKDE home range ####
 
@@ -269,6 +285,7 @@ deer_sf <- deer %>%
               st_as_sf(coords=c("x", "y"), crs=32616) %>%
               # Reproject
               st_transform(crs=4326)
+
 # save lat/lon
 ll <- deer_sf %>% st_coordinates() %>% as_tibble() %>% 
           rename(location.long=X, location.lat=Y)
@@ -279,7 +296,7 @@ deer <- deer %>%
 
 dat <- deer %>%      
             # need the lat long, etc. in a specific order 
-            dplyr::select(id, location.long, location.lat, date) %>% 
+            dplyr::select(key, location.long, location.lat, date) %>% 
             # also need columns to have a specific name
             rename(individual.local.identifier=key, timestamp=date)
 

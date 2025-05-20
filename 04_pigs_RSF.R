@@ -44,7 +44,7 @@ ggplot(pigs) +
 
 
 # Center and scale covariates
-pigs[,7:17] <- scale(pigs[,7:17])
+pigs[,7:19] <- scale(pigs[,7:19])
 
 ## Set up to loop by individual
 un.id <- unique(pigs$id)
@@ -74,7 +74,7 @@ for (i in 1:length(un.id)) {
   temp <- pigs %>% filter(id==un.id[i])
   
   # Set up data for LASSO in glmnet
-  x <- model.matrix(case ~ bottomland + deciduous + shrubs + gramanoids + developed + water + I(water^2), temp)[, -1]
+  x <- model.matrix(case ~ bottomland + deciduous + evergreen + shrubs + gramanoids + developed + water + I(water^2), temp)[, -1]
   y <- temp$case
   wts <- temp$weight
   
@@ -82,7 +82,7 @@ for (i in 1:length(un.id)) {
   tryCatch(cv.out <- cva.glmnet(x, y, data=temp, weights=wts, family="binomial", type.measure="deviance"),
            warning = function(w) {
              print(w)
-             lasso_fail[i] <<- 1
+             lasso_fail[i] <- 1
            })
 
   # Extract "best" paramters
@@ -99,7 +99,7 @@ for (i in 1:length(un.id)) {
   
   # Extract coefficients
   l.coef <- predict(rsf, type="coefficients", s=cv.out.p$lambdaMin[1])
-  
+
   # Save LASSO coefficients
   cfs[[i]] <- as.matrix(t(l.coef))
   

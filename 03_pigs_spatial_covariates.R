@@ -69,12 +69,36 @@ dat_pigs <- extract(layers, pigs_v)
 # Join extracted data back to location data frame
 pigs <- bind_cols(pigs, dat_pigs)
 
+# Combine a couple classes
+pigs <- pigs %>%
+  mutate(short_veg=gramanoids+shrubs,
+         allcrops=othercrops+foodcrops)
+
 # Correlation matrix
-cor(pigs[,c(8:15)])
+ids <- unique(pigs$id)
+quick.cor <- list()
+for (i in 1:length(ids)) {
+  temp <- pigs %>% filter(id==ids[i])
+  
+  c.mat <- cor(temp[,c(7:19)])
+  
+  high.cor <- matrix(0, nrow=13, ncol=13)
+  high.cor[which(abs(c.mat)>0.7)] <- 1
+  high.cor <- as.data.frame(high.cor)
+  names(high.cor) <- names(temp[,7:19])
+  high.cor$var <- names(temp[,7:19])
+  
+  quick.cor[[i]] <- high.cor
+}
+
+cor(pigs[,c(7:19)])
 
 # create key column
 # pigs <- pigs %>%
 #   unite("key", c("id", "burst"), sep="_", remove=FALSE)
+
+
+
 
 # write file so we don't always have to wait for the rasters to do stuff
 write_csv(pigs, "output/pigs_used_avail_covariates.csv")

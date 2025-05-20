@@ -142,7 +142,7 @@ pigs <- pigs_res %>%
 
 # how many days in each segment?
 ndays <- pigs %>% mutate(day=format(date, "%Y-%m-%d")) %>% group_by(id) %>% reframe(ndays=length(unique(day)))
-short <- ndays %>% filter(ndays<60)
+short <- ndays %>% filter(ndays<30)
 
 # Removed anything with less than 3 weeks of data
 pigs <- pigs %>% filter(!(id %in% short$id))
@@ -387,7 +387,7 @@ used <- used %>%
   dplyr::select(X, Y, id, case)
 
 ## Combine used and available points
-avail <- avail %>% dplyr::select(-burst)
+# avail <- avail %>% dplyr::select(-burst)
 dat <- bind_rows(used, avail)
 
 # save data
