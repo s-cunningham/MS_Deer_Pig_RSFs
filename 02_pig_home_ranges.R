@@ -456,7 +456,7 @@ used <- used %>%
   dplyr::select(X, Y, key, case)
 
 ## Combine used and available points
-# avail <- avail %>% dplyr::select(-burst)
+avail <- avail %>% rename(key=id)
 dat <- bind_rows(used, avail)
 
 # save data
