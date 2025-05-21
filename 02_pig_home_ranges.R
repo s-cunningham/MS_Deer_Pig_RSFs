@@ -140,6 +140,65 @@ pigs <- pigs_res %>%
   # Filter out NAs
   filter(!is.na(x)) 
 
+## Check distribution of how far they move in 4 hours
+quantile(pigs_res$dist, probs=c(0.9, 0.95, 0.99), na.rm=TRUE)
+
+# Filter 99th percentiles 
+pigs_res <- pigs_res %>% filter(dist < (1415.3430*2))
+
+#### 3. Determine which animals need to be split ####
+pigs_res <- as_tibble(pigs_res)
+un.id <- unique(pigs_res$id)
+## Look through plots and manually list which IDs probably will need to be segmented, as well as those that might need to be filtered by dates to remove patchy data
+for (i in 1:length(un.id)) {
+  
+  temp <- pigs_res %>% filter(id==un.id[i])
+  
+  p1 <- ggplot(temp, aes(x=x, y=y, color=date)) +
+    geom_path() + geom_point() +
+    ggtitle(un.id[i])
+  
+  p2 <- ggplot(temp, aes(x=date, y=R2n, color=date)) +
+    geom_path()
+  
+  print(p1 / p2)
+  
+}
+
+pigs_res <- pigs_res %>% filter(id!="26622_Eastern" | (id=="26622_Eastern" & x>339000 & y<3739000))
+pigs_res <- pigs_res %>% filter(id!="30252_Noxubee" | (id=="30252_Noxubee" & x>329000 & y>3683500))
+pigs_res <- pigs_res %>% filter(id!="26641_Eastern" | (id=="26641_Eastern" & x<340000))
+pigs_res <- pigs_res %>% filter(id!="26628_Noxubee" | (id=="26628_Noxubee" & x>326000 & x<330000))
+pigs_res <- pigs_res %>% filter(id!="152320_Northern" | (id=="152320_Northern" & R2n<5E06))
+pigs_res <- pigs_res %>% filter(id!="19223_Delta" | (id=="19223_Delta" & R2n<5E07))
+pigs_res <- pigs_res %>% filter(id!="19212_Delta" | (id=="19212_Delta" & R2n<2E08))
+pigs_res <- pigs_res %>% filter(id!="19210_Delta" | (id=="19210_Delta" & R2n<2E07))
+pigs_res <- pigs_res %>% filter(id!="19207_Delta" | (id=="19207_Delta" & x<182500))
+pigs_res <- pigs_res %>% filter(id!="377123_Delta" | (id=="377123_Delta" & x>204500))
+
+pigs_res$burst <- 1
+pigs_res <- pigs_res %>% dplyr::select(id,burst,x:rel.angle)
+
+## List of IDs that will likely need to be segmented
+to_segment <- c("19219_Delta", "19212_Delta")
+
+# Subset data without deer that need to be segmented (so that we can add the segments onto it)
+pigs <- pigs_res %>% 
+  # Filter out NAs
+  filter(!is.na(x)) %>%
+  # Remove IDs that will be segmented
+  filter(!(id %in% to_segment)) %>%
+  # Create a 'key' column to match the output from the Lavielle function
+  mutate(burst=1) %>%
+  unite("key", c("id", "burst"), sep="_", remove=FALSE) %>%
+  dplyr::select(id, key, x:rel.angle)
+
+## Need to do this manually, and make sure to add the segmented data to 'deer'
+s <- lv_func(pigs_res, "19212_Delta", 30)
+
+# Add segmented data to full dataset
+pigs <- bind_rows(pigs, s)
+
 # how many days in each segment?
 ndays <- pigs %>% mutate(day=format(date, "%Y-%m-%d")) %>% group_by(id) %>% reframe(ndays=length(unique(day)))
 short <- ndays %>% filter(ndays<30)
@@ -154,8 +213,6 @@ ggplot(temp, aes(x=x, y=y, color=date)) +
 ggplot(temp, aes(x=date, y=R2n, color=date)) +
   geom_vline(xintercept=as_datetime("2018-08-31 00:00:00")) +
   geom_path()
-
-
 
 ## Set up data
 # Convert to lat/long (WGS84)
@@ -176,15 +233,18 @@ pigs <- pigs %>%
 
 dat <- pigs %>%      
   # need the lat long, etc. in a specific order 
-  dplyr::select(id, location.long, location.lat, date) %>% 
+  dplyr::select(key, location.long, location.lat, date) %>% 
   # also need columns to have a specific name
-  rename(individual.local.identifier=id, timestamp=date)
+  rename(individual.local.identifier=key, timestamp=date)
 
 # Create telemetry object
 dat <- as.telemetry(dat, timeformat="%Y-%m-%d %H:%M:%S", timezone="America/Chicago")
 
-## Loop over all individuals / individual segments
-ids <- unique(pigs$id)
+# Take ids from telemetry object
+ids <- c()
+for (i in 1:length(dat)) {
+  ids <- c(ids, slot(dat[[i]],"info")$identity)
+}
 
 # Create list to save variograms and AKDEs
 out <- list()
@@ -194,8 +254,6 @@ size <- data.frame()
 
 # Set progress bar of sanity because this takes long - set it to the number of ids in the dataset (min = 0, max = max number of ids)
 pb <- txtProgressBar(min = 0, max = length(ids), style = 3)
-
-# out <- readRDS("results/home_ranges/raw_pigs_AKDEs.rds")
 
 # Run loop to fit AKDEs
 for (i in 1:length(ids)) {

@@ -189,14 +189,14 @@ for (i in 1:length(un.id)) {
 
 
 ## Filter 
-deer_res <- deer_res %>% filter(id!="152311_North" | (id=="152311_North" & x>326000) | (id=="152311_North" & x<324500))
-deer_res <- deer_res %>% filter(id!="152310_North" | (id=="152310_North" & x<326000))
+deer_res <- deer_res %>% filter(id!="152311_North" | (id=="152311_North" & x<326000 & x>324500))
+deer_res <- deer_res %>% filter(id!="152310_North" | (id=="152310_North" & x<325000))
 deer_res <- deer_res %>% filter(id!="87919_Delta" | (id=="87919_Delta" & x>130000))
-deer_res <- deer_res %>% filter(id!="87864_Delta" | (id=="87864_Delta" & x>130000))
+deer_res <- deer_res %>% filter(id!="81864_Delta" | (id=="81864_Delta" & x>130000))
 deer_res <- deer_res %>% filter(id!="47_Central" | (id=="47_Central" & R2n>6E06))
 deer_res <- deer_res %>% filter(id!="348_Central" | (id=="348_Central" & x<197000))
 deer_res <- deer_res %>% filter(id!="340_Central" | (id=="340_Central" & date <= "2019-01-01 23:59:59"))
-deer_res <- deer_res %>% filter(id!="321_Central" | (id=="321_Central" & x<202000) | (id=="321_Central" & y>3613000))
+deer_res <- deer_res %>% filter(id!="321_Central" | (id=="321_Central" & x<202000 & y>3613000))
 deer_res <- deer_res %>% filter(id!="295_Central" | (id=="295_Central" & x>205000))
 deer_res <- deer_res %>% filter(id!="281_Central" | (id=="281_Central" & y>3609000))
 deer_res <- deer_res %>% filter(id!="277_Central" | (id=="277_Central" & x<202500))
@@ -209,7 +209,7 @@ deer_res <- deer_res %>% filter(id!="100_Central" | (id=="100_Central" & x<19800
 deer_res <- deer_res %>% filter(id!="252_Central" | (id=="252_Central" & x>198000))
 
 ## IDs that need trimming
-temp <- deer_res %>% filter(id=="87900_Delta")
+temp <- deer_res %>% filter(id=="81864_Delta")
 ggplot(temp, aes(x=x, y=y, color=date)) +
   geom_path() + geom_point() 
 ggplot(temp, aes(x=date, y=R2n, color=date)) +
@@ -236,11 +236,17 @@ deer <- deer_res %>%
 s <- lv_func(deer_res, "20_Central", 30)
 
 # keep only some segments of 87924_Delta
-# s <- s %>% filter(key=="87924_Delta_1" | key=="87924_Delta_3" | key=="87924_Delta_4"| key=="87924_Delta_5") 
-# s <- s %>% filter(key!="81711_Delta_4") 
+# # s <- s %>% filter(key=="87924_Delta_1" | key=="87924_Delta_3" | key=="87924_Delta_4"| key=="87924_Delta_5")
+# s <- s %>% filter(key!="81711_Delta_4")
 # s <- s %>% filter(key!="97_Central_2") %>% mutate(key=if_else(key=="97_Central_3", "97_Central_2", key))
-# s <- s %>% filter(key!="293_Central_2")
-
+s <- s %>% filter(key!="293_Central_2")
+# s <- s %>% filter(key!="344_Central_4") %>%
+#   mutate(key=case_when(key=="344_Central_1" ~ "344_Central_1",
+#                        key=="344_Central_2" ~ "344_Central_2",
+#                        key=="344_Central_3" ~ "344_Central_3",
+#                        key=="344_Central_5" ~ "344_Central_4",
+#                        key=="344_Central_6" ~ "344_Central_5",
+#                        key=="344_Central_7" ~ "344_Central_6")) 
 
 # Add segmented data to full dataset
 deer <- bind_rows(deer, s)
@@ -258,7 +264,6 @@ to_segment[!(to_segment %in% deer$id)]
 deer <- deer %>% filter(key!="87924_Delta_3" | (key=="87924_Delta_3" & x>157500))
 deer <- deer %>% filter(key!="87924_Delta_4" | (key=="87924_Delta_4" & x<155000))
 deer <- deer %>% filter(key!="87924_Delta_5" | (key=="87924_Delta_5" & x>151000))
-
 
 # Save
 write_csv(deer, "output/segmented_deer.csv")
@@ -303,8 +308,11 @@ dat <- deer %>%
 # Create telemetry object
 dat <- as.telemetry(dat, timeformat="%Y-%m-%d %H:%M:%S", timezone="America/Chicago")
 
-## Loop over all individuals / individual segments
-ids <- unique(deer$key)
+# Take ids from telemetry object
+ids <- c()
+for (i in 1:length(dat)) {
+  ids <- c(ids, slot(dat[[i]],"info")$identity)
+}
 
 # Create list to save variograms and AKDEs
 out <- list()
