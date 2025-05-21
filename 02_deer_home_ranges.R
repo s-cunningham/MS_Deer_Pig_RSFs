@@ -460,7 +460,7 @@ for (i in 1:nrow(ud)) {
     
   # Save as shapefile
   filename <- paste0("output/deer_avail_cells/", ud$id[i], "_", ud$burst[i], "-avail.shp")
-  st_write(grid, filename, append=FALSE)
+  # st_write(grid, filename, append=FALSE)
   
   # convert back to sf
   pts <- st_as_sf(pts)
@@ -478,6 +478,7 @@ for (i in 1:nrow(ud)) {
 }
 # Save available points
 write_csv(avail, "output/deer_avail_pts.csv")
+avail <- avail %>% unite("key", c("id", "burst"), sep="_") 
 
 ## Now on to the used locations
 deer_sf <- deer %>% 
@@ -528,10 +529,8 @@ write_csv(used, "output/deer_used_locs.csv")
 
 # Organize so used data matches available data
 used <- used %>%
-  # split key
-  separate("key", into=c("rm1", "rm2", "burst"), sep="_") %>%
   # drop extra columns
-  dplyr::select(X, Y, key, burst, case)
+  dplyr::select(X, Y, key, case)
 
 ## Combine used and available points
 dat <- bind_rows(used, avail)
