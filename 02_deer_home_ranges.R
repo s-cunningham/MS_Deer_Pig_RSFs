@@ -460,7 +460,7 @@ for (i in 1:nrow(ud)) {
     
   # Save as shapefile
   filename <- paste0("output/deer_avail_cells/", ud$id[i], "_", ud$burst[i], "-avail.shp")
-  # st_write(grid, filename, append=FALSE)
+  st_write(grid, filename, append=FALSE)
   
   # convert back to sf
   pts <- st_as_sf(pts)
@@ -531,7 +531,7 @@ used <- used %>%
   # split key
   separate("key", into=c("rm1", "rm2", "burst"), sep="_") %>%
   # drop extra columns
-  dplyr::select(X, Y, id, burst, case)
+  dplyr::select(X, Y, key, burst, case)
 
 ## Combine used and available points
 dat <- bind_rows(used, avail)

@@ -413,7 +413,7 @@ pigs_sf <- pigs %>%
   # Convert to sf object
   st_as_sf(coords=c("x", "y"), crs=32616) %>%
   # remove some columns
-  dplyr::select(id, geometry) %>%
+  dplyr::select(key, geometry) %>%
   # reproject to ud
   st_transform(crs=st_crs(ud))
 
@@ -425,7 +425,7 @@ for (i in 1:nrow(ud)) {
   poly <- vect(ud$geometry[i])
   
   # filter to single ID and convert to SpatVector
-  temp <- pigs_sf %>% filter(id==ud$id[i]) 
+  temp <- pigs_sf %>% filter(key==ud$id[i]) 
   temp <- vect(temp)
   
   # Clip points to AKDE
@@ -453,7 +453,7 @@ used <- used %>%
   # split key
   # separate("key", into=c("rm1", "rm2", "burst"), sep="_") %>%
   # drop extra columns
-  dplyr::select(X, Y, id, case)
+  dplyr::select(X, Y, key, case)
 
 ## Combine used and available points
 # avail <- avail %>% dplyr::select(-burst)
