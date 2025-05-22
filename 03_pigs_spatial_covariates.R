@@ -16,9 +16,17 @@ theme_set(theme_bw())
 # locations (used & available)
 pigs <- read_csv("output/pigs_used_avail_locations.csv") %>%
   # Add column for weight
-  mutate(weight=if_else(case==1, 1, 5000))
+  mutate(weight=if_else(case==1, 1, 5000)) %>%
+  # drop 19212_Delta_4 - not HR, very exploratory
+  filter(key!="19212_Delta_4")
 
-# Rasters
+# Plot the ratio of used to available points
+pigs %>% group_by(key, case) %>% count() %>% 
+  pivot_wider(names_from="case", values_from="n") %>%
+  mutate(ratioUA=`1`/`0`) %>% 
+  ggplot() + geom_density(aes(x=ratioUA))
+
+# Read in rasters
 rast_list <- c("data/landscape_data/evergreen_210m_sum.tif",
                "data/landscape_data/deciduous_210m_sum.tif",
                "data/landscape_data/mixed_210m_sum.tif",
@@ -28,7 +36,8 @@ rast_list <- c("data/landscape_data/evergreen_210m_sum.tif",
                "data/landscape_data/bottomlandHW_210m_sum.tif",
                "data/landscape_data/herbwetlands_210_sum.tif",
                "data/landscape_data/palatable_crops_210m_sum.tif",
-               "data/landscape_data/developed_210m_sum.tif") 
+               "data/landscape_data/developed_210m_sum.tif",
+               "data/landscape_data/water_210m_sum.tif") 
 layers <- rast(rast_list)
 
 # Reclassify missing data to 0
@@ -38,18 +47,36 @@ layers <- classify(layers, m)
 # Convert to % 
 layers <- layers / 149
 
-# read water
-water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
-water <- resample(water, layers)
-ext(water) <- ext(layers)
+# Tree structure
+ch <- rast("data/landscape_data/LC23_CHavg_210m.tif")
+ch <- project(ch, layers)
+ext(ch) <- ext(ch)
+tcc <- rast("data/landscape_data/nlcd_tcc2021_ms50km_mean210m.tif")
+tcc <- project(tcc, layers)
+ext(tcc) <- ext(tcc)
+tcc_sd <- rast("data/landscape_data/nlcd_tcc2021_ms50km_sd210m.tif")
+tcc_sd <- project(tcc_sd, layers)
+ext(tcc_sd) <- ext(tcc_sd)
 
-layers <- c(layers, water)
+# read water
+# water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
+# water <- resample(water, layers)
+# ext(water) <- ext(layers)
+seas_water <- rast("data/landscape_data/msGWD_seasonal_water_distance.tif")
+seas_water <- project(seas_water, layers)
+ext(seas_water) <- ext(seas_water)
+perm_water <- rast("data/landscape_data/msGWD_permanent_water_distance.tif")
+perm_water <- project(perm_water, layers)
+ext(perm_water) <- ext(perm_water)
+
+layers <- c(layers, ch, tcc, seas_water, perm_water)
 
 # Center and scale continuous rasters
 # layers <- scale(layers)
 
 # Rename layers
-names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops", "gramanoids", "bottomland", "herbwetl", "foodcrops", "developed", "water")
+names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops", "gramanoids", "bottomland", "herbwetl", "foodcrops",
+                   "developed", "pct_water", "CanopyHeight", "CanopyCover", "dist_Swater", "dist_Pwater")
 # global(layers[["shrubs"]], fun="mean")
 # global(layers[["shrubs"]], fun="sd")
 
@@ -69,36 +96,7 @@ dat_pigs <- extract(layers, pigs_v)
 # Join extracted data back to location data frame
 pigs <- bind_cols(pigs, dat_pigs)
 
-# Combine a couple classes
-pigs <- pigs %>%
-  mutate(short_veg=gramanoids+shrubs,
-         allcrops=othercrops+foodcrops)
-
-# Correlation matrix
-ids <- unique(pigs$id)
-quick.cor <- list()
-for (i in 1:length(ids)) {
-  temp <- pigs %>% filter(id==ids[i])
-  
-  c.mat <- cor(temp[,c(7:19)])
-  
-  high.cor <- matrix(0, nrow=13, ncol=13)
-  high.cor[which(abs(c.mat)>0.7)] <- 1
-  high.cor <- as.data.frame(high.cor)
-  names(high.cor) <- names(temp[,7:19])
-  high.cor$var <- names(temp[,7:19])
-  
-  quick.cor[[i]] <- high.cor
-}
-
-cor(pigs[,c(7:19)])
-
-# create key column
-# pigs <- pigs %>%
-#   unite("key", c("id", "burst"), sep="_", remove=FALSE)
-
-
-
+cor(pigs[,7:17])
 
 # write file so we don't always have to wait for the rasters to do stuff
 write_csv(pigs, "output/pigs_used_avail_covariates.csv")

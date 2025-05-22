@@ -36,7 +36,7 @@ get_model_params <- function(fit) {
 deer <- read_csv("output/deer_used_avail_covariates.csv")
 
 # Center and scale covariates
-deer[,9:19] <- scale(deer[,9:19])
+deer[,7:17] <- scale(deer[,7:17])
 
 ## Set up to loop by individual
 un.id <- unique(deer$key)
@@ -80,12 +80,12 @@ for (i in 1:length(un.id)) {
   temp <- deer %>% filter(key==un.id[i])
   
   # Set up data for LASSO in glmnet
-  x <- model.matrix(case ~ deciduous + evergreen + bottomland + gramanoids + shrubs + foodcrops + developed, temp)[, -1]
+  x <- model.matrix(case ~ deciduous + bottomland + gramanoids + shrubs + foodcrops + developed + water, temp)[, -1]
   y <- temp$case
   wts <- temp$weight
   
   # Run cross validation for alpha and lambda
-  tryCatch(cv.out <- cva.glmnet(x, y, data=temp, weights=wts, family="binomial", type.measure="deviance"),
+  tryCatch(cv.out <- cva.glmnet(x, y, data=temp, weights=wts, family="binomial"),
            warning = function(w) {
              print(w)
              lasso_fail[i] <<- 1
@@ -125,19 +125,20 @@ for (i in 1:length(un.id)) {
     mod_form <- formula(paste("case ~", coefs))
     
     # run regression model with selected covariates    
-    tryCatch(test <- glm(mod_form, data=temp, family=binomial(link = "logit"), weight=weight),
+    tryCatch(test <- arm::bayesglm(mod_form, data=temp, family=binomial(link = "logit"), weight=weight),
              warning = function(w) {
                print(w)
                fail[i] <<- 1
              })
-    
-    # test2 <- arm::bayesglm(mod_form, data=temp, family=binomial(link = "logit"), weight=weight)
-    
+ 
     # Save GLM with the reduced covariate set
     reduced_glms[[i]] <- test
     
     glm_names <- c(glm_names, un.id[i])
-    glm_vifs[[i]] <- car::vif(test)
+    reduced_glms[[i]] <- test
+    if (nrow(l.coef)>3) {
+      glm_vifs[[i]] <- car::vif(test)
+    }
   }
 }
 

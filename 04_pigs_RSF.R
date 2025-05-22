@@ -34,13 +34,11 @@ get_model_params <- function(fit) {
 #### Read data ####
 pigs <- read_csv("output/pigs_used_avail_covariates.csv")
 
-pigs %>% group_by(id, case) %>% count() %>% print(n=72)
-
 # Center and scale covariates
-pigs[,7:19] <- scale(pigs[,7:19])
+pigs[,7:17] <- scale(pigs[,7:17])
 
 ## Set up to loop by individual
-un.id <- unique(pigs$id)
+un.id <- unique(pigs$key)
 
 # Create list to save models
 pigs_rsf <- list()
@@ -48,7 +46,7 @@ pigs_rsf <- list()
 # list to save coefficients
 cfs <- list()
 
-# # create a list to save VIF from GLMs
+# create a list to save VIF from GLMs
 glm_vifs <- list()
 
 # Save GLMS with reduced variable sets
@@ -64,10 +62,10 @@ set.seed(1)
 for (i in 1:length(un.id)) {
   
   # Filter by ID
-  temp <- pigs %>% filter(id==un.id[i])
+  temp <- pigs %>% filter(key==un.id[i])
   
   # Set up data for LASSO in glmnet
-  x <- model.matrix(case ~ bottomland + foodcrops + shrubs + developed + water + I(water^2), temp)[, -1]
+  x <- model.matrix(case ~ bottomland + deciduous + gramanoids + shrubs + developed + water, temp)[, -1]
   y <- temp$case
   wts <- temp$weight
   
@@ -100,8 +98,8 @@ for (i in 1:length(un.id)) {
   coefs <- as.matrix(l.coef) %>% 
     as.data.frame() %>% 
     rownames_to_column() 
-  # Check if both water and water2 are 0...if water is 0, but water2 is not, fill water2 with 0
-  coefs$s1[coefs$rowname=="I(water^2)"] <- if_else(coefs$s1[coefs$rowname=="water"]==0,0, coefs$s1[coefs$rowname=="I(water^2)"])
+  # # Check if both water and water2 are 0...if water is 0, but water2 is not, fill water2 with 0
+  # coefs$s1[coefs$rowname=="I(water^2)"] <- if_else(coefs$s1[coefs$rowname=="water"]==0,0, coefs$s1[coefs$rowname=="I(water^2)"])
   # Drop coefficients == 0  
   coefs <- coefs %>%  
     filter(rowname!="(Intercept)" & s1!=0) %>%
@@ -121,14 +119,12 @@ for (i in 1:length(un.id)) {
                fail[i] <<- 1
              })
     
-    test <- logistf::logistf(mod_form, data=temp, weights=weight)
-    test <- glm(mod_form, data=temp, weights=weight, family=binomial(link = "logit"))
-    
-    
     # Save GLM with the reduced covariate set
     reduced_glms[[i]] <- test
-    
-    glm_vifs[[i]] <- car::vif(test)
+    if (nrow(l.coef)>3) {
+      glm_vifs[[i]] <- car::vif(test)
+    }
+
   }
 }
 
@@ -145,27 +141,21 @@ se <- do.call(bind_rows, se)
 
 # rename intercept and add ID column
 se <- se %>%
-  rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%
+  rename(intercept=`(Intercept)`) %>%  #, water2=`I(water^2)`
   # drop intercept
   select(-intercept) %>%
   # Reorder
-  select(bottomland:water2) %>%
+  select(bottomland:water) %>%
   # fill with 0
-  mutate(across(bottomland:water2, \(x) coalesce(x, 0))) %>%
+  mutate(across(bottomland:water, \(x) coalesce(x, 0))) %>%
   mutate(water2 = if_else(water==0, 0, water2))
 
 # Add IDs
 se$id <- un.id
 
-# Drop those with unreasonable SEs (probably because the AKDE was too big)
-se <- se %>%
-  filter(id!="30251_Eastern_2" & id!="35493_Noxubee_2" & id!="35490_Noxubee_2" & id!="30252_Noxubee_1" &
-           id!="19212_Delta_2" & id!="19219_Delta_3" & id!="19219_Delta_2" & id!="35493_Noxubee_6") %>%
-  select(-id)
-
 # Calculate mean across all individuals
 glm_se <- se %>% 
-  reframe(across(bottomland:water2, \(x) mean(x, na.rm = TRUE)))
+  reframe(across(bottomland:water, \(x) mean(x, na.rm = TRUE)))
 
 write_csv(glm_se, "output/pigs_glm_se.csv")
 
@@ -179,27 +169,20 @@ r_glms <- do.call(bind_rows, r_glms)
 
 r_glms <- r_glms %>% 
   as_tibble() %>%
-  rename(intercept=`(Intercept)`, water2=`I(water^2)`) %>%
+  rename(intercept=`(Intercept)`) %>%
   # drop intercept
   select(-intercept) %>%
   # Reorder
-  select(bottomland:water2) %>%
+  select(bottomland:water) %>%
   # fill with 0
-  mutate(across(bottomland:water2, \(x) coalesce(x, 0))) %>%
-  mutate(water2 = if_else(water==0, 0, water2))
+  mutate(across(bottomland:water, \(x) coalesce(x, 0))) 
   
 # Add IDs 
 r_glms$id <- un.id
 
-# Drop those with unreasonable SEs (probably because the AKDE was too big)
-r_glms <- r_glms %>%
-  filter(id!="30251_Eastern_2" & id!="35493_Noxubee_2" & id!="35490_Noxubee_2" & id!="30252_Noxubee_1" &
-           id!="19212_Delta_2" & id!="19219_Delta_3" & id!="19219_Delta_2" & id!="35493_Noxubee_6") %>%
-select(-id)
-
 # Calculate mean across all individuals
 glm_betas <- r_glms %>% 
-  reframe(across(bottomland:water2, \(x) mean(x, na.rm = TRUE)))
+  reframe(across(bottomland:water, \(x) mean(x, na.rm = TRUE)))
 
 write_csv(glm_betas, "output/pigs_glm_betas.csv")
 

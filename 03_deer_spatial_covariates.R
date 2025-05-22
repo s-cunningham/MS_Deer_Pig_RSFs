@@ -9,6 +9,11 @@ deer <- read_csv("output/deer_used_avail_locations.csv") %>%
   # Add column for weight
   mutate(weight=if_else(case==1, 1, 5000))
 
+deer %>% group_by(key, case) %>% count() %>% 
+  pivot_wider(names_from="case", values_from="n") %>%
+  mutate(ratioUA=`1`/`0`) %>% 
+  ggplot() + geom_density(aes(x=ratioUA))
+
 # Rasters
 rast_list <- c("data/landscape_data/evergreen_180m_sum.tif",
                "data/landscape_data/deciduous_180m_sum.tif",
@@ -19,7 +24,8 @@ rast_list <- c("data/landscape_data/evergreen_180m_sum.tif",
                "data/landscape_data/bottomlandHW_180m_sum.tif",
                "data/landscape_data/herbwetlands_180_sum.tif",
                "data/landscape_data/palatable_crops_180m_sum.tif",
-               "data/landscape_data/developed_180m_sum.tif") 
+               "data/landscape_data/developed_180m_sum.tif",
+               "data/landscape_data/water_180m_sum.tif") 
 
 layers <- rast(rast_list)
 
@@ -31,11 +37,11 @@ layers <- classify(layers, m)
 layers <- layers / 113
 
 # read water
-water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
-water <- resample(water, layers)
-ext(water) <- ext(layers)
+# water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
+# water <- resample(water, layers)
+# ext(water) <- ext(layers)
 
-layers <- c(layers, water)
+# layers <- c(layers, water)
 
 # Center and scale continuous rasters
 # layers <- scale(layers)
@@ -61,11 +67,7 @@ dat_deer <- extract(layers, deer_v)
 deer <- bind_cols(deer, dat_deer)
 
 # correlation matrix
-cor(deer[,c(8:18)])
-
-# create key column
-deer <- deer %>%
-  unite("key", c("id", "burst"), sep="_", remove=FALSE)
+cor(deer[,c(7:17)])
 
 # write file so we don't always have to wait for the rasters to do stuff
 write_csv(deer, "output/deer_used_avail_covariates.csv")

@@ -194,7 +194,7 @@ pigs <- pigs_res %>%
   dplyr::select(id, key, x:rel.angle)
 
 ## Need to do this manually, and make sure to add the segmented data to 'deer'
-s <- lv_func(pigs_res, "19212_Delta", 30)
+s <- lv_func(pigs_res, "19219_Delta", 30)
 
 # Add segmented data to full dataset
 pigs <- bind_rows(pigs, s)
@@ -207,12 +207,14 @@ short <- ndays %>% filter(ndays<30)
 pigs <- pigs %>% filter(!(id %in% short$id))
 
 # Ending up with some HRs that are likely much too large
-temp <- pigs %>% filter(id=="152317_Northern")
+temp <- pigs %>% filter(key=="19212_Delta_3")
 ggplot(temp, aes(x=x, y=y, color=date)) +
   geom_path() + geom_point() 
 ggplot(temp, aes(x=date, y=R2n, color=date)) +
   geom_vline(xintercept=as_datetime("2018-08-31 00:00:00")) +
   geom_path()
+ggplot(temp) +
+  geom_histogram(aes(x=y))
 
 ## Set up data
 # Convert to lat/long (WGS84)
@@ -230,6 +232,10 @@ ll <- pigs_sf %>% st_coordinates() %>% as_tibble() %>%
 pigs <- pigs %>% 
   filter(!is.na(x)) %>% 
   bind_cols(ll)
+
+# Drop extra forays from 19212_Delta_3
+pigs <- pigs %>% 
+  filter(!(key=="19212_Delta_3" & y<3752500)) 
 
 dat <- pigs %>%      
   # need the lat long, etc. in a specific order 
@@ -254,6 +260,8 @@ size <- data.frame()
 
 # Set progress bar of sanity because this takes long - set it to the number of ids in the dataset (min = 0, max = max number of ids)
 pb <- txtProgressBar(min = 0, max = length(ids), style = 3)
+
+out <- readRDS("results/home_ranges/raw_pigs_AKDEs.rds")
 
 # Run loop to fit AKDEs
 for (i in 1:length(ids)) {

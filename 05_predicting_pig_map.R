@@ -5,6 +5,12 @@ library(tidyterra)
 theme_set(theme_bw())
 
 #### Read Data ####
+# pig data
+pigs <- read_csv("output/pigs_used_avail_covariates.csv")
+
+# Center and scale covariates
+pigs_cs <- scale(pigs[,7:17])
+
 # Rasters
 rast_list <- c("data/landscape_data/evergreen_210m_sum.tif",
                "data/landscape_data/deciduous_210m_sum.tif",
@@ -14,7 +20,9 @@ rast_list <- c("data/landscape_data/evergreen_210m_sum.tif",
                "data/landscape_data/gramanoids_210m_sum.tif", 
                "data/landscape_data/bottomlandHW_210m_sum.tif",
                "data/landscape_data/herbwetlands_210_sum.tif",
-               "data/landscape_data/palatable_crops_210m_sum.tif") 
+               "data/landscape_data/palatable_crops_210m_sum.tif",
+               "data/landscape_data/developed_210m_sum.tif",
+               "data/landscape_data/water_210m_sum.tif") 
 layers <- rast(rast_list)
 
 # Reclassify missing data to 0
@@ -25,17 +33,32 @@ layers <- classify(layers, m)
 layers <- layers / 149
 
 # read water
-water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
-water <- resample(water, layers)
-ext(water) <- ext(layers)
-
-layers <- c(layers, water)
-
-# Center and scale continuous rasters
-layers <- scale(layers)
+# water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
+# water <- resample(water, layers)
+# ext(water) <- ext(layers)
+# 
+# layers <- c(layers, water)
 
 # Rename layers
-names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops", "gramanoids", "bottomland", "herbwetl", "foodcrops", "water")
+names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops", "gramanoids", "bottomland", "herbwetl", "foodcrops", "developed", "water")
+
+# remove some that aren't in the model
+dontneed <- c("evergreen", "mixed", "othercrops", "herbwetl")
+layers <- subset(layers, dontneed, negate=TRUE)
+
+# Center and scale based on values in pig data
+lnames <- names(layers)
+for (i in 1:length(lnames)) {
+  # Subtract mean and divide by standard deviation
+  layers[[lnames[i]]] <- (layers[[lnames[i]]] - attr(pigs_cs,"scaled:center")[[lnames[i]]]) / attr(pigs_cs,"scaled:scale")[[lnames[i]]]
+}
+
+# Save pig center & scaled
+# Define the output file names.  
+output_files <- paste0("data/landscape_data/scaled_rasters/pig_scaled_", lnames, ".tif")
+
+# Write each layer to a separate file
+writeRaster(layers, output_files, overwrite=TRUE)
 
 
 #### Predict across MS counties ####
@@ -77,11 +100,8 @@ for (i in 1:length(split_counties)) {
   # bottomland + deciduous + evergreen + shrubs + foodcrops + water + I(water^2)
   pred <- exp(betas$beta[1]*cty_layers[["bottomland"]] +
               betas$beta[2]*cty_layers[["shrubs"]] +
-              betas$beta[3]*cty_layers[["deciduous"]] +
-              betas$beta[4]*cty_layers[["evergreen"]] +
-              betas$beta[5]*cty_layers[["foodcrops"]] +
-              betas$beta[6]*cty_layers[["water"]] +
-              betas$beta[7]*(cty_layers[["water"]]^2))
+              betas$beta[3]*cty_layers[["developed"]] +
+              betas$beta[4]*cty_layers[["water"]])
   
   # create filename
   filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, ".tif")
@@ -89,35 +109,35 @@ for (i in 1:length(split_counties)) {
   writeRaster(pred, filename, overwrite=TRUE)
   
   ## Lower CI
-  pred <- exp(betas$lci[1]*cty_layers[["bottomland"]] +
-                betas$lci[2]*cty_layers[["shrubs"]] +
-                betas$lci[3]*cty_layers[["deciduous"]] +
-                betas$lci[4]*cty_layers[["evergreen"]] +
-                betas$lci[5]*cty_layers[["foodcrops"]] +
-                betas$lci[6]*cty_layers[["water"]] +
-                betas$lci[7]*(cty_layers[["water"]]^2))
-  
-  # create filename
-  filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
-  
-  # Export county prediction raster
-  writeRaster(pred, filename, overwrite=TRUE)
-  
-  
-  ## Upper CI
-  pred <- exp(betas$uci[1]*cty_layers[["bottomland"]] +
-                betas$uci[2]*cty_layers[["shrubs"]] +
-                betas$uci[3]*cty_layers[["deciduous"]] +
-                betas$uci[4]*cty_layers[["evergreen"]] +
-                betas$uci[5]*cty_layers[["foodcrops"]] +
-                betas$uci[6]*cty_layers[["water"]] +
-                betas$uci[7]*(cty_layers[["water"]]^2))
-  
-  # create filename
-  filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
-  
-  # Export county prediction raster
-  writeRaster(pred, filename, overwrite=TRUE)
+  # pred <- exp(betas$lci[1]*cty_layers[["bottomland"]] +
+  #               betas$lci[2]*cty_layers[["shrubs"]] +
+  #               betas$lci[3]*cty_layers[["deciduous"]] +
+  #               betas$lci[4]*cty_layers[["evergreen"]] +
+  #               betas$lci[5]*cty_layers[["foodcrops"]] +
+  #               betas$lci[6]*cty_layers[["water"]] +
+  #               betas$lci[7]*(cty_layers[["water"]]^2))
+  # 
+  # # create filename
+  # filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
+  # 
+  # # Export county prediction raster
+  # writeRaster(pred, filename, overwrite=TRUE)
+  # 
+  # 
+  # ## Upper CI
+  # pred <- exp(betas$uci[1]*cty_layers[["bottomland"]] +
+  #               betas$uci[2]*cty_layers[["shrubs"]] +
+  #               betas$uci[3]*cty_layers[["deciduous"]] +
+  #               betas$uci[4]*cty_layers[["evergreen"]] +
+  #               betas$uci[5]*cty_layers[["foodcrops"]] +
+  #               betas$uci[6]*cty_layers[["water"]] +
+  #               betas$uci[7]*(cty_layers[["water"]]^2))
+  # 
+  # # create filename
+  # filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
+  # 
+  # # Export county prediction raster
+  # writeRaster(pred, filename, overwrite=TRUE)
   
 }
 
