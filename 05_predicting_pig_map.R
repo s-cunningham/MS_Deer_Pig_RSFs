@@ -9,9 +9,9 @@ theme_set(theme_bw())
 pigs <- read_csv("output/pigs_used_avail_covariates.csv")
 
 # Center and scale covariates
-pigs_cs <- scale(pigs[,7:17])
+pigs_cs <- scale(pigs[,7:22])
 
-# Rasters
+# Read in rasters
 rast_list <- c("data/landscape_data/evergreen_210m_sum.tif",
                "data/landscape_data/deciduous_210m_sum.tif",
                "data/landscape_data/mixed_210m_sum.tif",
@@ -22,6 +22,8 @@ rast_list <- c("data/landscape_data/evergreen_210m_sum.tif",
                "data/landscape_data/herbwetlands_210_sum.tif",
                "data/landscape_data/palatable_crops_210m_sum.tif",
                "data/landscape_data/developed_210m_sum.tif",
+               "data/landscape_data/allforestwoods_210m_sum.tif",
+               "data/landscape_data/allhardwoods_210m_sum.tif",
                "data/landscape_data/water_210m_sum.tif") 
 layers <- rast(rast_list)
 
@@ -33,17 +35,24 @@ layers <- classify(layers, m)
 layers <- layers / 149
 
 # read water
-# water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
-# water <- resample(water, layers)
-# ext(water) <- ext(layers)
-# 
-# layers <- c(layers, water)
+water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
+water <- resample(water, layers)
+ext(water) <- ext(layers)
+seas_water <- rast("data/landscape_data/msGWD_seasonal_water_distance.tif")
+seas_water <- project(seas_water, layers)
+ext(seas_water) <- ext(seas_water)
+perm_water <- rast("data/landscape_data/msGWD_permanent_water_distance.tif")
+perm_water <- project(perm_water, layers)
+ext(perm_water) <- ext(perm_water)
+
+layers <- c(layers, water, seas_water, perm_water)
 
 # Rename layers
-names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops", "gramanoids", "bottomland", "herbwetl", "foodcrops", "developed", "water")
+names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops", "gramanoids", "bottomland", "herbwetl", "foodcrops",
+                   "developed", "allwoods", "hardwoods", "pct_water", "dist_water", "dist_Swater", "dist_Pwater")
 
 # remove some that aren't in the model
-dontneed <- c("evergreen", "mixed", "othercrops", "herbwetl")
+dontneed <- c( "mixed", "deciduous", "allwoods", "foodcrops", "developed", "pct_water", "othercrops", "bottomland", "dist_Swater", "dist_Pwater", "pct_water")
 layers <- subset(layers, dontneed, negate=TRUE)
 
 # Center and scale based on values in pig data
@@ -97,11 +106,14 @@ for (i in 1:length(split_counties)) {
   cty_layers <- crop(layers, cty, mask=TRUE)
 
   # Predict (w(x) = exp(x*beta))
-  # bottomland + deciduous + evergreen + shrubs + foodcrops + water + I(water^2)
-  pred <- exp(betas$beta[1]*cty_layers[["bottomland"]] +
-              betas$beta[2]*cty_layers[["shrubs"]] +
-              betas$beta[3]*cty_layers[["developed"]] +
-              betas$beta[4]*cty_layers[["water"]])
+  # hardwoods + evergreen + herbwetl + shrubs + gramanoids + developed + dist_Swater + I(dist_Swater^2) + dist_Pwater + I(dist_Pwater^2)
+  pred <- exp(betas$beta[1]*cty_layers[["hardwoods"]] +
+              betas$beta[2]*cty_layers[["evergreen"]] +  
+              betas$beta[3]*cty_layers[["herbwetl"]] +  
+              betas$beta[4]*cty_layers[["shrubs"]] +
+              betas$beta[5]*cty_layers[["gramanoids"]] +
+              betas$beta[6]*cty_layers[["dist_water"]] +
+              betas$beta[7]*(cty_layers[["dist_water"]]^2))
   
   # create filename
   filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, ".tif")
@@ -162,6 +174,16 @@ pred <- log(pred)
 
 # plot
 plot(pred)
+
+
+
+m <- c(-3.292919, 0, NA,
+       0, 8.234098, 2)
+rclmat <- matrix(m, ncol=3, byrow=TRUE)
+selfor <- classify(pred, rclmat, include.lowest=TRUE)
+plot(selfor)
+
+# predls <- (pred-minmax(pred)[1]) / (minmax(pred)[2] - minmax(pred)[1])
 
 ## lower CI
 ## List county rasters

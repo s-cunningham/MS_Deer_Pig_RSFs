@@ -18,6 +18,7 @@ deer %>% group_by(key, case) %>% count() %>%
 rast_list <- c("data/landscape_data/evergreen_180m_sum.tif",
                "data/landscape_data/deciduous_180m_sum.tif",
                "data/landscape_data/mixed_180m_sum.tif",
+               "data/landscape_data/allhardwoods_180m_sum.tif",
                "data/landscape_data/shrublands_180m_sum.tif",
                "data/landscape_data/othercrops_180m_sum.tif",
                "data/landscape_data/gramanoids_180m_sum.tif", 
@@ -37,18 +38,15 @@ layers <- classify(layers, m)
 layers <- layers / 113
 
 # read water
-# water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
-# water <- resample(water, layers)
-# ext(water) <- ext(layers)
+water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
+water <- resample(water, layers)
+ext(water) <- ext(layers)
 
-# layers <- c(layers, water)
-
-# Center and scale continuous rasters
-# layers <- scale(layers)
+layers <- c(layers, water)
 
 # Rename layers
-names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops",
-                   "gramanoids", "bottomland", "herbwetl", "foodcrops", "developed", "water")
+names(layers) <- c("evergreen", "deciduous", "mixed", "allhardwoods", "shrubs", "othercrops",
+                   "gramanoids", "bottomland", "herbwetl", "foodcrops", "developed", "water_pct", "water_dist")
 
 #### Extract covariates and used and available locations ####
 
@@ -67,7 +65,7 @@ dat_deer <- extract(layers, deer_v)
 deer <- bind_cols(deer, dat_deer)
 
 # correlation matrix
-cor(deer[,c(7:17)])
+cor(deer[,c(7:19)])
 
 # write file so we don't always have to wait for the rasters to do stuff
 write_csv(deer, "output/deer_used_avail_covariates.csv")

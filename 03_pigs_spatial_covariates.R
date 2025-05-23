@@ -37,6 +37,8 @@ rast_list <- c("data/landscape_data/evergreen_210m_sum.tif",
                "data/landscape_data/herbwetlands_210_sum.tif",
                "data/landscape_data/palatable_crops_210m_sum.tif",
                "data/landscape_data/developed_210m_sum.tif",
+               "data/landscape_data/allforestwoods_210m_sum.tif",
+               "data/landscape_data/allhardwoods_210m_sum.tif",
                "data/landscape_data/water_210m_sum.tif") 
 layers <- rast(rast_list)
 
@@ -48,20 +50,20 @@ layers <- classify(layers, m)
 layers <- layers / 149
 
 # Tree structure
-ch <- rast("data/landscape_data/LC23_CHavg_210m.tif")
-ch <- project(ch, layers)
-ext(ch) <- ext(ch)
-tcc <- rast("data/landscape_data/nlcd_tcc2021_ms50km_mean210m.tif")
-tcc <- project(tcc, layers)
-ext(tcc) <- ext(tcc)
-tcc_sd <- rast("data/landscape_data/nlcd_tcc2021_ms50km_sd210m.tif")
-tcc_sd <- project(tcc_sd, layers)
-ext(tcc_sd) <- ext(tcc_sd)
+# ch <- rast("data/landscape_data/LC23_CHavg_210m.tif")
+# ch <- project(ch, layers)
+# ext(ch) <- ext(ch)
+# tcc <- rast("data/landscape_data/nlcd_tcc2021_ms50km_mean210m.tif")
+# tcc <- project(tcc, layers)
+# ext(tcc) <- ext(tcc)
+# tcc_sd <- rast("data/landscape_data/nlcd_tcc2021_ms50km_sd210m.tif")
+# tcc_sd <- project(tcc_sd, layers)
+# ext(tcc_sd) <- ext(tcc_sd)
 
 # read water
-# water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
-# water <- resample(water, layers)
-# ext(water) <- ext(layers)
+water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
+water <- resample(water, layers)
+ext(water) <- ext(layers)
 seas_water <- rast("data/landscape_data/msGWD_seasonal_water_distance.tif")
 seas_water <- project(seas_water, layers)
 ext(seas_water) <- ext(seas_water)
@@ -69,14 +71,11 @@ perm_water <- rast("data/landscape_data/msGWD_permanent_water_distance.tif")
 perm_water <- project(perm_water, layers)
 ext(perm_water) <- ext(perm_water)
 
-layers <- c(layers, ch, tcc, seas_water, perm_water)
-
-# Center and scale continuous rasters
-# layers <- scale(layers)
+layers <- c(layers, water, seas_water, perm_water)
 
 # Rename layers
 names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops", "gramanoids", "bottomland", "herbwetl", "foodcrops",
-                   "developed", "pct_water", "CanopyHeight", "CanopyCover", "dist_Swater", "dist_Pwater")
+                   "developed", "allwoods", "hardwoods", "pct_water", "dist_water", "dist_Swater", "dist_Pwater")
 # global(layers[["shrubs"]], fun="mean")
 # global(layers[["shrubs"]], fun="sd")
 
@@ -96,7 +95,7 @@ dat_pigs <- extract(layers, pigs_v)
 # Join extracted data back to location data frame
 pigs <- bind_cols(pigs, dat_pigs)
 
-cor(pigs[,7:17])
+cor(pigs[,7:22])
 
 # write file so we don't always have to wait for the rasters to do stuff
 write_csv(pigs, "output/pigs_used_avail_covariates.csv")

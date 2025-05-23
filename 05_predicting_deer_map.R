@@ -4,7 +4,7 @@
 # Objective: Take the coefficients from the RSF and predict across Mississippi
 # Input: Proportional cover rasters, coefficients from RSF models
 # Output: Rasters (.tif and/or .asc) of statewide RSF predictions
-# Required packages: tidyverse, glmnet, glmnetUtils, arm
+# Required packages: tidyverse, terra, tidyterra
 # ----------------------------------------------------------------------------------------------------------------------------
 
 library(tidyverse)
@@ -16,12 +16,16 @@ library(tidyterra)
 rast_list <- c("data/landscape_data/evergreen_180m_sum.tif",
                "data/landscape_data/deciduous_180m_sum.tif",
                "data/landscape_data/mixed_180m_sum.tif",
+               "data/landscape_data/allhardwoods_180m_sum.tif",
                "data/landscape_data/shrublands_180m_sum.tif",
                "data/landscape_data/othercrops_180m_sum.tif",
                "data/landscape_data/gramanoids_180m_sum.tif", 
                "data/landscape_data/bottomlandHW_180m_sum.tif",
                "data/landscape_data/herbwetlands_180_sum.tif",
-               "data/landscape_data/palatable_crops_180m_sum.tif") 
+               "data/landscape_data/palatable_crops_180m_sum.tif",
+               "data/landscape_data/developed_180m_sum.tif",
+               "data/landscape_data/water_180m_sum.tif") 
+
 layers <- rast(rast_list)
 
 # Reclassify missing data to 0
@@ -38,12 +42,31 @@ ext(water) <- ext(layers)
 
 layers <- c(layers, water)
 
-# Center and scale continuous rasters
-layers <- scale(layers)
-
 # Rename layers
-names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops",
-                   "gramanoids", "bottomland", "herbwetl", "foodcrops", "water")
+names(layers) <- c("evergreen", "deciduous", "mixed", "allhardwoods", "shrubs", "othercrops",
+                   "gramanoids", "bottomland", "herbwetl", "foodcrops", "developed", "water_pct", "water_dist")
+
+# remove some that aren't in the model
+dontneed <- c("evergreen", "mixed", "othercrops", "herbwetl", "bottomland", "deciduous", "water_pct")
+layers <- subset(layers, dontneed, negate=TRUE)
+
+# Center and scale based on values in deer data
+deer <- read_csv("output/deer_used_avail_covariates.csv")
+# Center and scale covariates
+deer_cs <- scale(deer[,7:19])
+lnames <- names(layers)
+for (i in 1:length(lnames)) {
+  # Subtract mean and divide by standard deviation
+  layers[[lnames[i]]] <- (layers[[lnames[i]]] - attr(deer_cs,"scaled:center")[[lnames[i]]]) / attr(deer_cs,"scaled:scale")[[lnames[i]]]
+}
+
+# Save pig center & scaled
+# Define the output file names.  
+output_files <- paste0("data/landscape_data/scaled_rasters/deer_scaled_", lnames, ".tif")
+
+# Write each layer to a separate file
+writeRaster(layers, output_files, overwrite=TRUE)
+
 
 #### Predict across MS counties ####
 # *Uses wayyyy less memory than doing the whole state at once*
@@ -85,15 +108,14 @@ for (i in 1:length(split_counties)) {
   
   ## Mean prediction
   # Predict (w(x) = exp(x*beta))
-  # deciduous + evergreen + bottomland + gramanoids + shrubs + foodcrops + water + I(water^2)
-  pred <- exp(betas$beta[1]*cty_layers[["deciduous"]] +
-                betas$beta[2]*cty_layers[["evergreen"]] +
-                betas$beta[3]*cty_layers[["bottomland"]] +
-                betas$beta[4]*cty_layers[["gramanoids"]] +
-                betas$beta[5]*cty_layers[["shrubs"]] +
-                betas$beta[6]*cty_layers[["foodcrops"]] +
-                betas$beta[7]*cty_layers[["water"]] +
-                betas$beta[8]*(cty_layers[["water"]]^2))
+  # allhardwoods + gramanoids + shrubs + foodcrops + developed + water
+  pred <- exp(betas$beta[1]*cty_layers[["allhardwoods"]] +
+                betas$beta[2]*cty_layers[["gramanoids"]] +
+                betas$beta[3]*cty_layers[["shrubs"]] +
+                betas$beta[4]*cty_layers[["foodcrops"]] +
+                betas$beta[5]*cty_layers[["developed"]] +
+                betas$beta[6]*cty_layers[["water_dist"]]+
+                betas$beta[6]*(cty_layers[["water_dist"]]^2))
   
   # create filename
   filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_mean.tif")
@@ -101,38 +123,38 @@ for (i in 1:length(split_counties)) {
   # Export county prediction raster
   writeRaster(pred, filename, overwrite=TRUE)
   
-  # something not right with math
-  # ## Lower CI prediction
-  pred <- exp(betas$lci[1]*cty_layers[["deciduous"]] +
-                betas$lci[2]*cty_layers[["evergreen"]] +
-                betas$lci[3]*cty_layers[["bottomland"]] +
-                betas$lci[4]*cty_layers[["gramanoids"]] +
-                betas$lci[5]*cty_layers[["shrubs"]] +
-                betas$lci[6]*cty_layers[["foodcrops"]] +
-                betas$lci[7]*cty_layers[["water"]] +
-                betas$lci[8]*(cty_layers[["water"]]^2))
-
-  # create filename
-  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
-
-  # Export county prediction raster
-  writeRaster(pred, filename, overwrite=TRUE)
-
-  ## Upper CI prediction
-  pred <- exp(betas$uci[1]*cty_layers[["deciduous"]] +
-                betas$uci[2]*cty_layers[["evergreen"]] +
-                betas$uci[3]*cty_layers[["bottomland"]] +
-                betas$uci[4]*cty_layers[["gramanoids"]] +
-                betas$uci[5]*cty_layers[["shrubs"]] +
-                betas$uci[6]*cty_layers[["foodcrops"]] +
-                betas$uci[7]*cty_layers[["water"]] +
-                betas$uci[8]*(cty_layers[["water"]]^2))
-
-  # create filename
-  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
-
-  # Export county prediction raster
-  writeRaster(pred, filename, overwrite=TRUE)
+  # # something not right with math
+  # # ## Lower CI prediction
+  # pred <- exp(betas$lci[1]*cty_layers[["deciduous"]] +
+  #               betas$lci[2]*cty_layers[["evergreen"]] +
+  #               betas$lci[3]*cty_layers[["bottomland"]] +
+  #               betas$lci[4]*cty_layers[["gramanoids"]] +
+  #               betas$lci[5]*cty_layers[["shrubs"]] +
+  #               betas$lci[6]*cty_layers[["foodcrops"]] +
+  #               betas$lci[7]*cty_layers[["water"]] +
+  #               betas$lci[8]*(cty_layers[["water"]]^2))
+  # 
+  # # create filename
+  # filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
+  # 
+  # # Export county prediction raster
+  # writeRaster(pred, filename, overwrite=TRUE)
+  # 
+  # ## Upper CI prediction
+  # pred <- exp(betas$uci[1]*cty_layers[["deciduous"]] +
+  #               betas$uci[2]*cty_layers[["evergreen"]] +
+  #               betas$uci[3]*cty_layers[["bottomland"]] +
+  #               betas$uci[4]*cty_layers[["gramanoids"]] +
+  #               betas$uci[5]*cty_layers[["shrubs"]] +
+  #               betas$uci[6]*cty_layers[["foodcrops"]] +
+  #               betas$uci[7]*cty_layers[["water"]] +
+  #               betas$uci[8]*(cty_layers[["water"]]^2))
+  # 
+  # # create filename
+  # filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
+  # 
+  # # Export county prediction raster
+  # writeRaster(pred, filename, overwrite=TRUE)
 }
 
 
@@ -153,6 +175,7 @@ pred <- mosaic(rsrc)
 names(pred) <- "RSF"
 
 # take ln of map
+pred <- pred + 0.000001
 pred <- log(pred)
 
 # plot
@@ -202,11 +225,11 @@ minmax(lci)
 minmax(uci)
 
 ## Perform linear stretch
-pred <- (pred - minmax(pred)[1])/(minmax(pred)[2] - minmax(pred)[1])
+predLS <- (pred - minmax(pred)[1])/(minmax(pred)[2] - minmax(pred)[1])
 lci <- (lci - minmax(lci)[1])/(minmax(lci)[2] - minmax(lci)[1])
 uci <- (uci - minmax(uci)[1])/(minmax(uci)[2] - minmax(uci)[1])
 
-plot(pred)
+plot(predLS)
 plot(lci)
 plot(uci)
 
