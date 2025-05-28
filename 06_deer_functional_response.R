@@ -9,9 +9,21 @@
 
 library(tidyverse)
 
-deer_rsf <- readRDS("output/deer_reduced_glms.RDS")
+## Read in deer data
+deer <- read_csv("output/deer_used_avail_covariates.csv")
+
+# Center and scale covariates
+deer[,7:19] <- scale(deer[,7:19])
+
+## Set up to loop by individual
+un.id <- unique(deer$key)
+
+
 
 #### Summarize coefficients ####
+# read in models
+deer_rsf <- readRDS("output/deer_glms.RDS")
+
 # extract mean coeficients and combine into a single table
 r_glms <- lapply(deer_rsf, coef)
 r_glms <- lapply(r_glms, as.data.frame)
@@ -32,3 +44,5 @@ r_glms <- r_glms %>%
 # Add IDs 
 r_glms$id <- un.id
 
+
+plot(r_glms$allhardwoods)

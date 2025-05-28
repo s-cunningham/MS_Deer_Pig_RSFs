@@ -123,40 +123,45 @@ for (i in 1:length(split_counties)) {
   # Export county prediction raster
   writeRaster(pred, filename, overwrite=TRUE)
   
-  # # something not right with math
-  # # ## Lower CI prediction
-  # pred <- exp(betas$lci[1]*cty_layers[["deciduous"]] +
-  #               betas$lci[2]*cty_layers[["evergreen"]] +
-  #               betas$lci[3]*cty_layers[["bottomland"]] +
-  #               betas$lci[4]*cty_layers[["gramanoids"]] +
-  #               betas$lci[5]*cty_layers[["shrubs"]] +
-  #               betas$lci[6]*cty_layers[["foodcrops"]] +
-  #               betas$lci[7]*cty_layers[["water"]] +
-  #               betas$lci[8]*(cty_layers[["water"]]^2))
-  # 
-  # # create filename
-  # filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
-  # 
-  # # Export county prediction raster
-  # writeRaster(pred, filename, overwrite=TRUE)
-  # 
-  # ## Upper CI prediction
-  # pred <- exp(betas$uci[1]*cty_layers[["deciduous"]] +
-  #               betas$uci[2]*cty_layers[["evergreen"]] +
-  #               betas$uci[3]*cty_layers[["bottomland"]] +
-  #               betas$uci[4]*cty_layers[["gramanoids"]] +
-  #               betas$uci[5]*cty_layers[["shrubs"]] +
-  #               betas$uci[6]*cty_layers[["foodcrops"]] +
-  #               betas$uci[7]*cty_layers[["water"]] +
-  #               betas$uci[8]*(cty_layers[["water"]]^2))
-  # 
-  # # create filename
-  # filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
-  # 
-  # # Export county prediction raster
-  # writeRaster(pred, filename, overwrite=TRUE)
+  # something not right with math
+  ## Lower CI prediction
+  pred <- exp(betas$lci[1]*cty_layers[["allhardwoods"]] +
+                betas$lci[2]*cty_layers[["gramanoids"]] +
+                betas$lci[3]*cty_layers[["shrubs"]] +
+                betas$lci[4]*cty_layers[["foodcrops"]] +
+                betas$lci[5]*cty_layers[["developed"]] +
+                betas$lci[6]*cty_layers[["water_dist"]]+
+                betas$lci[6]*(cty_layers[["water_dist"]]^2))
+
+  # create filename
+  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
+
+  # Export county prediction raster
+  writeRaster(pred, filename, overwrite=TRUE)
+
+  ## Upper CI prediction
+  pred <- exp(betas$uci[1]*cty_layers[["allhardwoods"]] +
+                betas$uci[2]*cty_layers[["gramanoids"]] +
+                betas$uci[3]*cty_layers[["shrubs"]] +
+                betas$uci[4]*cty_layers[["foodcrops"]] +
+                betas$uci[5]*cty_layers[["developed"]] +
+                betas$uci[6]*cty_layers[["water_dist"]]+
+                betas$uci[6]*(cty_layers[["water_dist"]]^2))
+
+  # create filename
+  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
+
+  # Export county prediction raster
+  writeRaster(pred, filename, overwrite=TRUE)
 }
 
+# Read in MS shapefile (to drop islands)
+ms <- vect("data/landscape_data/mississippi_ACEA.shp")
+ms <- project(ms, pred)
+
+# Read in permanent water mask
+water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
+water <- project(water, pred)
 
 #### Combine county rasters into full state ####
 ## List county rasters
@@ -178,10 +183,83 @@ names(pred) <- "RSF"
 pred <- pred + 0.000001
 pred <- log(pred)
 
+# Reclassify missing data to 0
+m <- rbind(c(NA, minmax(pred)[1]))
+pred <- classify(pred, m)
+
+# Remove islands
+pred <- mask(pred, ms)
+
+# Remove water
+pred <- mask(pred, water, inverse=TRUE)
+
 # plot
 plot(pred)
 
-## lower CI
+## Calculate quantiles
+global(pred, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
+
+m <- c(-13.815511, -7.950021, 1,
+       -7.950021, -5.639721, 2,
+       -5.639721, -3.40708, 3,
+       -3.40708, -2.085063, 4,
+       -2.085063, -1.112339, 5,
+       -1.112339, -0.3190405, 6,
+       -0.3190405, 0.3061447, 7,
+        0.3061447, 0.768716, 8,
+        0.768716, 1.16346, 9,
+        1.16346, 1.817576, 10)
+rclmat <- matrix(m, ncol=3, byrow=TRUE)
+rc1 <- classify(pred, rclmat, include.lowest=TRUE)
+plot(rc1)
+
+names(rc1) <- "bin"
+
+# Set up NLCD classes and class values
+rc_values <- 1:10
+rc_class <- c("1", "2", "3", "4","5", "6", "7","8", "9", "10")
+
+# Add class names and numbers to the raster
+levels(rc1) <- list(data.frame(bin = rc_values,
+                               suitability = rc_class))
+# Plot
+ggplot() +
+  geom_spatraster(data=rc1) +
+  scale_fill_grass_d(
+    palette = "plasma",
+    alpha = 1,
+    direction = -1,
+    na.translate = FALSE) +
+  theme_void()
+
+## Resample to 90x90
+# Load template raster (cells must be *exactly* the same width/length for RAMAS)
+temp_rast <- rast("data/landscape_data/CDL2023_90mACEA_mask.tif")
+
+# Resample
+pred90 <- resample(pred, temp_rast)
+pred90 <- crop(pred90, pred)
+
+# Check new quantiles
+global(pred90, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
+
+# update layer and variable names
+varnames(pred) <- "DeerResourceSelection"
+names(pred) <- "RSF"
+
+varnames(pred90) <- "DeerResourceSelection"
+names(pred90) <- "RSF"
+
+## Write rasters
+# Save ASCII for RAMAS
+writeRaster(pred90, "results/predictions/deer_rsf_predicted.asc", NAflag=-9999, overwrite=TRUE)
+# additionally save mean predictions as .tif for plotting (both resampled and original 30x30m)
+writeRaster(pred90, "results/predictions/deer_rsf_predicted_90m.tif", overwrite=TRUE)
+writeRaster(pred, "results/predictions/deer_rsf_predicted_30m.tif", overwrite=TRUE)
+# plot binned rsf values (log scale)
+writeRaster(rc1, "results/predictions/deer_rsf_bins_30m.tif", overwrite=TRUE)
+
+#### lower CI ####
 ## List county rasters
 files <- list.files(path="output/deer_county_preds/", pattern="_LCI.tif", full.names=TRUE)
 
@@ -197,10 +275,31 @@ lci <- mosaic(rsrc)
 # rename layer
 names(lci) <- "RSF"
 
+# take ln of map
+lci <- lci + 0.000001
+lci <- log(lci)
+
+# Reclassify missing data to 0
+m <- rbind(c(NA, minmax(lci)[1]))
+lci <- classify(lci, m)
+
+# Remove islands
+lci <- mask(lci, ms)
+
+# Remove water
+lci <- mask(lci, water, inverse=TRUE)
+
 # plot
 plot(lci)
 
-# upper CI
+## Calculate quantiles
+global(lci, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
+
+
+
+
+
+#### upper CI ####
 ## List county rasters
 files <- list.files(path="output/deer_county_preds/", pattern="_UCI.tif", full.names=TRUE)
 
@@ -216,160 +315,24 @@ uci <- mosaic(rsrc)
 # rename layer
 names(uci) <- "RSF"
 
+# take ln of map
+uci <- uci + 0.000001
+uci <- log(uci)
+
+# Reclassify missing data to 0
+m <- rbind(c(NA, minmax(uci)[1]))
+uci <- classify(uci, m)
+
+# Remove islands
+uci <- mask(uci, ms)
+
+# Remove water
+uci <- mask(uci, water, inverse=TRUE)
+
 # plot
 plot(uci)
 
-# Check min/max of all three rasters
-minmax(pred)
-minmax(lci)
-minmax(uci)
-
-## Perform linear stretch
-predLS <- (pred - minmax(pred)[1])/(minmax(pred)[2] - minmax(pred)[1])
-lci <- (lci - minmax(lci)[1])/(minmax(lci)[2] - minmax(lci)[1])
-uci <- (uci - minmax(uci)[1])/(minmax(uci)[2] - minmax(uci)[1])
-
-plot(predLS)
-plot(lci)
-plot(uci)
-
-plot(pred > lci)
-
-## Need to resample for RAMAS (30 m cells going to have too many rows)
-# Load template raster (cells must be *exactly* the same width/length for RAMAS)
-temp_rast <- rast("data/landscape_data/CDL2023_90mACEA_mask.tif")
-
-# Resample
-deer_pred <- resample(pred, temp_rast)
-deer_pred <- crop(deer_pred, pred)
-
-# Reclassify missing data to 0
-m <- rbind(c(NA, 0))
-deer_pred <- classify(deer_pred, m)
-
-## Write rasters
-writeRaster(deer_pred, "results/predictions/deer_rsf_predicted.asc", NAflag=-9999, overwrite=TRUE)
-# additionally save mean predictions as .tif for plotting (both resampled and original 30x30m)
-writeRaster(deer_pred, "results/predictions/deer_rsf_predicted_90m.tif", overwrite=TRUE)
-writeRaster(pred, "results/predictions/deer_rsf_predicted_30m.tif", overwrite=TRUE)
-
-## LCI resample and save as ASCII
-# Resample
-deer_lci <- resample(lci, temp_rast)
-deer_lci <- crop(deer_lci, lci)
-
-# Reclassify missing data to 0
-m <- rbind(c(NA, 0))
-deer_lci <- classify(deer_lci, m)
-
-writeRaster(deer_lci, "results/predictions/deer_rsf_predicted_lci.asc", NAflag=-9999, overwrite=TRUE)
-
-## UCI resample and save as ASCII
-# Resample
-deer_uci <- resample(uci, temp_rast)
-deer_uci <- crop(deer_uci, uci)
-
-# Reclassify missing data to 0
-m <- rbind(c(NA, 0))
-deer_uci <- classify(deer_uci, m)
-
-writeRaster(deer_uci, "results/predictions/deer_rsf_predicted_uci.asc", NAflag=-9999, overwrite=TRUE)
+## Calculate quantiles
+global(uci, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
 
 
-
-
-## Classify out the core and marginal area from marginal and highly marginal, respectively
-# 0.17, 0.085, 0.51
-m <- c(0.17, 1, 1,
-       0, 0.17, NA)
-rclmat <- matrix(m, ncol=3, byrow=TRUE)
-rc1 <- classify(deer_pred, rclmat, include.lowest=TRUE)
-plot(rc1)
-writeRaster(rc1, "results/predictions/deer_rsf_predicted90m_core.tif", overwrite=TRUE)
-
-m <- c(0.085, 1, 1,
-       0, 0.085, NA)
-rclmat <- matrix(m, ncol=3, byrow=TRUE)
-rc2 <- classify(deer_pred, rclmat, include.lowest=TRUE)
-plot(rc2)
-writeRaster(rc2, "results/predictions/deer_rsf_predicted90m_mar.tif", overwrite=TRUE)
-
-m <- c(0.051, 1, 1,
-       0, 0.051, NA)
-rclmat <- matrix(m, ncol=3, byrow=TRUE)
-rc3 <- classify(deer_pred, rclmat, include.lowest=TRUE)
-plot(rc3)
-writeRaster(rc3, "results/predictions/deer_rsf_predicted90m_highlymar.tif", overwrite=TRUE)
-
-ggplot() +
-  geom_spatraster(data=rc3, aes(fill=RSF))
-
-
-# writeRaster(rc1, "results/predictions/deer_rsf_predicted90m_noCore.tif", overwrite=TRUE)
-writeRaster(rc1, "results/predictions/deer_rsf_predicted90m_noCore.asc", NAflag=-9999, overwrite=TRUE)
-
-m <- c(0.41, 1, 1)
-rclmat <- matrix(m, ncol=3, byrow=TRUE)
-rc1 <- classify(deer_pred, rclmat, include.lowest=TRUE)
-plot(rc1)
-# writeRaster(rc1, "results/predictions/deer_rsf_predicted90m_noMarginalCore.tif", overwrite=TRUE)
-writeRaster(rc1, "results/predictions/deer_rsf_predicted90m_noMarginalCore.asc", NAflag=-9999, overwrite=TRUE)
-
-#### Calculate threshold ####
-
-## Extract RSF values at deer locations
-# Read in used/avail points
-deer <- read_csv("output/deer_used_avail_covariates.csv") %>%
-  # Drop covariate values
-  select(X:case)
-
-# Convert to SpatVector
-deer_v <- vect(deer, geom=c("X", "Y"), crs=crs(layers), keepgeom=FALSE)
-deer_v <- sf::st_as_sf(deer_v)
-
-# subset to used locations
-used <- deer %>% filter(case==1)
-
-# convert locations to spatvector
-used <- vect(used, geom=c("X", "Y"), crs=crs(layers), keepgeom=FALSE)         
-
-# Extract RSF values at each deer and available point
-used_extr <- extract(deer_pred, used)
-used$RSF <- used_extr$RSF
-
-# convert to data frame (will drop the X, Y coords, but thats ok)
-used <- as.data.frame(used)
-# drop extra columns and convert to tibble
-used <- used %>% 
-  select(key, case, RSF) %>% 
-  as_tibble()
-
-# Quantiles of used points
-quantile(used$RSF, probs=c(0.05, 0.1,0.25, 0.5, 0.75,0.95, 1))
-
-
-## Reclassify raster and export preliminary patches (just based on thresholds)
-m <- c(0, 0.80, 0,
-       0.80, 1, 1)
-rclmat <- matrix(m, ncol=3, byrow=TRUE)
-rc1 <- classify(deer_pred, rclmat, include.lowest=TRUE)
-plot(rc1)
-
-writeRaster(rc1, "results/predictions/deer_rsf_predicted_90m_core.tif", overwrite=TRUE)
-
-m <- c(0, 0.40, 0,
-       0.40, 1, 1)
-rclmat <- matrix(m, ncol=3, byrow=TRUE)
-rc1 <- classify(deer_pred, rclmat, include.lowest=TRUE)
-plot(rc1)
-
-writeRaster(rc1, "results/predictions/deer_rsf_predicted_90m_marginal.tif", overwrite=TRUE)
-
-
-m <- c(0, 0.24, 0,
-       0.24, 1, 1)
-rclmat <- matrix(m, ncol=3, byrow=TRUE)
-rc1 <- classify(deer_pred, rclmat, include.lowest=TRUE)
-plot(rc1)
-
-writeRaster(rc1, "results/predictions/deer_rsf_predicted_90m_highlymarginal.tif", overwrite=TRUE)
