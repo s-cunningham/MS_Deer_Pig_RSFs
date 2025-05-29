@@ -35,7 +35,7 @@ for (i in 1:length(un.id)) {
   # y <- temp$case
   # wts <- temp$weight
   
-  rsf <- bayesglm(case ~ hardwoods + evergreen + herbwetl + shrubs + gramanoids + dist_water + I(dist_water^2), 
+  rsf <- bayesglm(case ~ hardwoods + shrubs + gramanoids + developed + dist_water + I(dist_water^2), 
                         data=temp, family=binomial(link = "logit"), weight=weight)
   
   pigs_rsf[[i]] <- rsf

@@ -226,9 +226,9 @@ levels(rc1) <- list(data.frame(bin = rc_values,
 ggplot() +
   geom_spatraster(data=rc1) +
   scale_fill_grass_d(
-    palette = "plasma",
+    palette = "viridis",
     alpha = 1,
-    direction = -1,
+    direction = 1,
     na.translate = FALSE) +
   theme_void()
 
@@ -258,81 +258,3 @@ writeRaster(pred90, "results/predictions/deer_rsf_predicted_90m.tif", overwrite=
 writeRaster(pred, "results/predictions/deer_rsf_predicted_30m.tif", overwrite=TRUE)
 # plot binned rsf values (log scale)
 writeRaster(rc1, "results/predictions/deer_rsf_bins_30m.tif", overwrite=TRUE)
-
-#### lower CI ####
-## List county rasters
-files <- list.files(path="output/deer_county_preds/", pattern="_LCI.tif", full.names=TRUE)
-
-## Read all files in as rasters
-rlist <- lapply(files, rast)
-
-## Convert to SpatRasterCollection
-rsrc <- sprc(rlist)
-
-## mosaic
-lci <- mosaic(rsrc)
-
-# rename layer
-names(lci) <- "RSF"
-
-# take ln of map
-lci <- lci + 0.000001
-lci <- log(lci)
-
-# Reclassify missing data to 0
-m <- rbind(c(NA, minmax(lci)[1]))
-lci <- classify(lci, m)
-
-# Remove islands
-lci <- mask(lci, ms)
-
-# Remove water
-lci <- mask(lci, water, inverse=TRUE)
-
-# plot
-plot(lci)
-
-## Calculate quantiles
-global(lci, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
-
-
-
-
-
-#### upper CI ####
-## List county rasters
-files <- list.files(path="output/deer_county_preds/", pattern="_UCI.tif", full.names=TRUE)
-
-## Read all files in as rasters
-rlist <- lapply(files, rast)
-
-## Convert to SpatRasterCollection
-rsrc <- sprc(rlist)
-
-## mosaic
-uci <- mosaic(rsrc)
-
-# rename layer
-names(uci) <- "RSF"
-
-# take ln of map
-uci <- uci + 0.000001
-uci <- log(uci)
-
-# Reclassify missing data to 0
-m <- rbind(c(NA, minmax(uci)[1]))
-uci <- classify(uci, m)
-
-# Remove islands
-uci <- mask(uci, ms)
-
-# Remove water
-uci <- mask(uci, water, inverse=TRUE)
-
-# plot
-plot(uci)
-
-## Calculate quantiles
-global(uci, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
-
-

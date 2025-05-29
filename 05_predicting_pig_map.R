@@ -52,7 +52,7 @@ names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops", "g
                    "developed", "allwoods", "hardwoods", "pct_water", "dist_water", "dist_Swater", "dist_Pwater")
 
 # remove some that aren't in the model
-dontneed <- c( "mixed", "deciduous", "allwoods", "foodcrops", "developed", "pct_water", "othercrops", "bottomland", "dist_Swater", "dist_Pwater", "pct_water")
+dontneed <- c( "mixed", "deciduous", "allwoods", "foodcrops", "pct_water", "othercrops", "bottomland", "dist_Swater", "dist_Pwater", "pct_water")
 layers <- subset(layers, dontneed, negate=TRUE)
 
 # Center and scale based on values in pig data
@@ -63,11 +63,11 @@ for (i in 1:length(lnames)) {
 }
 
 # Save pig center & scaled
-# Define the output file names.  
-output_files <- paste0("data/landscape_data/scaled_rasters/pig_scaled_", lnames, ".tif")
-
-# Write each layer to a separate file
-writeRaster(layers, output_files, overwrite=TRUE)
+# Define the output file names.
+# output_files <- paste0("data/landscape_data/scaled_rasters/pig_scaled_", lnames, ".tif")
+# 
+# # Write each layer to a separate file
+# writeRaster(layers, output_files, overwrite=TRUE)
 
 
 #### Predict across MS counties ####
@@ -108,54 +108,59 @@ for (i in 1:length(split_counties)) {
   # Predict (w(x) = exp(x*beta))
   # hardwoods + evergreen + herbwetl + shrubs + gramanoids + developed + dist_Swater + I(dist_Swater^2) + dist_Pwater + I(dist_Pwater^2)
   pred <- exp(betas$beta[1]*cty_layers[["hardwoods"]] +
-              betas$beta[2]*cty_layers[["evergreen"]] +  
-              betas$beta[3]*cty_layers[["herbwetl"]] +  
-              betas$beta[4]*cty_layers[["shrubs"]] +
-              betas$beta[5]*cty_layers[["gramanoids"]] +
-              betas$beta[6]*cty_layers[["dist_water"]] +
-              betas$beta[7]*(cty_layers[["dist_water"]]^2))
+              betas$beta[2]*cty_layers[["shrubs"]] +
+              betas$beta[3]*cty_layers[["gramanoids"]] +
+              betas$beta[4]*cty_layers[["developed"]] +
+              betas$beta[5]*cty_layers[["dist_water"]] +
+              betas$beta[6]*(cty_layers[["dist_water"]]^2))
   
   # create filename
-  filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, ".tif")
+  filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_mean.tif")
   
   writeRaster(pred, filename, overwrite=TRUE)
   
   ## Lower CI
-  # pred <- exp(betas$lci[1]*cty_layers[["bottomland"]] +
-  #               betas$lci[2]*cty_layers[["shrubs"]] +
-  #               betas$lci[3]*cty_layers[["deciduous"]] +
-  #               betas$lci[4]*cty_layers[["evergreen"]] +
-  #               betas$lci[5]*cty_layers[["foodcrops"]] +
-  #               betas$lci[6]*cty_layers[["water"]] +
-  #               betas$lci[7]*(cty_layers[["water"]]^2))
-  # 
-  # # create filename
-  # filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
-  # 
-  # # Export county prediction raster
-  # writeRaster(pred, filename, overwrite=TRUE)
-  # 
-  # 
+  pred <- exp(betas$lci[1]*cty_layers[["hardwoods"]] +
+                betas$lci[2]*cty_layers[["shrubs"]] +
+                betas$lci[3]*cty_layers[["gramanoids"]] +
+                betas$lci[4]*cty_layers[["developed"]] +
+                betas$lci[5]*cty_layers[["dist_water"]] +
+                betas$lci[6]*(cty_layers[["dist_water"]]^2))
+
+  # create filename
+  filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
+
+  # Export county prediction raster
+  writeRaster(pred, filename, overwrite=TRUE)
+
+
   # ## Upper CI
-  # pred <- exp(betas$uci[1]*cty_layers[["bottomland"]] +
-  #               betas$uci[2]*cty_layers[["shrubs"]] +
-  #               betas$uci[3]*cty_layers[["deciduous"]] +
-  #               betas$uci[4]*cty_layers[["evergreen"]] +
-  #               betas$uci[5]*cty_layers[["foodcrops"]] +
-  #               betas$uci[6]*cty_layers[["water"]] +
-  #               betas$uci[7]*(cty_layers[["water"]]^2))
-  # 
-  # # create filename
-  # filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
-  # 
-  # # Export county prediction raster
-  # writeRaster(pred, filename, overwrite=TRUE)
+  pred <- exp(betas$uci[1]*cty_layers[["hardwoods"]] +
+                betas$uci[2]*cty_layers[["shrubs"]] +
+                betas$uci[3]*cty_layers[["gramanoids"]] +
+                betas$uci[4]*cty_layers[["developed"]] +
+                betas$uci[5]*cty_layers[["dist_water"]] +
+                betas$uci[6]*(cty_layers[["dist_water"]]^2))
+
+  # create filename
+  filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
+
+  # Export county prediction raster
+  writeRaster(pred, filename, overwrite=TRUE)
   
 }
 
+# Read in MS shapefile (to drop islands)
+ms <- vect("data/landscape_data/mississippi_ACEA.shp")
+ms <- project(ms, pred)
+
+# Read in permanent water mask
+water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
+water <- project(water, pred)
+
 #### Combine county rasters into full state ####
 ## List county rasters
-files <- list.files(path="output/pig_county_preds/", pattern=".tif", full.names=TRUE)
+files <- list.files(path="output/pig_county_preds/", pattern="_mean.tif$", full.names=TRUE)
 
 ## Read all files in as rasters
 rlist <- lapply(files, rast)
@@ -170,110 +175,81 @@ pred <- mosaic(rsrc)
 names(pred) <- "RSF"
 
 # take ln of map
+pred <- pred + 0.000001
 pred <- log(pred)
+
+# Reclassify missing data to 0
+m <- rbind(c(NA, minmax(pred)[1]))
+pred <- classify(pred, m)
+
+# Remove islands
+pred <- mask(pred, ms)
+
+# Remove water
+pred <- mask(pred, water, inverse=TRUE)
 
 # plot
 plot(pred)
 
+## Calculate quantiles
+global(pred, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
 
-
-m <- c(-3.292919, 0, NA,
-       0, 8.234098, 2)
+m <- c(minmax(pred)[1], -6.802658, 1,
+       -6.802658, -4.412018, 2,
+       -4.412018, -3.009047, 3,
+       -3.009047, -2.051441, 4,
+       -2.051441, -1.376415, 5,
+       -1.376415, -0.8999376, 6,
+       -0.8999376, -0.4866923, 7,
+       -0.4866923, 0.3623784, 8,
+       0.3623784, 1.695516, 9,
+       1.695516, minmax(pred)[2], 10)
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
-selfor <- classify(pred, rclmat, include.lowest=TRUE)
-plot(selfor)
+rc1 <- classify(pred, rclmat, include.lowest=TRUE)
+plot(rc1)
 
-# predls <- (pred-minmax(pred)[1]) / (minmax(pred)[2] - minmax(pred)[1])
+names(rc1) <- "bin"
 
-## lower CI
-## List county rasters
-files <- list.files(path="output/pig_county_preds/", pattern="_LCI.tif", full.names=TRUE)
+# Set up NLCD classes and class values
+rc_values <- 1:10
+rc_class <- c("1", "2", "3", "4","5", "6", "7","8", "9", "10")
 
-## Read all files in as rasters
-rlist <- lapply(files, rast)
+# Add class names and numbers to the raster
+levels(rc1) <- list(data.frame(bin = rc_values,
+                               suitability = rc_class))
 
-## Convert to SpatRasterCollection
-rsrc <- sprc(rlist)
+ggplot() +
+  geom_spatraster(data=rc1) +
+  scale_fill_grass_d(
+    palette = "viridis",
+    alpha = 1,
+    direction = 1,
+    na.translate = FALSE) +
+  theme_void()
 
-## mosaic
-lci <- mosaic(rsrc)
-
-# rename layer
-names(lci) <- "RSF"
-
-# take ln of map
-lci <- log(lci)
-
-# some values are -Inf...we don't want that, will replace with another low value
-hist(lci)
-# Reclassify missing data to 0
-m <- rbind(c(-Inf, -103.27893))
-lci <- classify(lci, m)
-
-# plot
-plot(lci)
-
-# upper CI
-## List county rasters
-files <- list.files(path="output/pig_county_preds/", pattern="_UCI.tif", full.names=TRUE)
-
-## Read all files in as rasters
-rlist <- lapply(files, rast)
-
-## Convert to SpatRasterCollection
-rsrc <- sprc(rlist)
-
-## mosaic
-uci <- mosaic(rsrc)
-
-# rename layer
-names(uci) <- "RSF"
-
-# take ln of map
-uci <- log(uci)
-
-# plot
-plot(uci)
-
-### 
-
-# Check min/max of all three rasters
-minmax(pred)
-minmax(lci)
-minmax(uci)
-
-# Get quantile bins to use as thresholds
-global(test_pred, fun=quantile,probs=seq(0.1, 1, 0.1), na.rm=TRUE)
-
-global(lci, fun=quantile,probs=seq(0.1, 1, 0.1), na.rm=TRUE)
-
-global(uci, fun=quantile,probs=seq(0.1, 1, 0.1), na.rm=TRUE)
-
-
-## Need to resample for RAMAS (30 m cells going to have too many rows)
+## Resample to 90x90
 # Load template raster (cells must be *exactly* the same width/length for RAMAS)
 temp_rast <- rast("data/landscape_data/CDL2023_90mACEA_mask.tif")
 
 # Resample
-pigs_pred <- resample(pred, temp_rast)
-pigs_pred <- crop(pigs_pred, pred)
+pred90 <- resample(pred, temp_rast)
+pred90 <- crop(pred90, pred)
 
-# Mask lakes
-lakes <- vect("data/landscape_data/ne_ms_lakes.shp")
-lakes <- project(lakes, pred)
-pigs_pred <- mask(pigs_pred, lakes, inverse=TRUE)
+# Check new quantiles
+global(pred90, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
 
-# Reclassify missing data to 0
-m <- rbind(c(NA, minmax(pred)[1]))
-pigs_pred <- classify(pigs_pred, m)
+# update layer and variable names
+varnames(pred) <- "DeerResourceSelection"
+names(pred) <- "RSF"
 
-plot(pigs_pred)
-
-
+varnames(pred90) <- "DeerResourceSelection"
+names(pred90) <- "RSF"
 
 ## Write rasters
-writeRaster(pigs_pred, "results/predictions/pigs_rsf_predictedLn.asc", NAflag=-9999, overwrite=TRUE)
+# Save ASCII for RAMAS
+writeRaster(pred90, "results/predictions/pigs_rsf_predicted.asc", NAflag=-9999, overwrite=TRUE)
 # additionally save mean predictions as .tif for plotting (both resampled and original 30x30m)
-writeRaster(pigs_pred, "results/predictions/pigs_rsf_predictedLn_90m.tif", overwrite=TRUE)
-writeRaster(pred, "results/predictions/pigs_rsf_predictedLn_30m.tif", overwrite=TRUE)
-
+writeRaster(pred90, "results/predictions/pigs_rsf_predicted_90m.tif", overwrite=TRUE)
+writeRaster(pred, "results/predictions/pigs_rsf_predicted_30m.tif", overwrite=TRUE)
+# plot binned rsf values (log scale)
+writeRaster(rc1, "results/predictions/pigs_rsf_bins_30m.tif", overwrite=TRUE)
