@@ -155,13 +155,7 @@ for (i in 1:length(split_counties)) {
   writeRaster(pred, filename, overwrite=TRUE)
 }
 
-# Read in MS shapefile (to drop islands)
-ms <- vect("data/landscape_data/mississippi_ACEA.shp")
-ms <- project(ms, pred)
 
-# Read in permanent water mask
-water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
-water <- project(water, pred)
 
 #### Combine county rasters into full state ####
 ## List county rasters
@@ -178,6 +172,14 @@ pred <- mosaic(rsrc)
 
 # rename layer
 names(pred) <- "RSF"
+
+# Read in MS shapefile (to drop islands)
+ms <- vect("data/landscape_data/mississippi_ACEA.shp")
+ms <- project(ms, pred)
+
+# Read in permanent water mask
+water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
+water <- project(water, pred)
 
 # take ln of map
 pred <- pred + 0.000001
@@ -196,19 +198,23 @@ pred <- mask(pred, water, inverse=TRUE)
 # plot
 plot(pred)
 
-## Calculate quantiles
-global(pred, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
+# linear stretch (so that values >=0)
+pred <- (pred - minmax(pred)[1])/(minmax(pred)[2]-minmax(pred)[1])
 
-m <- c(-13.815511, -7.950021, 1,
-       -7.950021, -5.639721, 2,
-       -5.639721, -3.40708, 3,
-       -3.40708, -2.085063, 4,
-       -2.085063, -1.112339, 5,
-       -1.112339, -0.3190405, 6,
-       -0.3190405, 0.3061447, 7,
-        0.3061447, 0.768716, 8,
-        0.768716, 1.16346, 9,
-        1.16346, 1.817576, 10)
+## Calculate quantiles
+global(pred, quantile, probs=c(0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,
+                               0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1), na.rm=TRUE)
+
+m <- c(0, 0.3751971, 1,
+       0.3751971, 0.5229799, 2,
+       0.5229799, 0.665795, 3,
+       0.665795, 0.7503603, 4,
+       0.7503603, 0.8125825, 5,
+       0.8125825, 0.8633273, 6,
+       0.8633273, 0.9033184, 7,
+       0.9033184, 0.9329077, 8,
+       0.9329077, 0.9581583, 9,
+       0.9581583, 1, 10)
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 rc1 <- classify(pred, rclmat, include.lowest=TRUE)
 plot(rc1)
@@ -241,7 +247,8 @@ pred90 <- resample(pred, temp_rast)
 pred90 <- crop(pred90, pred)
 
 # Check new quantiles
-global(pred90, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
+qtls <- global(pred90, quantile, probs=c(0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,
+                                 0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1), na.rm=TRUE) |> t()
 
 # update layer and variable names
 varnames(pred) <- "DeerResourceSelection"
@@ -258,3 +265,17 @@ writeRaster(pred90, "results/predictions/deer_rsf_predicted_90m.tif", overwrite=
 writeRaster(pred, "results/predictions/deer_rsf_predicted_30m.tif", overwrite=TRUE)
 # plot binned rsf values (log scale)
 writeRaster(rc1, "results/predictions/deer_rsf_bins_30m.tif", overwrite=TRUE)
+
+
+### Validation of predictions
+library(modEvA)
+
+# Calculate continuous Boyce index
+deer <- read_csv("output/deer_used_avail_covariates.csv")
+
+deerSV <- vect(deer, geom=c("X", "Y"), crs=crs(pred))
+pt_preds <- extract(pred, deerSV)$layer
+
+obs <- deer$case
+
+Boyce(obs=obs, pred=pt_preds)

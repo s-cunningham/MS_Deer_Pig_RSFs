@@ -1,6 +1,47 @@
 ## This script reads in text files with RAMAS results (Area and Carrying Capacity), then summarizes total K and area
 
 library(tidyverse)
+library(R.utils)
+
+## abundance
+x <- "results/simulations/deer_bin1_14_abundance.txt"
+
+# Use R.utils package to count how many lines in a file (will be helpful for multiple patches?)
+nlines <- as.vector(countLines(x))
+
+
+# Read in .txt file to get trajectory summary
+dat <- read_table(x, skip=14, n_max=16)
+names(dat) <- c("time", "minimum", "lowerSD", "average", "upperSD", "maximum", "drop")
+dat <- dat %>% select(-drop)
+
+
+# Abundance
+
+nlines-14
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### old ##### 
+
+
 
 #### Functions to read .txt files from RAMAS ####
 area_RAMAS <- function(x) {

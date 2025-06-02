@@ -99,3 +99,6 @@ cor(pigs[,7:22])
 
 # write file so we don't always have to wait for the rasters to do stuff
 write_csv(pigs, "output/pigs_used_avail_covariates.csv")
+
+
+

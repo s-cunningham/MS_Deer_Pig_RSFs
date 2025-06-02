@@ -52,7 +52,7 @@ names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops", "g
                    "developed", "allwoods", "hardwoods", "pct_water", "dist_water", "dist_Swater", "dist_Pwater")
 
 # remove some that aren't in the model
-dontneed <- c( "mixed", "deciduous", "allwoods", "foodcrops", "pct_water", "othercrops", "bottomland", "dist_Swater", "dist_Pwater", "pct_water")
+dontneed <- c( "mixed", "deciduous", "allwoods", "herbwetl", "evergreen", "foodcrops", "pct_water", "othercrops", "bottomland", "dist_Swater", "dist_Pwater", "pct_water")
 layers <- subset(layers, dontneed, negate=TRUE)
 
 # Center and scale based on values in pig data
@@ -119,35 +119,6 @@ for (i in 1:length(split_counties)) {
   
   writeRaster(pred, filename, overwrite=TRUE)
   
-  ## Lower CI
-  pred <- exp(betas$lci[1]*cty_layers[["hardwoods"]] +
-                betas$lci[2]*cty_layers[["shrubs"]] +
-                betas$lci[3]*cty_layers[["gramanoids"]] +
-                betas$lci[4]*cty_layers[["developed"]] +
-                betas$lci[5]*cty_layers[["dist_water"]] +
-                betas$lci[6]*(cty_layers[["dist_water"]]^2))
-
-  # create filename
-  filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
-
-  # Export county prediction raster
-  writeRaster(pred, filename, overwrite=TRUE)
-
-
-  # ## Upper CI
-  pred <- exp(betas$uci[1]*cty_layers[["hardwoods"]] +
-                betas$uci[2]*cty_layers[["shrubs"]] +
-                betas$uci[3]*cty_layers[["gramanoids"]] +
-                betas$uci[4]*cty_layers[["developed"]] +
-                betas$uci[5]*cty_layers[["dist_water"]] +
-                betas$uci[6]*(cty_layers[["dist_water"]]^2))
-
-  # create filename
-  filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
-
-  # Export county prediction raster
-  writeRaster(pred, filename, overwrite=TRUE)
-  
 }
 
 # Read in MS shapefile (to drop islands)
@@ -191,19 +162,22 @@ pred <- mask(pred, water, inverse=TRUE)
 # plot
 plot(pred)
 
+# linear stretch (so that values >=0)
+pred <- (pred - minmax(pred)[1])/(minmax(pred)[2]-minmax(pred)[1])
+
 ## Calculate quantiles
 global(pred, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
 
-m <- c(minmax(pred)[1], -6.802658, 1,
-       -6.802658, -4.412018, 2,
-       -4.412018, -3.009047, 3,
-       -3.009047, -2.051441, 4,
-       -2.051441, -1.376415, 5,
-       -1.376415, -0.8999376, 6,
-       -0.8999376, -0.4866923, 7,
-       -0.4866923, 0.3623784, 8,
-       0.3623784, 1.695516, 9,
-       1.695516, minmax(pred)[2], 10)
+m <- c(minmax(pred)[1], 0.4100915, 1,
+       0.4100915, 0.5498892, 2,
+       0.5498892, 0.6319309, 3,
+       0.6319309, 0.6879289, 4,
+       0.6879289, 0.7274025, 5,
+       0.7274025, 0.7552656, 6,
+       0.7552656, 0.7794309, 7,
+       0.7794309, 0.8290822, 8,
+       0.8290822, 0.9070402, 9,
+       0.9070402, minmax(pred)[2], 10)
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 rc1 <- classify(pred, rclmat, include.lowest=TRUE)
 plot(rc1)
@@ -239,10 +213,10 @@ pred90 <- crop(pred90, pred)
 global(pred90, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
 
 # update layer and variable names
-varnames(pred) <- "DeerResourceSelection"
+varnames(pred) <- "PigResourceSelection"
 names(pred) <- "RSF"
 
-varnames(pred90) <- "DeerResourceSelection"
+varnames(pred90) <- "PigResourceSelection"
 names(pred90) <- "RSF"
 
 ## Write rasters
@@ -253,3 +227,16 @@ writeRaster(pred90, "results/predictions/pigs_rsf_predicted_90m.tif", overwrite=
 writeRaster(pred, "results/predictions/pigs_rsf_predicted_30m.tif", overwrite=TRUE)
 # plot binned rsf values (log scale)
 writeRaster(rc1, "results/predictions/pigs_rsf_bins_30m.tif", overwrite=TRUE)
+
+
+library(modEvA)
+
+# Calculate continuous Boyce index
+pigs <- read_csv("output/pigs_used_avail_covariates.csv")
+
+pigsSV <- vect(pigs, geom=c("X", "Y"), crs=crs(pred))
+pt_preds <- extract(pred, pigsSV)$RSF
+
+obs <- pigs$case
+
+Boyce(obs=obs, pred=pt_preds)
