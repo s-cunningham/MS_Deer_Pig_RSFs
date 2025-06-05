@@ -121,14 +121,6 @@ for (i in 1:length(split_counties)) {
   
 }
 
-# Read in MS shapefile (to drop islands)
-ms <- vect("data/landscape_data/mississippi_ACEA.shp")
-ms <- project(ms, pred)
-
-# Read in permanent water mask
-water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
-water <- project(water, pred)
-
 #### Combine county rasters into full state ####
 ## List county rasters
 files <- list.files(path="output/pig_county_preds/", pattern="_mean.tif$", full.names=TRUE)
@@ -153,8 +145,16 @@ pred <- log(pred)
 m <- rbind(c(NA, minmax(pred)[1]))
 pred <- classify(pred, m)
 
+# Read in MS shapefile (to drop islands)
+ms <- vect("data/landscape_data/mississippi_ACEA.shp")
+ms <- project(ms, pred)
+
 # Remove islands
 pred <- mask(pred, ms)
+
+# Read in permanent water mask
+water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
+water <- project(water, pred)
 
 # Remove water
 pred <- mask(pred, water, inverse=TRUE)
@@ -162,13 +162,19 @@ pred <- mask(pred, water, inverse=TRUE)
 # plot
 plot(pred)
 
+m <- c(minmax(pred)[1], 0, 0,
+       0, minmax(pred)[2], 1)
+rclmat <- matrix(m, ncol=3, byrow=TRUE)
+rc1 <- classify(pred, rclmat, include.lowest=TRUE)
+plot(rc1)
+  
 # linear stretch (so that values >=0)
-pred <- (pred - minmax(pred)[1])/(minmax(pred)[2]-minmax(pred)[1])
+predls <- (pred - minmax(pred)[1])/(minmax(pred)[2]-minmax(pred)[1])
 
 ## Calculate quantiles
-global(pred, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
+global(predls, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
 
-m <- c(minmax(pred)[1], 0.4100915, 1,
+m <- c(minmax(predls)[1], 0.4100915, 1,
        0.4100915, 0.5498892, 2,
        0.5498892, 0.6319309, 3,
        0.6319309, 0.6879289, 4,
@@ -177,9 +183,9 @@ m <- c(minmax(pred)[1], 0.4100915, 1,
        0.7552656, 0.7794309, 7,
        0.7794309, 0.8290822, 8,
        0.8290822, 0.9070402, 9,
-       0.9070402, minmax(pred)[2], 10)
+       0.9070402, minmax(predls)[2], 10)
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
-rc1 <- classify(pred, rclmat, include.lowest=TRUE)
+rc1 <- classify(predls, rclmat, include.lowest=TRUE)
 plot(rc1)
 
 names(rc1) <- "bin"
@@ -206,12 +212,12 @@ ggplot() +
 temp_rast <- rast("data/landscape_data/CDL2023_90mACEA_mask.tif")
 
 # Resample
-pred90 <- resample(pred, temp_rast)
-pred90 <- crop(pred90, pred)
+pred90 <- resample(predls, temp_rast)
+pred90 <- crop(pred90, predls)
 
 # Check new quantiles
 global(pred90, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
-
+global(pred90, quantile, probs=c(0.333333,0.66666), na.rm=TRUE)
 # update layer and variable names
 varnames(pred) <- "PigResourceSelection"
 names(pred) <- "RSF"
@@ -219,12 +225,16 @@ names(pred) <- "RSF"
 varnames(pred90) <- "PigResourceSelection"
 names(pred90) <- "RSF"
 
+varnames(predls) <- "PigResourceSelection"
+names(predls) <- "RSF"
+
 ## Write rasters
 # Save ASCII for RAMAS
 writeRaster(pred90, "results/predictions/pigs_rsf_predicted.asc", NAflag=-9999, overwrite=TRUE)
 # additionally save mean predictions as .tif for plotting (both resampled and original 30x30m)
 writeRaster(pred90, "results/predictions/pigs_rsf_predicted_90m.tif", overwrite=TRUE)
 writeRaster(pred, "results/predictions/pigs_rsf_predicted_30m.tif", overwrite=TRUE)
+writeRaster(predls, "results/predictions/pigs_rsf_predicted_linStr_30m.tif", overwrite=TRUE)
 # plot binned rsf values (log scale)
 writeRaster(rc1, "results/predictions/pigs_rsf_bins_30m.tif", overwrite=TRUE)
 
@@ -240,3 +250,5 @@ pt_preds <- extract(pred, pigsSV)$RSF
 obs <- pigs$case
 
 Boyce(obs=obs, pred=pt_preds)
+
+

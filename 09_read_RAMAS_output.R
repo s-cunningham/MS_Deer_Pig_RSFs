@@ -1,140 +1,58 @@
 ## This script reads in text files with RAMAS results (Area and Carrying Capacity), then summarizes total K and area
 
 library(tidyverse)
-library(R.utils)
+
+
+source("00_functions.R")
 
 ## abundance
-x <- "results/simulations/deer_bin1_14_abundance.txt"
+N <- list.files(path="results/simulations/", pattern="_abundance.txt$", full.names=TRUE)
+N <- lapply(N, ramas_abun)
+N <- do.call("bind_rows", N)
 
-# Use R.utils package to count how many lines in a file (will be helpful for multiple patches?)
-nlines <- as.vector(countLines(x))
-
-
-# Read in .txt file to get trajectory summary
-dat <- read_table(x, skip=14, n_max=16)
-names(dat) <- c("time", "minimum", "lowerSD", "average", "upperSD", "maximum", "drop")
-dat <- dat %>% select(-drop)
-
-
-# Abundance
-
-nlines-14
+# Calculate lambda and geometric mean for each scenario
+N <- N %>%
+  group_by(species, density, bin) %>%
+  reframe(lambda=lambda_calc(average)) %>%
+  group_by(species, density, bin) %>%
+  reframe(lamda_mgm=gm_mean(lambda))
 
 
+ggplot(N) +
+  geom_line(aes(x=time, y=average, group=factor(bin), color=factor(bin))) +
+  facet_wrap(vars(species, density))
 
 
+## Patch area
+area <- list.files(path="results/simulations/", pattern="_area.txt$", full.names=TRUE)
+area <- lapply(area, ramas_area)
+area <- do.call("bind_rows", area)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#### old ##### 
-
-
-
-#### Functions to read .txt files from RAMAS ####
-area_RAMAS <- function(x) {
+area <- area %>%
+  group_by(species, density, bin) %>%
+  reframe(Areakm2=sum(Area_km2))
   
-  # Read in .txt file
-  dat <- read_table(x) %>%
-    select(Patch, ncells, Areakm2, CoreA.) %>%
-    rename(PatchNo=Patch)
-  
-  # Extract pieces from file name
-  spp <- str_split(x, "[:punct:]")[[1]][4]
-  level <- str_split(x, "[:punct:]")[[1]][6]
-  patch <- str_split(x, "[:punct:]")[[1]][5] 
-  density <- str_split(x, "[:punct:]")[[1]][7] 
-  
-  # Add to data frame
-  dat$spp <- spp
-  dat$density <- density
-  dat$level <- level
-  dat$patch <- patch
+ggplot(area) +
+  geom_point(aes(x=factor(bin), y=Areakm2, group=density, color=density)) +
+  facet_wrap(vars(species)) +
+  theme_bw()
 
-  # Rearrange columns
-  dat <- dat %>%
-    select(spp:patch, PatchNo:CoreA.)
-  
-  return(dat)
-}
-K_RAMAS <- function(x) {
-  
-  # Read in .txt file
-  dat <- read_table(x) %>%
-    select(Patch:N0) %>%
-    rename(PatchNo=Patch)
-  
-  # Extract pieces from file name
-  spp <- str_split(x, "[:punct:]")[[1]][4]
-  level <- str_split(x, "[:punct:]")[[1]][6]
-  patch <- str_split(x, "[:punct:]")[[1]][5] 
-  density <- str_split(x, "[:punct:]")[[1]][7] 
-  
-  # Add to data frame
-  dat$spp <- spp
-  dat$density <- density
-  dat$level <- level
-  dat$patch <- patch
-  
-  # Rearrange columns
-  dat <- dat %>%
-    select(spp:patch, PatchNo:N0)
-  
-  return(dat)
-}
 
-#### Read in data ####
+## Carrying capacity
+K <- list.files(path="results/simulations/", pattern="_K.txt$", full.names=TRUE)
+K <- lapply(K, ramas_K)
+K <- do.call("bind_rows", K)
 
-## Read in area
-# List all the files in the ramas_output folder that end in _area.txt
-files <- list.files(path="data/ramas_output/", pattern="_area.txt", full.names=TRUE)
-# Read all files in the list
-files <- lapply(files, area_RAMAS)
-# Reduce the list to a data frame (tibble)
-area <- do.call("bind_rows", files)
-# convert density and percentage columns to numeric
-area <- area %>% mutate(across(2, as.numeric))
+K <- K %>%
+  # drop patches that have K of < 5
+  filter(K >= 5) %>%
+  # summarize by species, density and bin
+  group_by(species, density, bin) %>%
+  reframe(K=sum(K), N0=sum(N0), avgHS=mean(AvgHS)) %>% # might need to recalculate avgHS
+  # replace actual density number with low and high
+  mutate(density=if_else(density==14 | density==8, "low", "high"))
 
-## Read in carrying capacity
-# List all the files in the ramas_output folder that end in _K.txt
-files <- list.files(path="data/ramas_output/", pattern="_K.txt", full.names=TRUE)
-# Read all files in the list
-files <- lapply(files, K_RAMAS)
-# Reduce the list to a data frame (tibble)
-k <- do.call("bind_rows", files)
-# convert density and percentage columns to numeric
-k <- k %>% mutate(across(2, as.numeric))
-
-## Join K and area
-dat <- left_join(k, area, by=c("spp", "density", "level", "patch", "PatchNo"))
-
-# Drop Area and recalculate
-dat <- dat %>%
-  # drop area columns
-  select(-Areakm2, -CoreA.) %>%
-  # Calculate area of 90 x 90 m cells, convert to km2
-  mutate(Areakm2 = (ncells * 90 * 90)/1000/1000) 
-
-# Drop patches that have K < 6 (might be variable between densities)
-# dat <- dat %>% 
-#   filter(K >= 6)
-
-# Summarize K and area of reduced patch size
-res <- dat %>% group_by(density, level, patch) %>%
-  reframe(K=sum(K), Area=sum(Areakm2)) %>%
-  arrange(density, patch, level)
-
-write_csv(res, "results/carrying_capacity_area.csv")
-
+ggplot(K) +
+  geom_point(aes(x=factor(bin), y=K, group=density, color=density)) +
+  facet_wrap(vars(species)) +
+  theme_bw()

@@ -198,11 +198,17 @@ pred <- mask(pred, water, inverse=TRUE)
 # plot
 plot(pred)
 
+m <- c(minmax(pred)[1], 0, 0,
+       0, minmax(pred)[2], 1)
+rclmat <- matrix(m, ncol=3, byrow=TRUE)
+rc1 <- classify(pred, rclmat, include.lowest=TRUE)
+plot(rc1)
+
 # linear stretch (so that values >=0)
-pred <- (pred - minmax(pred)[1])/(minmax(pred)[2]-minmax(pred)[1])
+predls <- (pred - minmax(pred)[1])/(minmax(pred)[2]-minmax(pred)[1])
 
 ## Calculate quantiles
-global(pred, quantile, probs=c(0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,
+global(predls, quantile, probs=c(0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,
                                0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1), na.rm=TRUE)
 
 m <- c(0, 0.3751971, 1,
@@ -216,7 +222,7 @@ m <- c(0, 0.3751971, 1,
        0.9329077, 0.9581583, 9,
        0.9581583, 1, 10)
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
-rc1 <- classify(pred, rclmat, include.lowest=TRUE)
+rc1 <- classify(predls, rclmat, include.lowest=TRUE)
 plot(rc1)
 
 names(rc1) <- "bin"
@@ -243,12 +249,14 @@ ggplot() +
 temp_rast <- rast("data/landscape_data/CDL2023_90mACEA_mask.tif")
 
 # Resample
-pred90 <- resample(pred, temp_rast)
-pred90 <- crop(pred90, pred)
+pred90 <- resample(predls, temp_rast)
+pred90 <- crop(pred90, predls)
 
 # Check new quantiles
 qtls <- global(pred90, quantile, probs=c(0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,
                                  0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1), na.rm=TRUE) |> t()
+global(pred90, quantile, probs=c(0.333333,0.66666), na.rm=TRUE)
+
 
 # update layer and variable names
 varnames(pred) <- "DeerResourceSelection"
@@ -257,12 +265,16 @@ names(pred) <- "RSF"
 varnames(pred90) <- "DeerResourceSelection"
 names(pred90) <- "RSF"
 
+varnames(predls) <- "DeerResourceSelection"
+names(predls) <- "RSF"
+
 ## Write rasters
 # Save ASCII for RAMAS
-writeRaster(pred90, "results/predictions/deer_rsf_predicted.asc", NAflag=-9999, overwrite=TRUE)
+writeRaster(pred90, "results/predictions/deer_rsf_predicted.asc", NAflag=-9999, overwrite=TRUE) # has linear stretch for RAMAs
 # additionally save mean predictions as .tif for plotting (both resampled and original 30x30m)
-writeRaster(pred90, "results/predictions/deer_rsf_predicted_90m.tif", overwrite=TRUE)
-writeRaster(pred, "results/predictions/deer_rsf_predicted_30m.tif", overwrite=TRUE)
+writeRaster(pred90, "results/predictions/deer_rsf_predicted_90m.tif", overwrite=TRUE) # has linear stretch for RAMAs
+writeRaster(predls, "results/predictions/deer_rsf_predicted_linStr_30m.tif", overwrite=TRUE)
+writeRaster(pred, "results/predictions/deer_rsf_predicted_30m.tif", overwrite=TRUE) 
 # plot binned rsf values (log scale)
 writeRaster(rc1, "results/predictions/deer_rsf_bins_30m.tif", overwrite=TRUE)
 
