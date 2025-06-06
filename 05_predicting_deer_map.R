@@ -108,20 +108,20 @@ for (i in 1:length(split_counties)) {
   
   ## Mean prediction
   # Predict (w(x) = exp(x*beta))
-  # allhardwoods + gramanoids + shrubs + foodcrops + developed + water
-  pred <- exp(betas$beta[1]*cty_layers[["allhardwoods"]] +
-                betas$beta[2]*cty_layers[["gramanoids"]] +
-                betas$beta[3]*cty_layers[["shrubs"]] +
-                betas$beta[4]*cty_layers[["foodcrops"]] +
-                betas$beta[5]*cty_layers[["developed"]] +
-                betas$beta[6]*cty_layers[["water_dist"]]+
-                betas$beta[6]*(cty_layers[["water_dist"]]^2))
-  
-  # create filename
-  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_mean.tif")
+  # # allhardwoods + gramanoids + shrubs + foodcrops + developed + water
+  # pred <- exp(betas$beta[1]*cty_layers[["allhardwoods"]] +
+  #               betas$beta[2]*cty_layers[["gramanoids"]] +
+  #               betas$beta[3]*cty_layers[["shrubs"]] +
+  #               betas$beta[4]*cty_layers[["foodcrops"]] +
+  #               betas$beta[5]*cty_layers[["developed"]] +
+  #               betas$beta[6]*cty_layers[["water_dist"]]+
+  #               betas$beta[6]*(cty_layers[["water_dist"]]^2))
+  # 
+  # # create filename
+  # filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_mean.tif")
 
   # Export county prediction raster
-  writeRaster(pred, filename, overwrite=TRUE)
+  # writeRaster(pred, filename, overwrite=TRUE)
   
   # something not right with math
   ## Lower CI prediction
@@ -291,3 +291,89 @@ pt_preds <- extract(pred, deerSV)$layer
 obs <- deer$case
 
 Boyce(obs=obs, pred=pt_preds)
+
+
+
+############
+
+#### Combine county rasters into full state ####
+## List county rasters
+files <- list.files(path="output/deer_county_preds/", pattern="_LCI.tif$", full.names=TRUE)
+
+## Read all files in as rasters
+rlist <- lapply(files, rast)
+
+## Convert to SpatRasterCollection
+rsrc <- sprc(rlist)
+
+## mosaic
+pred <- mosaic(rsrc)
+
+# rename layer
+names(pred) <- "RSF"
+
+# Read in MS shapefile (to drop islands)
+ms <- vect("data/landscape_data/mississippi_ACEA.shp")
+ms <- project(ms, pred)
+
+# Read in permanent water mask
+water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
+water <- project(water, pred)
+
+# take ln of map
+pred <- pred + 0.000001
+pred <- log(pred)
+
+# Reclassify missing data to 0
+m <- rbind(c(NA, minmax(pred)[1]))
+pred <- classify(pred, m)
+
+# Remove islands
+pred <- mask(pred, ms)
+
+# Remove water
+pred <- mask(pred, water, inverse=TRUE)
+
+# plot
+plot(pred)
+
+#### Combine county rasters into full state ####
+## List county rasters
+files <- list.files(path="output/deer_county_preds/", pattern="_UCI.tif$", full.names=TRUE)
+
+## Read all files in as rasters
+rlist <- lapply(files, rast)
+
+## Convert to SpatRasterCollection
+rsrc <- sprc(rlist)
+
+## mosaic
+pred <- mosaic(rsrc)
+
+# rename layer
+names(pred) <- "RSF"
+
+# Read in MS shapefile (to drop islands)
+ms <- vect("data/landscape_data/mississippi_ACEA.shp")
+ms <- project(ms, pred)
+
+# Read in permanent water mask
+water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
+water <- project(water, pred)
+
+# take ln of map
+pred <- pred + 0.000001
+pred <- log(pred)
+
+# Reclassify missing data to 0
+m <- rbind(c(NA, minmax(pred)[1]))
+pred <- classify(pred, m)
+
+# Remove islands
+pred <- mask(pred, ms)
+
+# Remove water
+pred <- mask(pred, water, inverse=TRUE)
+
+# plot
+plot(pred)
