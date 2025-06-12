@@ -87,19 +87,19 @@ deer_patches <- ggplot() +
     which_north = TRUE,
     pad_x = unit(0.05, "npc"),
     pad_y = unit(0.85, "npc"),
-    style = north_arrow_orienteering()) +
-  annotation_scale(
-    height = unit(0.015, "npc"),
-    width_hint = 0.5,
-    pad_x = unit(0.07, "npc"),
-    pad_y = unit(0.07, "npc"),
-    text_cex = .8) 
+    style = north_arrow_minimal()) 
 
 pig_patches <- ggplot() +
   geom_spatraster(data=pigs_mn) +
   scale_fill_viridis_d(option="D", direction=-1, name="Patch Type:", na.value="transparent", na.translate=FALSE) +
   geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.4) +
-  theme_void() 
+  theme_void() +
+  annotation_scale(
+    height = unit(0.015, "npc"),
+    width_hint = 0.5,
+    pad_x = unit(0.55, "npc"),
+    pad_y = unit(0.01, "npc"),
+    text_cex = .9) 
 
 deer_patches + pig_patches +
   # plot_annotation(tag_levels = 'a', tag_prefix="(", tag_suffix=")") +
@@ -108,4 +108,5 @@ deer_patches + pig_patches +
         legend.text=element_text(size=11),
         legend.title=element_text(size=12))
 
-ggsave(file="figs/patches.svg")
+ggsave(file="figs/Fig4_patches.svg")
+# 10.4 x 9 in image

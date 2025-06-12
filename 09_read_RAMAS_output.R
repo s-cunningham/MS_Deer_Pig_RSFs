@@ -41,8 +41,6 @@ area <- do.call("bind_rows", area)
 area <- area %>%
   group_by(species, density, bin) %>%
   reframe(Areakm2=sum(Area_km2)) %>%
-  mutate(bin=as.character(bin)) %>%
-  mutate(bin=if_else(is.na(bin), "core", bin)) %>%
   # replace actual density number with low and high
   mutate(density=if_else(density==14 | density==8, "low", "high"))
   
@@ -65,14 +63,12 @@ K <- K %>%
   group_by(species, density, bin) %>%
   reframe(K=sum(K), N0=sum(N0), avgHS=mean(AvgHS)) %>% # might need to recalculate avgHS
   # replace actual density number with low and high
-  mutate(density=if_else(density==14 | density==8, "low", "high")) %>%
-  mutate(bin=as.character(bin)) %>%
-  mutate(bin=if_else(is.na(bin), "core", bin))
+  mutate(density=if_else(density==14 | density==8, "low", "high")) 
 
-K$bin <- factor(K$bin, levels=c("1", "2", "3", "4","5", "6","7", "8","9", "10", "core"),
-                labels=c("1", "2", "3", "4","5", "6","7", "8","9", "10", "core"))
+# Join to cutoff value
+K <- left_join(K, dat, by=c("species", "bin"))
 
 ggplot(K) +
-  geom_point(aes(x=factor(bin), y=K, group=density, color=density)) +
+  geom_point(aes(x=cutoff, y=K, group=density, color=density)) +
   facet_wrap(vars(species)) +
   theme_bw()
