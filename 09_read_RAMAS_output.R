@@ -8,7 +8,6 @@ source("00_functions.R")
 # Read file with threshold values
 dat <- read_csv("data/logrsf_cutoffs.csv")
 
-
 ## abundance
 N <- list.files(path="results/simulations/", pattern="_abundance.txt$", full.names=TRUE)
 N <- lapply(N, ramas_abun)
@@ -72,3 +71,5 @@ ggplot(K) +
   geom_point(aes(x=cutoff, y=K, group=density, color=density)) +
   facet_wrap(vars(species)) +
   theme_bw()
+
+# check pigs highly marginal at low density
