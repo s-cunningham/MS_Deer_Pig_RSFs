@@ -57,6 +57,15 @@ saveRDS(deer_rsf, "output/deer_glms.RDS")
 # reduced_glms <- readRDS("output/deer_reduced_glms.RDS")
 
 #### Summarize coefficients ####
+# get covariance matrices
+vcov_mat <- lapply(deer_rsf, vcov)
+
+# Remove intercept row and column from each covariance matrix
+vcov_mat <- lapply(vcov_mat, function(v) {
+  idx <- which(rownames(v) != "(Intercept)")
+  v[idx, idx, drop = FALSE]
+})
+
 # extract mean coeficients and combine into a single table
 r_glms <- lapply(deer_rsf, coef)
 r_glms <- lapply(r_glms, as.data.frame)
@@ -74,6 +83,13 @@ r_glms <- r_glms %>%
   # fill with 0
   mutate(across(allhardwoods:water_dist2, \(x) coalesce(x, 0)))
 
+# Create list
+beta_list <- lapply(1:nrow(r_glms), function(i) {
+  b <- as.numeric(r_glms[i, ])
+  names(b) <- colnames(r_glms)
+  b
+})
+
 # Add IDs 
 r_glms$id <- un.id
 
@@ -83,8 +99,31 @@ glm_betas <- r_glms %>%
 
 write_csv(glm_betas, "output/deer_glm_betas.csv")
 
+## Find between / within variance
+# 1. Stack beta vectors into a matrix
+B <- do.call(rbind, beta_list)  # N x K
+B_bar <- colMeans(B)
 
-# Extract SE for confidence intervals
+# 2. Within-individual variance
+within_var <- Reduce(`+`, vcov_mat) / length(beta_list)
+
+# 3. Between-individual variance
+B_centered <- sweep(B, 2, B_bar)
+between_var <- crossprod(B_centered) / (nrow(B) - 1)
+
+# 4. Total variance of average coefficients
+total_var <- within_var / length(beta_list) + between_var
+
+# Final output
+beta_avg <- B_bar
+vcov_avg <- total_var
+
+final <- list(beta_avg, vcov_avg)
+
+# save cov matrix
+saveRDS(final, "output/deer_vcov.rds")
+
+## Extract SE for confidence intervals
 se <- lapply(deer_rsf, se.coef)
 
 # combine into a tibble

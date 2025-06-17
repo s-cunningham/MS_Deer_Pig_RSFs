@@ -6,7 +6,8 @@ library(tidyverse)
 source("00_functions.R")
 
 # Read file with threshold values
-dat <- read_csv("data/logrsf_cutoffs.csv")
+dat <- read_csv("data/logrsf_cutoffs.csv") %>%
+  mutate(bin=gsub(" ", "",bin))
 
 ## abundance
 N <- list.files(path="results/simulations/", pattern="_abundance.txt$", full.names=TRUE)

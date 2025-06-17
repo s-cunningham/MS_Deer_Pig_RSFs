@@ -63,6 +63,13 @@ r_glms <- r_glms %>%
   # fill with 0
   mutate(across(hardwoods:water2, \(x) coalesce(x, 0)))
   
+# Create list
+beta_list <- lapply(1:nrow(r_glms), function(i) {
+  b <- as.numeric(r_glms[i, ])
+  names(b) <- colnames(r_glms)
+  b
+})
+
 # Add IDs 
 r_glms$id <- un.id
 
@@ -71,6 +78,39 @@ glm_betas <- r_glms %>%
   reframe(across(hardwoods:water2, \(x) mean(x, na.rm = TRUE)))
 
 write_csv(glm_betas, "output/pigs_glm_betas.csv")
+
+## Find between / within variance
+# get covariance matrices
+vcov_mat <- lapply(deer_rsf, vcov)
+
+# Remove intercept row and column from each covariance matrix
+vcov_mat <- lapply(vcov_mat, function(v) {
+  idx <- which(rownames(v) != "(Intercept)")
+  v[idx, idx, drop = FALSE]
+})
+
+# 1. Stack beta vectors into a matrix
+B <- do.call(rbind, beta_list)  # N x K
+B_bar <- colMeans(B)
+
+# 2. Within-individual variance
+within_var <- Reduce(`+`, vcov_mat) / length(beta_list)
+
+# 3. Between-individual variance
+B_centered <- sweep(B, 2, B_bar)
+between_var <- crossprod(B_centered) / (nrow(B) - 1)
+
+# 4. Total variance of average coefficients
+total_var <- within_var / length(beta_list) + between_var
+
+# Final output
+beta_avg <- B_bar
+vcov_avg <- total_var
+
+final <- list(beta_avg, vcov_avg)
+
+# save cov matrix
+saveRDS(final, "output/pigs_vcov.rds")
 
 ## Extract SE for confidence intervals
 se <- lapply(pigs_rsf, se.coef)
