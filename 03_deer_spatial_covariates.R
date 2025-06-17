@@ -14,6 +14,7 @@ deer %>% group_by(key, case) %>% count() %>%
   mutate(ratioUA=`1`/`0`) %>% 
   ggplot() + geom_density(aes(x=ratioUA))
 
+
 # Rasters
 rast_list <- c("data/landscape_data/evergreen_180m_sum.tif",
                "data/landscape_data/deciduous_180m_sum.tif",

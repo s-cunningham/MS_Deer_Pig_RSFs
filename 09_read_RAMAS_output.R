@@ -67,9 +67,17 @@ K <- K %>%
 # Join to cutoff value
 K <- left_join(K, dat, by=c("species", "bin"))
 
-ggplot(K) +
-  geom_point(aes(x=cutoff, y=K, group=density, color=density)) +
-  facet_wrap(vars(species)) +
-  theme_bw()
+K <- K %>%
+  mutate(species=if_else(species=="deer", "White-tailed Deer", "Wild Pigs"))
 
-# check pigs highly marginal at low density
+zero_line <- data.frame(species=c("White-tailed Deer", "Wild Pigs"),
+                        cutoff=c(0.884, 0.808))
+
+ggplot() +
+  geom_vline(data=zero_line, aes(xintercept=cutoff), linewidth=0.2) +
+  geom_point(data=K, aes(x=cutoff, y=K, group=density, shape=density, color=density)) +
+  scale_shape_manual(values=c(21, 23)) +
+  facet_wrap(vars(species)) +
+  theme_classic() +
+  theme(panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
+

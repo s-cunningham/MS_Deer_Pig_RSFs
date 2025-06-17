@@ -54,8 +54,26 @@ area_pigs <- expanse(polylist[["pigs_core_27_patch"]], unit="km")
 ovp1 <- terra::union(polylist$deer_core_22_patch, polylist$pigs_core_27_patch)
 expanse(ovp1, unit="km")[[3]]
 
+ovp1 <- ovp1 %>%
+  mutate(deer_core_22_patch=coalesce(deer_core_22_patch,0),
+         pigs_core_27_patch=coalesce(pigs_core_27_patch,0),
+         overlap=deer_core_22_patch+pigs_core_27_patch) %>%
+  select(overlap)
 
+writeVector(ovp1, "output/overlap_raster.shp")
 
+nonovp <- erase(polylist$pigs_core_27_patch - polylist$deer_core_22_patch)
+expanse(nonovp, unit="km")
+
+# read CWD counties shapefile
+cwd <- vect("data/landscape_data/2024CWDpositive_counties.shp")
+cwd <- project(cwd, crs(polylist$deer_core_22_patch))
+
+cwd_deer_core <- crop(polylist$deer_core_22_patch, cwd)   
+expanse(cwd_deer_core, unit="km")  
+  
+  
+  
 #### Create patch plot for manuscript ####
 ## For each species, combine into multiclass raster (mean predictions)
 # Will use the patch values to reclassify
