@@ -14,6 +14,9 @@ N <- list.files(path="results/simulations/", pattern="_abundance.txt$", full.nam
 N <- lapply(N, ramas_abun)
 N <- do.call("bind_rows", N)
 
+# Drop density dependence
+N <- N %>% filter(densDep=="exp" & bin!="10") %>% select(-densDep)
+
 ggplot(N) +
   geom_line(aes(x=time, y=average, group=factor(bin), color=factor(bin))) +
   facet_wrap(vars(species, density))
@@ -28,10 +31,21 @@ N <- N %>%
 
 N <- left_join(N, dat, by=c("species", "bin"))
 
+N <- N %>%
+  mutate(species=if_else(species=="deer", "White-tailed Deer", "Wild Pigs"))
+
+zero_line <- data.frame(species=c("White-tailed Deer", "Wild Pigs"),
+                        cutoff=c(0.884, 0.808))
+
 ggplot(N) +
+  geom_hline(yintercept=1, linewidth=0.5) +
+  geom_vline(data=zero_line, aes(xintercept=cutoff), linewidth=0.2) +
   geom_point(aes(x=cutoff, y=lambda_mgm, group=density, color=density)) +
   facet_grid(species~density) +
   theme_bw()
+
+
+
 
 ## Patch area
 area <- list.files(path="results/simulations/", pattern="_area.txt$", full.names=TRUE)

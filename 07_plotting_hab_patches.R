@@ -60,11 +60,25 @@ ovp1 <- ovp1 %>%
          overlap=deer_core_22_patch+pigs_core_27_patch) %>%
   select(overlap)
 
-writeVector(ovp1, "output/overlap_raster.shp")
+writeVector(ovp1, "output/overlap_raster.shp", overwrite=TRUE)
 
 nonovp <- erase(polylist$pigs_core_27_patch - polylist$deer_core_22_patch)
 expanse(nonovp, unit="km")
 
+# Core deer & core pig habitat overlap - marginal
+ovp2 <- terra::union(polylist$deer_marginal_22_patch, polylist$pigs_marginal_27_patch)
+expanse(ovp2, unit="km")[[3]]
+
+ovp2 <- ovp2 %>%
+  mutate(deer_marginal_22_patch=coalesce(deer_marginal_22_patch,0),
+         pigs_marginal_27_patch=coalesce(pigs_marginal_27_patch,0),
+         overlap=deer_marginal_22_patch+pigs_marginal_27_patch) %>%
+  select(overlap)
+
+
+
+
+## How much deer core area in CWD zones?
 # read CWD counties shapefile
 cwd <- vect("data/landscape_data/2024CWDpositive_counties.shp")
 cwd <- project(cwd, crs(polylist$deer_core_22_patch))

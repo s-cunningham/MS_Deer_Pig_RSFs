@@ -54,3 +54,10 @@ ggplot() +
 # save figure
 ggsave("figs/mapping_standard_error.svg")
 # Saving 8.91 x 8.05 in image
+
+
+
+
+# Flag pixels with covariates outside training range
+extrap_mask <- sum(abs(cov_stack) > 3, na.rm = TRUE) > 0
+plot(extrap_mask, main = "Covariate Extrapolation Areas")

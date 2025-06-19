@@ -74,12 +74,50 @@ landcov_fracs <- landcov_fracs %>%
          value=case_when(value==1 ~ "Hardwoods",
                          value==2 ~ "Crops",
                          value==3 ~ "Shrubs",
-                         value==4 ~ "Gramanoids",
+                         value==4 ~ "Graminoids",
                          value==5 ~ "Developed"))
+
+# Average distance to water
+water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
+water <- resample(water, cdl)
+ext(water) <- ext(cdl)
+
+# Reclassify missing data to 0
+m <- rbind(c(0, NA))
+water <- classify(water, m)
+
+# Average distance to water in home range
+mean_dist <- exact_extract(water, ud, 'mean')
+
+# Add to data frame with individual ID
+mean_dist <- data.frame(key=ud$key, Water=mean_dist, Water2=mean_dist^2)
+
+# pivot so it can have rows added to landcover_fracs
+mean_dist <- mean_dist %>%
+  as_tibble() %>%
+  pivot_longer(cols=2:3, names_to="value", values_to="freq")
+
+# Bind rows to landcov_fracs
+landcov_fracs <- bind_rows(landcov_fracs, mean_dist)
 
 #### Coefficients ####
 # read in models
 deer_rsf <- readRDS("output/deer_glms.RDS")
+deerSD <- read_csv("output/deer_used_avail_covariates.csv") %>%
+  # Select just the variables from the model
+  select("shrubs", "gramanoids", "foodcrops", "developed", "allhardwoods", "water_dist") %>%
+  # Create squared water
+  mutate(Water2=water_dist^2) %>%
+  # rename to match landcover data
+  rename(Hardwoods=allhardwoods, Graminoids=gramanoids, Shrubs=shrubs, Crops=foodcrops, Developed=developed,
+         Water=water_dist) %>%
+  # reorder to match glms
+  select(Hardwoods, Graminoids, Shrubs, Crops, Developed, Water, Water2)
+
+# Center and scale
+deerSD <- scale(deerSD)
+
+deerSD <- attr(deerSD, "scaled:scale")
 
 # extract mean coeficients and combine into a single table
 r_glms <- lapply(deer_rsf, coef)
@@ -94,26 +132,50 @@ r_glms <- r_glms %>%
   # drop intercept
   dplyr::select(-intercept) %>%
   # Reorder
-  dplyr::select(allhardwoods:developed) %>%
+  dplyr::select(allhardwoods:water_dist2) %>%
   # fill with 0
-  mutate(across(allhardwoods:developed, \(x) coalesce(x, 0))) %>%
+  mutate(across(allhardwoods:water_dist2, \(x) coalesce(x, 0))) %>%
   # rename to match landcover data
-  rename(Hardwoods=allhardwoods, Gramanoids=gramanoids, Shrubs=shrubs, Crops=foodcrops, Developed=developed)
+  rename(Hardwoods=allhardwoods, Graminoids=gramanoids, Shrubs=shrubs, Crops=foodcrops, Developed=developed,
+         Water=water_dist, Water2=water_dist2)
+
+# Unscale
+r_glms <- r_glms %>%
+  mutate(Hardwoods=Hardwoods / deerSD[1],
+         Graminoids=Graminoids / deerSD[2],
+         Shrubs=Shrubs / deerSD[3],
+         Crops=Crops / deerSD[4],
+         Developed=Developed / deerSD[5],
+         Water=Water / deerSD[6],
+         Water2=Water2 / deerSD[7])
 
 # Add IDs 
 r_glms$key <- un.id
 
 # Pivot longer
 r_glms <- r_glms %>%
-  pivot_longer(1:5, names_to="value", values_to="beta")
+  pivot_longer(1:7, names_to="value", values_to="beta")
 
 ## Join pct cover and glm betas
-dat <- left_join(r_glms, landcov_fracs, by=c("key", "value"))
+deer_fr <- left_join(r_glms, landcov_fracs, by=c("key", "value"))
+
+# Fill in 0s
+deer_fr <- deer_fr %>% mutate(freq=coalesce(freq, 0))
+
+# Save CSV
+write_csv(deer_fr, "output/deer_functional.csv")
 
 #### Plot functional response
-ggplot(dat) +
-  geom_hline(yintercept=0) +
-  geom_point(aes(x=freq, y=beta)) +
-  facet_wrap(vars(value), scales="free", ncol=5) +
-  theme_classic()
+ggplot(deer_fr) +
+  geom_hline(yintercept=0, linewidth=0.5, color="gray60") +
+  geom_point(aes(x=freq, y=beta), alpha=0.5) +
+  facet_wrap(vars(value), scales="free", ncol=7, strip.position="bottom") +
+  labs(y = expression(beta)) +
+  theme_classic() +
+  theme(panel.border = element_rect(fill=NA, color="black", linewidth=0.5),
+        axis.title.x=element_blank(),
+        axis.title.y=element_text(angle = 0, vjust = 0.5, size=16),
+        axis.text=element_text(size=10),
+        strip.placement="outside",
+        strip.background=element_rect(color=NA, fill=NA))
 

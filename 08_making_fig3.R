@@ -39,7 +39,7 @@ d_map <- ggplot() +
     which_north = TRUE,
     pad_x = unit(0.05, "npc"),
     pad_y = unit(0.02, "npc"),
-    style = north_arrow_orienteering())
+    style = north_arrow_minimal())
 
 p_map <- ggplot() +
   geom_spatraster(data=pigs) +

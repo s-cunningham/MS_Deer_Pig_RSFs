@@ -81,7 +81,7 @@ write_csv(glm_betas, "output/pigs_glm_betas.csv")
 
 ## Find between / within variance
 # get covariance matrices
-vcov_mat <- lapply(deer_rsf, vcov)
+vcov_mat <- lapply(pigs_rsf, vcov)
 
 # Remove intercept row and column from each covariance matrix
 vcov_mat <- lapply(vcov_mat, function(v) {

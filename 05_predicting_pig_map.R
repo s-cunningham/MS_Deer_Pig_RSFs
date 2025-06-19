@@ -12,19 +12,10 @@ pigs <- read_csv("output/pigs_used_avail_covariates.csv")
 pigs_cs <- scale(pigs[,7:22])
 
 # Read in rasters
-rast_list <- c("data/landscape_data/evergreen_210m_sum.tif",
-               "data/landscape_data/deciduous_210m_sum.tif",
-               "data/landscape_data/mixed_210m_sum.tif",
-               "data/landscape_data/shrublands_210m_sum.tif",
-               "data/landscape_data/othercrops_210m_sum.tif",
+rast_list <- c("data/landscape_data/shrublands_210m_sum.tif",
                "data/landscape_data/gramanoids_210m_sum.tif", 
-               "data/landscape_data/bottomlandHW_210m_sum.tif",
-               "data/landscape_data/herbwetlands_210_sum.tif",
-               "data/landscape_data/palatable_crops_210m_sum.tif",
                "data/landscape_data/developed_210m_sum.tif",
-               "data/landscape_data/allforestwoods_210m_sum.tif",
-               "data/landscape_data/allhardwoods_210m_sum.tif",
-               "data/landscape_data/water_210m_sum.tif") 
+               "data/landscape_data/allhardwoods_210m_sum.tif") 
 layers <- rast(rast_list)
 
 # Reclassify missing data to 0
@@ -38,22 +29,11 @@ layers <- layers / 149
 water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
 water <- resample(water, layers)
 ext(water) <- ext(layers)
-seas_water <- rast("data/landscape_data/msGWD_seasonal_water_distance.tif")
-seas_water <- project(seas_water, layers)
-ext(seas_water) <- ext(seas_water)
-perm_water <- rast("data/landscape_data/msGWD_permanent_water_distance.tif")
-perm_water <- project(perm_water, layers)
-ext(perm_water) <- ext(perm_water)
 
-layers <- c(layers, water, seas_water, perm_water)
+layers <- c(layers, water)
 
 # Rename layers
-names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops", "gramanoids", "bottomland", "herbwetl", "foodcrops",
-                   "developed", "allwoods", "hardwoods", "pct_water", "dist_water", "dist_Swater", "dist_Pwater")
-
-# remove some that aren't in the model
-dontneed <- c( "mixed", "deciduous", "allwoods", "herbwetl", "evergreen", "foodcrops", "pct_water", "othercrops", "bottomland", "dist_Swater", "dist_Pwater", "pct_water")
-layers <- subset(layers, dontneed, negate=TRUE)
+names(layers) <- c("shrubs", "gramanoids", "developed", "hardwoods", "dist_water")
 
 # Center and scale based on values in pig data
 lnames <- names(layers)
@@ -84,10 +64,10 @@ se <- read_csv("output/pigs_glm_se.csv") %>%
 # Join into a single data frame
 betas <- left_join(betas, se, by=c("covariate"))
 
-# caluclate confidence intervales
-betas <- betas %>%
-  mutate(uci = beta + (1.96*se),
-         lci = beta - (1.96*se))
+# Extract coefficients and their variance-covariance matrix for SE plotting
+coefs <- readRDS("output/pigs_vcov.rds")
+beta_hat <- coefs[[1]]
+vcov_mat <- coefs[[2]]
 
 ## Read county shapefile
 counties <- vect("data/landscape_data/county_nrcs_a_ms.shp")
@@ -96,6 +76,7 @@ counties <- project(counties, layers)
 
 # Create a list where each element is a county
 split_counties <- split(counties, "COUNTYNAME") 
+
 # Loop over counties
 for (i in 1:length(split_counties)) {
   
@@ -119,6 +100,35 @@ for (i in 1:length(split_counties)) {
   
   writeRaster(pred, filename, overwrite=TRUE)
   
+  #### Plotting standard error ####
+  # Create the squared covariate
+  x_sq <- cty_layers[["dist_water"]]^2
+  names(x_sq) <- "water2"  # name it to match the model formula
+
+  # Add it to the covariate stack
+  cty_layers <- c(cty_layers, x_sq)
+  
+  # Prediction matrix (X_pred)
+  # Get the raster values as a matrix (rows = cells, cols = covariates)
+  X_pred <- values(cty_layers, mat = TRUE)
+  
+  eta_var <- rowSums((X_pred %*% vcov_mat * X_pred))  # efficient shortcut
+  eta_se <- sqrt(eta_var)
+  
+  # Just need 1 layer to form a template
+  template <- cty_layers[[1]]
+  
+  # Convert to raster
+  r_se <- template; values(r_se) <- eta_se
+  names(r_se) <- "SE"
+  
+  # Replace all values >10 with 10
+  r_se <- clamp(r_se, upper=10, values = TRUE)
+
+  # create filename
+  filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_SE.tif")
+  
+  writeRaster(r_se, filename, overwrite=TRUE)
 }
 
 #### Combine county rasters into full state ####
@@ -250,5 +260,41 @@ pt_preds <- extract(pred, pigsSV)$RSF
 obs <- pigs$case
 
 Boyce(obs=obs, pred=pt_preds)
+
+
+#### Uncertainty ####
+
+## List county rasters
+files <- list.files(path="output/pig_county_preds/", pattern="_SE.tif$", full.names=TRUE)
+
+## Read all files in as rasters
+rlist <- lapply(files, rast)
+
+## Convert to SpatRasterCollection
+rsrc <- sprc(rlist)
+
+## mosaic
+se_rast <- mosaic(rsrc)
+
+# rename layer
+names(se_rast) <- "SE"
+
+# Read in MS shapefile (to drop islands)
+ms <- project(ms, se_rast)
+
+# Remove islands
+se_rast <- mask(se_rast, ms)
+
+# Read in permanent water mask
+water <- project(water, se_rast)
+
+# Remove water
+se_rast <- mask(se_rast, water, inverse=TRUE)
+
+plot(se_rast)
+
+# plot SE raster (clamped at 10)
+writeRaster(se_rast, "results/predictions/pigs_rsf_se_30m.tif", overwrite=TRUE)
+
 
 
