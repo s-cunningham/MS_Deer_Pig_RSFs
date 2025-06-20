@@ -14,10 +14,8 @@ library(tidyterra)
 #### Read in rasters ####
 # Rasters
 rast_list <- c("data/landscape_data/allhardwoods_180m_sum.tif",
-               "data/landscape_data/shrublands_180m_sum.tif",
                "data/landscape_data/gramanoids_180m_sum.tif", 
-               "data/landscape_data/palatable_crops_180m_sum.tif",
-               "data/landscape_data/developed_180m_sum.tif") 
+               "data/landscape_data/palatable_crops_180m_sum.tif") 
 
 layers <- rast(rast_list)
 
@@ -36,7 +34,7 @@ ext(water) <- ext(layers)
 layers <- c(layers, water)
 
 # Rename layers
-names(layers) <- c("allhardwoods", "shrubs","gramanoids", "foodcrops", "developed", "water_dist")
+names(layers) <- c("allhardwoods", "gramanoids", "foodcrops", "water_dist")
 
 # Read in MS shapefile (to drop islands)
 ms <- vect("data/landscape_data/mississippi_ACEA.shp")
@@ -53,7 +51,7 @@ water <- project(water, layers)
 layers <- mask(layers, water, inverse=TRUE)
 
 # put the layer names back
-names(layers) <- c("allhardwoods", "shrubs", "gramanoids", "foodcrops", "developed", "water_dist")
+names(layers) <- c("allhardwoods",  "gramanoids", "foodcrops", "water_dist")
 
 # crop to map extent
 layers <- crop(layers, ms)
@@ -66,12 +64,12 @@ sd_vals   <- global(layers, "sd", na.rm = TRUE)
 layers <- (layers - mean_vals$mean) / sd_vals$sd
 
 # Save deer center & scaled
-# Define the output file names. 
-lnames <- c("allhardwoods", "shrubs","gramanoids", "foodcrops", "developed", "water_dist")
-output_files <- paste0("data/landscape_data/scaled_rasters/deer_scaled_", lnames, ".tif")
-
-# # Write each layer to a separate file
-writeRaster(layers, output_files, overwrite=TRUE)
+# # Define the output file names. 
+# lnames <- c("allhardwoods", "gramanoids", "foodcrops", "water_dist")
+# output_files <- paste0("data/landscape_data/scaled_rasters/deer_scaled_", lnames, ".tif")
+# 
+# # # Write each layer to a separate file
+# writeRaster(layers, output_files, overwrite=TRUE)
 
 
 #### Predict across MS counties ####
@@ -102,8 +100,6 @@ counties <- project(counties, layers)
 
 # Create a list where each element is a county
 split_counties <- split(counties, "COUNTYNAME") 
-
-layers <- layers[[c(1,3,4,5)]]
 
 # Loop over counties
 for (i in 1:length(split_counties)) {

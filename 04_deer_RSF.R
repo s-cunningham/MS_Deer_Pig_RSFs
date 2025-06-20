@@ -52,7 +52,7 @@ for (i in 1:length(un.id)) {
   temp <- deer %>% filter(key==un.id[i])
 
   # Fit model and print the iteration for IDs that have warnings
-  rsf <- tryCatch(bayesglm(case ~ allhardwoods + gramanoids + foodcrops + water_dist + I(water_dist^2), 
+  rsf <- tryCatch(bayesglm(case ~ allhardwoods + gramanoids + foodcrops + + developed + water_dist + I(water_dist^2), 
                            data=temp, family=binomial(link = "logit"), weight=weight), warning=function(w) print(i))
   
   # add model object to list
