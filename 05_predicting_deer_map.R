@@ -38,22 +38,40 @@ layers <- c(layers, water)
 # Rename layers
 names(layers) <- c("allhardwoods", "shrubs","gramanoids", "foodcrops", "developed", "water_dist")
 
-# Center and scale based on values in deer data
-deer <- read_csv("output/deer_used_avail_covariates.csv")
-# Center and scale covariates
-deer_cs <- scale(deer[,7:19])
-lnames <- names(layers)
-for (i in 1:length(lnames)) {
-  # Subtract mean and divide by standard deviation
-  layers[[lnames[i]]] <- (layers[[lnames[i]]] - attr(deer_cs,"scaled:center")[[lnames[i]]]) / attr(deer_cs,"scaled:scale")[[lnames[i]]]
-}
+# Read in MS shapefile (to drop islands)
+ms <- vect("data/landscape_data/mississippi_ACEA.shp")
+ms <- project(ms, layers)
+
+# Remove islands
+layers <- mask(layers, ms)
+
+# Read in permanent water mask
+water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
+water <- project(water, layers)
+
+# Remove water
+layers <- mask(layers, water, inverse=TRUE)
+
+# put the layer names back
+names(layers) <- c("allhardwoods", "shrubs", "gramanoids", "foodcrops", "developed", "water_dist")
+
+# crop to map extent
+layers <- crop(layers, ms)
+
+# Get mean and sd from entire covariate rasters
+mean_vals <- global(layers, "mean", na.rm = TRUE)
+sd_vals   <- global(layers, "sd", na.rm = TRUE)
+
+# Apply to covariate rasters
+layers <- (layers - mean_vals$mean) / sd_vals$sd
 
 # Save deer center & scaled
-# Define the output file names.  
-# output_files <- paste0("data/landscape_data/scaled_rasters/deer_scaled_", lnames, ".tif")
-# 
+# Define the output file names. 
+lnames <- c("allhardwoods", "shrubs","gramanoids", "foodcrops", "developed", "water_dist")
+output_files <- paste0("data/landscape_data/scaled_rasters/deer_scaled_", lnames, ".tif")
+
 # # Write each layer to a separate file
-# writeRaster(layers, output_files, overwrite=TRUE)
+writeRaster(layers, output_files, overwrite=TRUE)
 
 
 #### Predict across MS counties ####
@@ -85,6 +103,8 @@ counties <- project(counties, layers)
 # Create a list where each element is a county
 split_counties <- split(counties, "COUNTYNAME") 
 
+layers <- layers[[c(1,3,4,5)]]
+
 # Loop over counties
 for (i in 1:length(split_counties)) {
   
@@ -99,11 +119,11 @@ for (i in 1:length(split_counties)) {
   # allhardwoods + gramanoids + shrubs + foodcrops + developed + water
   pred <- exp(betas$beta[1]*cty_layers[["allhardwoods"]] +
                 betas$beta[2]*cty_layers[["gramanoids"]] +
-                betas$beta[3]*cty_layers[["shrubs"]] +
-                betas$beta[4]*cty_layers[["foodcrops"]] +
-                betas$beta[5]*cty_layers[["developed"]] +
-                betas$beta[6]*cty_layers[["water_dist"]]+
-                betas$beta[6]*(cty_layers[["water_dist"]]^2))
+                # betas$beta[3]*cty_layers[["shrubs"]] +
+                betas$beta[3]*cty_layers[["foodcrops"]] +
+                # betas$beta[5]*cty_layers[["developed"]] +
+                betas$beta[4]*cty_layers[["water_dist"]]+
+                betas$beta[5]*(cty_layers[["water_dist"]]^2))
 
   # create filename
   filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_mean.tif")
@@ -115,32 +135,27 @@ for (i in 1:length(split_counties)) {
   # Create the squared covariate
   x_sq <- cty_layers[["water_dist"]]^2
   names(x_sq) <- "water2"  # name it to match the model formula
-  
+
   # Add it to the covariate stack
   cty_layers <- c(cty_layers, x_sq)
-  
+
   # Prediction matrix (X_pred)
   # Get the raster values as a matrix (rows = cells, cols = covariates)
   X_pred <- values(cty_layers, mat = TRUE)
-  
+
   eta_var <- rowSums((X_pred %*% vcov_mat * X_pred))  # efficient shortcut
   eta_se <- sqrt(eta_var)
-  
+
   # Just need 1 layer to form a template
   template <- cty_layers[[1]]
-  
+
   # Convert to raster
   r_se <- template; values(r_se) <- eta_se
   names(r_se) <- "SE"
-  
-  # Replace all values >10 with 10
-  r_se <- clamp(r_se, upper=10, values = TRUE)
-  
-  upper_rsf <- exp(eta_se + 1.96 * SE_eta)
-  
+
   # create filename
   filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_SE.tif")
-  
+
   writeRaster(r_se, filename, overwrite=TRUE)
   
 }
@@ -161,14 +176,6 @@ pred <- mosaic(rsrc)
 
 # rename layer
 names(pred) <- "RSF"
-
-# Read in MS shapefile (to drop islands)
-ms <- vect("data/landscape_data/mississippi_ACEA.shp")
-ms <- project(ms, pred)
-
-# Read in permanent water mask
-water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
-water <- project(water, pred)
 
 # take ln of map
 pred <- pred + 0.000001
@@ -197,19 +204,18 @@ plot(rc1)
 predls <- (pred - minmax(pred)[1])/(minmax(pred)[2]-minmax(pred)[1])
 
 ## Calculate quantiles
-global(predls, quantile, probs=c(0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,
-                               0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1), na.rm=TRUE)
+qrtls <- global(predls, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
 
-m <- c(0, 0.3751971, 1,
-       0.3751971, 0.5229799, 2,
-       0.5229799, 0.665795, 3,
-       0.665795, 0.7503603, 4,
-       0.7503603, 0.8125825, 5,
-       0.8125825, 0.8633273, 6,
-       0.8633273, 0.9033184, 7,
-       0.9033184, 0.9329077, 8,
-       0.9329077, 0.9581583, 9,
-       0.9581583, 1, 10)
+m <- c(0, qrtls[1,1], 1,
+       qrtls[1,1], qrtls[1,2], 2,
+       qrtls[1,2], qrtls[1,3], 3,
+       qrtls[1,3], qrtls[1,4], 4,
+       qrtls[1,4], qrtls[1,5], 5,
+       qrtls[1,5], qrtls[1,6], 6,
+       qrtls[1,6], qrtls[1,7], 7,
+       qrtls[1,7], qrtls[1,8], 8,
+       qrtls[1,8], qrtls[1,9], 9,
+       qrtls[1,9], 1, 10)
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 rc1 <- classify(predls, rclmat, include.lowest=TRUE)
 plot(rc1)
@@ -242,10 +248,7 @@ pred90 <- resample(predls, temp_rast)
 pred90 <- crop(pred90, predls)
 
 # Check new quantiles
-qtls <- global(pred90, quantile, probs=c(0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,
-                                 0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1), na.rm=TRUE) |> t()
-global(pred90, quantile, probs=c(0.333333,0.66666), na.rm=TRUE)
-
+qntls90 <- global(pred90, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
 
 # update layer and variable names
 varnames(pred) <- "DeerResourceSelection"
@@ -275,7 +278,7 @@ library(modEvA)
 deer <- read_csv("output/deer_used_avail_covariates.csv")
 
 deerSV <- vect(deer, geom=c("X", "Y"), crs=crs(pred))
-pt_preds <- extract(pred, deerSV)$layer
+pt_preds <- extract(pred, deerSV)$RSF
 
 obs <- deer$case
 
@@ -312,6 +315,9 @@ water <- project(water, se_rast)
 se_rast <- mask(se_rast, water, inverse=TRUE)
 
 plot(se_rast)
+
+# Replace all values >10 with 10
+se_rast <- clamp(se_rast, upper=10, values=TRUE)
 
 # plot SE raster (clamped at 10)
 writeRaster(se_rast, "results/predictions/deer_rsf_se_30m.tif", overwrite=TRUE)

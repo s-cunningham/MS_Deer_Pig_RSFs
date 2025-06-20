@@ -27,19 +27,11 @@ pigs %>% group_by(key, case) %>% count() %>%
   ggplot() + geom_density(aes(x=ratioUA))
 
 # Read in rasters
-rast_list <- c("data/landscape_data/evergreen_210m_sum.tif",
-               "data/landscape_data/deciduous_210m_sum.tif",
-               "data/landscape_data/mixed_210m_sum.tif",
-               "data/landscape_data/shrublands_210m_sum.tif",
-               "data/landscape_data/othercrops_210m_sum.tif",
+rast_list <- c("data/landscape_data/shrublands_210m_sum.tif",
                "data/landscape_data/gramanoids_210m_sum.tif", 
-               "data/landscape_data/bottomlandHW_210m_sum.tif",
-               "data/landscape_data/herbwetlands_210_sum.tif",
                "data/landscape_data/palatable_crops_210m_sum.tif",
                "data/landscape_data/developed_210m_sum.tif",
-               "data/landscape_data/allforestwoods_210m_sum.tif",
-               "data/landscape_data/allhardwoods_210m_sum.tif",
-               "data/landscape_data/water_210m_sum.tif") 
+               "data/landscape_data/allhardwoods_210m_sum.tif") 
 layers <- rast(rast_list)
 
 # Reclassify missing data to 0
@@ -49,35 +41,46 @@ layers <- classify(layers, m)
 # Convert to % 
 layers <- layers / 149
 
-# Tree structure
-# ch <- rast("data/landscape_data/LC23_CHavg_210m.tif")
-# ch <- project(ch, layers)
-# ext(ch) <- ext(ch)
-# tcc <- rast("data/landscape_data/nlcd_tcc2021_ms50km_mean210m.tif")
-# tcc <- project(tcc, layers)
-# ext(tcc) <- ext(tcc)
-# tcc_sd <- rast("data/landscape_data/nlcd_tcc2021_ms50km_sd210m.tif")
-# tcc_sd <- project(tcc_sd, layers)
-# ext(tcc_sd) <- ext(tcc_sd)
-
 # read water
 water <- rast("data/landscape_data/RSinterarealMerge_distance30m.tif")
 water <- resample(water, layers)
 ext(water) <- ext(layers)
-seas_water <- rast("data/landscape_data/msGWD_seasonal_water_distance.tif")
-seas_water <- project(seas_water, layers)
-ext(seas_water) <- ext(seas_water)
-perm_water <- rast("data/landscape_data/msGWD_permanent_water_distance.tif")
-perm_water <- project(perm_water, layers)
-ext(perm_water) <- ext(perm_water)
 
-layers <- c(layers, water, seas_water, perm_water)
+layers <- c(layers, water)
 
 # Rename layers
-names(layers) <- c("evergreen", "deciduous", "mixed", "shrubs", "othercrops", "gramanoids", "bottomland", "herbwetl", "foodcrops",
-                   "developed", "allwoods", "hardwoods", "pct_water", "dist_water", "dist_Swater", "dist_Pwater")
-# global(layers[["shrubs"]], fun="mean")
-# global(layers[["shrubs"]], fun="sd")
+names(layers) <- c("shrubs", "gramanoids", "foodcrops","developed", "hardwoods", "dist_water")
+
+# Read in MS shapefile (to drop islands)
+ms <- vect("data/landscape_data/mississippi_ACEA.shp")
+ms <- project(ms, layers)
+
+# Remove islands
+layers <- mask(layers, ms)
+
+# Read in permanent water mask
+water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
+water <- project(water, layers)
+
+# Remove water
+layers <- mask(layers, water, inverse=TRUE)
+
+# put the layer names back
+names(layers) <-  c("shrubs", "gramanoids", "foodcrops","developed", "hardwoods", "dist_water")
+
+# crop to map extent
+layers <- crop(layers, ms)
+
+# Get mean and sd from entire covariate rasters
+mean_vals <- global(layers, "mean", na.rm = TRUE)
+sd_vals   <- global(layers, "sd", na.rm = TRUE)
+
+# Apply to covariate rasters
+cov_scaled <- (layers - mean_vals$mean) / sd_vals$sd
+
+rast_cs <- bind_cols(mean_vals, sd_vals)
+rast_cs <- rownames_to_column(rast_cs, var="layer")
+write_csv(rast_cs, "output/pigs_raster_mean_sds.csv")
 
 #### Extract covariates and used and available locations ####
 

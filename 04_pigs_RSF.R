@@ -14,7 +14,15 @@ library(arm)
 pigs <- read_csv("output/pigs_used_avail_covariates.csv")
 
 # Center and scale covariates
-pigs[,7:22] <- scale(pigs[,7:22])
+lyrs <- read_csv("output/pigs_raster_mean_sds.csv")
+
+pigs <- pigs %>%
+  mutate(hardwoods=(hardwoods-lyrs$mean[1]) / lyrs$sd[1],
+         shrubs=(shrubs-lyrs$mean[2]) / lyrs$sd[2],
+         gramanoids=(gramanoids-lyrs$mean[3]) / lyrs$sd[3],
+         foodcrops=(foodcrops-lyrs$mean[4]) / lyrs$sd[4],
+         developed=(developed-lyrs$mean[5]) / lyrs$sd[5],
+         dist_water=(dist_water-lyrs$mean[6]) / lyrs$sd[6]) 
 
 ## Set up to loop by individual
 un.id <- unique(pigs$key)
@@ -29,24 +37,32 @@ for (i in 1:length(un.id)) {
   
   # Filter by ID
   temp <- pigs %>% filter(key==un.id[i]) 
-  
-  # Set up data for LASSO in glmnet
-  # x <- model.matrix(case ~ bottomland + deciduous + gramanoids + shrubs + developed + water, temp)[, -1]
-  # y <- temp$case
-  # wts <- temp$weight
-  
-  rsf <- bayesglm(case ~ hardwoods + shrubs + gramanoids + developed + dist_water + I(dist_water^2), 
-                        data=temp, family=binomial(link = "logit"), weight=weight)
+
+  # Fit model and print the iteration for IDs that have warnings
+  rsf <- tryCatch(bayesglm(case ~ hardwoods + shrubs + gramanoids + developed + dist_water + I(dist_water^2), 
+                           data=temp, family=binomial(link = "logit"), weight=weight), warning=function(w) print(i))
   
   pigs_rsf[[i]] <- rsf
 
 }
 
+pigs_rsf <- pigs_rsf[-c(14,29)]
+un.id <- un.id[-c(14,29)]
+
 saveRDS(pigs_rsf, "output/pigs_glms.RDS")
 # reduced_glms <- readRDS("output/pigs_reduced_glms.RDS")
 
-#### Summarizing coefficients ####
-## extract mean coeficients and combine into a single table
+#### Summarize coefficients ####
+# get covariance matrices
+vcov_mat <- lapply(pigs_rsf, vcov)
+
+# Remove intercept row and column from each covariance matrix
+vcov_mat <- lapply(vcov_mat, function(v) {
+  idx <- which(rownames(v) != "(Intercept)")
+  v[idx, idx, drop = FALSE]
+})
+
+# extract mean coeficients and combine into a single table
 r_glms <- lapply(pigs_rsf, coef)
 r_glms <- lapply(r_glms, as.data.frame)
 r_glms <- lapply(r_glms, t)
@@ -55,14 +71,14 @@ r_glms <- do.call(bind_rows, r_glms)
 
 r_glms <- r_glms %>% 
   as_tibble() %>%
-  rename(intercept=`(Intercept)`, water2=`I(dist_water^2)`) %>%  
+  rename(intercept=`(Intercept)`, dist_water2=`I(dist_water^2)`) %>%  
   # drop intercept
   dplyr::select(-intercept) %>%
   # Reorder
-  dplyr::select(hardwoods:water2) %>%
+  dplyr::select(hardwoods:dist_water2) %>%
   # fill with 0
-  mutate(across(hardwoods:water2, \(x) coalesce(x, 0)))
-  
+  mutate(across(hardwoods:dist_water2, \(x) coalesce(x, 0)))
+
 # Create list
 beta_list <- lapply(1:nrow(r_glms), function(i) {
   b <- as.numeric(r_glms[i, ])
@@ -75,19 +91,11 @@ r_glms$id <- un.id
 
 # Calculate mean across all individuals
 glm_betas <- r_glms %>% 
-  reframe(across(hardwoods:water2, \(x) mean(x, na.rm = TRUE)))
+  reframe(across(hardwoods:dist_water2, \(x) mean(x, na.rm = TRUE)))
 
 write_csv(glm_betas, "output/pigs_glm_betas.csv")
 
 ## Find between / within variance
-# get covariance matrices
-vcov_mat <- lapply(pigs_rsf, vcov)
-
-# Remove intercept row and column from each covariance matrix
-vcov_mat <- lapply(vcov_mat, function(v) {
-  idx <- which(rownames(v) != "(Intercept)")
-  v[idx, idx, drop = FALSE]
-})
 
 # 1. Stack beta vectors into a matrix
 B <- do.call(rbind, beta_list)  # N x K
@@ -120,21 +128,19 @@ se <- do.call(bind_rows, se)
 
 # rename intercept and add ID column
 se <- se %>%
-  rename(intercept=`(Intercept)`, water2=`I(dist_water^2)`) %>%  
+  rename(intercept=`(Intercept)`, dist_water2=`I(dist_water^2)`) %>%  
   # drop intercept
   dplyr::select(-intercept) %>%
   # Reorder
-  dplyr::select(hardwoods:water2) %>%
+  dplyr::select(hardwoods:dist_water2) %>%
   # fill with 0
-  mutate(across(hardwoods:water2, \(x) coalesce(x, 0)))
+  mutate(across(hardwoods:dist_water2, \(x) coalesce(x, 0)))
 
 # Add IDs
 se$id <- un.id
 
 # Calculate mean across all individuals
 glm_se <- se %>% 
-  reframe(across(hardwoods:water2, \(x) mean(x, na.rm = TRUE)))
+  reframe(across(hardwoods:dist_water2, \(x) mean(x, na.rm = TRUE)))
 
 write_csv(glm_se, "output/pigs_glm_se.csv")
-
-

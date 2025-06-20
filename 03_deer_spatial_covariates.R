@@ -16,18 +16,11 @@ deer %>% group_by(key, case) %>% count() %>%
 
 
 # Rasters
-rast_list <- c("data/landscape_data/evergreen_180m_sum.tif",
-               "data/landscape_data/deciduous_180m_sum.tif",
-               "data/landscape_data/mixed_180m_sum.tif",
-               "data/landscape_data/allhardwoods_180m_sum.tif",
+rast_list <- c("data/landscape_data/allhardwoods_180m_sum.tif",
                "data/landscape_data/shrublands_180m_sum.tif",
-               "data/landscape_data/othercrops_180m_sum.tif",
                "data/landscape_data/gramanoids_180m_sum.tif", 
-               "data/landscape_data/bottomlandHW_180m_sum.tif",
-               "data/landscape_data/herbwetlands_180_sum.tif",
                "data/landscape_data/palatable_crops_180m_sum.tif",
-               "data/landscape_data/developed_180m_sum.tif",
-               "data/landscape_data/water_180m_sum.tif") 
+               "data/landscape_data/developed_180m_sum.tif") 
 
 layers <- rast(rast_list)
 
@@ -46,8 +39,38 @@ ext(water) <- ext(layers)
 layers <- c(layers, water)
 
 # Rename layers
-names(layers) <- c("evergreen", "deciduous", "mixed", "allhardwoods", "shrubs", "othercrops",
-                   "gramanoids", "bottomland", "herbwetl", "foodcrops", "developed", "water_pct", "water_dist")
+names(layers) <- c("allhardwoods", "shrubs", "gramanoids", "foodcrops", "developed", "water_dist")
+
+# Read in MS shapefile (to drop islands)
+ms <- vect("data/landscape_data/mississippi_ACEA.shp")
+ms <- project(ms, layers)
+
+# Remove islands
+layers <- mask(layers, ms)
+
+# Read in permanent water mask
+water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
+water <- project(water, layers)
+
+# Remove water
+layers <- mask(layers, water, inverse=TRUE)
+
+# put the layer names back
+names(layers) <- c("allhardwoods", "shrubs", "gramanoids", "foodcrops", "developed", "water_dist")
+
+# crop to map extent
+layers <- crop(layers, ms)
+
+# Get mean and sd from entire covariate rasters
+mean_vals <- global(layers, "mean", na.rm = TRUE)
+sd_vals   <- global(layers, "sd", na.rm = TRUE)
+
+# Apply to covariate rasters
+cov_scaled <- (layers - mean_vals$mean) / sd_vals$sd
+
+rast_cs <- bind_cols(mean_vals, sd_vals)
+rast_cs <- rownames_to_column(rast_cs, var="layer")
+write_csv(rast_cs, "output/deer_raster_mean_sds.csv")
 
 #### Extract covariates and used and available locations ####
 

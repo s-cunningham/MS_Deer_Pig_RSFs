@@ -8,9 +8,6 @@ theme_set(theme_bw())
 # pig data
 pigs <- read_csv("output/pigs_used_avail_covariates.csv")
 
-# Center and scale covariates
-pigs_cs <- scale(pigs[,7:22])
-
 # Read in rasters
 rast_list <- c("data/landscape_data/shrublands_210m_sum.tif",
                "data/landscape_data/gramanoids_210m_sum.tif", 
@@ -35,20 +32,39 @@ layers <- c(layers, water)
 # Rename layers
 names(layers) <- c("shrubs", "gramanoids", "developed", "hardwoods", "dist_water")
 
-# Center and scale based on values in pig data
-lnames <- names(layers)
-for (i in 1:length(lnames)) {
-  # Subtract mean and divide by standard deviation
-  layers[[lnames[i]]] <- (layers[[lnames[i]]] - attr(pigs_cs,"scaled:center")[[lnames[i]]]) / attr(pigs_cs,"scaled:scale")[[lnames[i]]]
-}
+# Read in MS shapefile (to drop islands)
+ms <- vect("data/landscape_data/mississippi_ACEA.shp")
+ms <- project(ms, layers)
 
-# Save pig center & scaled
-# Define the output file names.
-# output_files <- paste0("data/landscape_data/scaled_rasters/pig_scaled_", lnames, ".tif")
-# 
+# Remove islands
+layers <- mask(layers, ms)
+
+# Read in permanent water mask
+water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
+water <- project(water, layers)
+
+# Remove water
+layers <- mask(layers, water, inverse=TRUE)
+# crop to map extent
+layers <- crop(layers, ms)
+
+# put layer names back
+names(layers) <- c("shrubs", "gramanoids", "developed", "hardwoods", "dist_water")
+
+# Get mean and sd from entire covariate rasters
+mean_vals <- global(layers, "mean", na.rm = TRUE)
+sd_vals   <- global(layers, "sd", na.rm = TRUE)
+
+# Apply to covariate rasters
+layers <- (layers - mean_vals$mean) / sd_vals$sd
+
+# Save deer center & scaled
+# Define the output file names. 
+lnames <- c("shrubs", "gramanoids", "developed", "hardwoods", "dist_water")
+output_files <- paste0("data/landscape_data/scaled_rasters/deer_scaled_", lnames, ".tif")
+
 # # Write each layer to a separate file
-# writeRaster(layers, output_files, overwrite=TRUE)
-
+writeRaster(layers, output_files, overwrite=TRUE)
 
 #### Predict across MS counties ####
 ## Read in coefficients
@@ -122,9 +138,6 @@ for (i in 1:length(split_counties)) {
   r_se <- template; values(r_se) <- eta_se
   names(r_se) <- "SE"
   
-  # Replace all values >10 with 10
-  r_se <- clamp(r_se, upper=10, values = TRUE)
-
   # create filename
   filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_SE.tif")
   
@@ -155,16 +168,8 @@ pred <- log(pred)
 m <- rbind(c(NA, minmax(pred)[1]))
 pred <- classify(pred, m)
 
-# Read in MS shapefile (to drop islands)
-ms <- vect("data/landscape_data/mississippi_ACEA.shp")
-ms <- project(ms, pred)
-
 # Remove islands
 pred <- mask(pred, ms)
-
-# Read in permanent water mask
-water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
-water <- project(water, pred)
 
 # Remove water
 pred <- mask(pred, water, inverse=TRUE)
@@ -182,18 +187,18 @@ plot(rc1)
 predls <- (pred - minmax(pred)[1])/(minmax(pred)[2]-minmax(pred)[1])
 
 ## Calculate quantiles
-global(predls, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
+qrtls <- global(predls, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
 
-m <- c(minmax(predls)[1], 0.4100915, 1,
-       0.4100915, 0.5498892, 2,
-       0.5498892, 0.6319309, 3,
-       0.6319309, 0.6879289, 4,
-       0.6879289, 0.7274025, 5,
-       0.7274025, 0.7552656, 6,
-       0.7552656, 0.7794309, 7,
-       0.7794309, 0.8290822, 8,
-       0.8290822, 0.9070402, 9,
-       0.9070402, minmax(predls)[2], 10)
+m <- c(0, qrtls[1,1], 1,
+       qrtls[1,1], qrtls[1,2], 2,
+       qrtls[1,2], qrtls[1,3], 3,
+       qrtls[1,3], qrtls[1,4], 4,
+       qrtls[1,4], qrtls[1,5], 5,
+       qrtls[1,5], qrtls[1,6], 6,
+       qrtls[1,6], qrtls[1,7], 7,
+       qrtls[1,7], qrtls[1,8], 8,
+       qrtls[1,8], qrtls[1,9], 9,
+       qrtls[1,9], 1, 10)
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 rc1 <- classify(predls, rclmat, include.lowest=TRUE)
 plot(rc1)
@@ -227,7 +232,7 @@ pred90 <- crop(pred90, predls)
 
 # Check new quantiles
 global(pred90, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
-global(pred90, quantile, probs=c(0.333333,0.66666), na.rm=TRUE)
+
 # update layer and variable names
 varnames(pred) <- "PigResourceSelection"
 names(pred) <- "RSF"
@@ -292,6 +297,9 @@ water <- project(water, se_rast)
 se_rast <- mask(se_rast, water, inverse=TRUE)
 
 plot(se_rast)
+
+# Replace all values >10 with 10
+se_rast <- clamp(se_rast, upper=10, values=TRUE)
 
 # plot SE raster (clamped at 10)
 writeRaster(se_rast, "results/predictions/pigs_rsf_se_30m.tif", overwrite=TRUE)

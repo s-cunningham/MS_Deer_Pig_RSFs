@@ -14,7 +14,15 @@ library(arm)
 deer <- read_csv("output/deer_used_avail_covariates.csv")
 
 # Center and scale covariates
-deer[,7:19] <- scale(deer[,7:19])
+lyrs <- read_csv("output/deer_raster_mean_sds.csv")
+
+deer <- deer %>%
+  mutate(allhardwoods=(allhardwoods-lyrs$mean[1]) / lyrs$sd[1],
+         shrubs=(shrubs-lyrs$mean[2]) / lyrs$sd[2],
+         gramanoids=(gramanoids-lyrs$mean[3]) / lyrs$sd[3],
+         foodcrops=(foodcrops-lyrs$mean[4]) / lyrs$sd[4],
+         developed=(developed-lyrs$mean[5]) / lyrs$sd[5],
+         water_dist=(water_dist-lyrs$mean[6]) / lyrs$sd[6]) 
 
 ## Set up to loop by individual
 un.id <- unique(deer$key)
@@ -43,18 +51,18 @@ for (i in 1:length(un.id)) {
   # Filter by ID
   temp <- deer %>% filter(key==un.id[i])
 
-  # Run the LASSO with the optimal lambda and alpha
-  rsf <- bayesglm(case ~ allhardwoods + gramanoids + shrubs + foodcrops + developed + water_dist + I(water_dist^2), data=temp, family=binomial(link = "logit"), weight=weight)
-
+  # Fit model and print the iteration for IDs that have warnings
+  rsf <- tryCatch(bayesglm(case ~ allhardwoods + gramanoids + foodcrops + water_dist + I(water_dist^2), 
+                           data=temp, family=binomial(link = "logit"), weight=weight), warning=function(w) print(i))
+  
   # add model object to list
   deer_rsf[[i]] <- rsf
   
 }
 
-# add names to list
-
-saveRDS(deer_rsf, "output/deer_glms.RDS")
-# reduced_glms <- readRDS("output/deer_reduced_glms.RDS")
+# Drop individuals that have complete separation
+deer_rsf <- deer_rsf[-c(5,42)]
+un.id <- un.id[-c(5,42)]
 
 #### Summarize coefficients ####
 # get covariance matrices
@@ -65,6 +73,17 @@ vcov_mat <- lapply(vcov_mat, function(v) {
   idx <- which(rownames(v) != "(Intercept)")
   v[idx, idx, drop = FALSE]
 })
+
+flag <- lapply(vcov_mat, function(x) sum(diag(x) > 100)) %>% unlist()
+flag <- ifelse(flag==2, 1, flag)
+which(flag==1)
+
+# Drop individuals that have complete separation
+deer_rsf <- deer_rsf[-c(4,67,72)]
+un.id <- un.id[-c(4,67,72)]
+
+saveRDS(deer_rsf, "output/deer_glms.RDS")
+# reduced_glms <- readRDS("output/deer_reduced_glms.RDS")
 
 # extract mean coeficients and combine into a single table
 r_glms <- lapply(deer_rsf, coef)
