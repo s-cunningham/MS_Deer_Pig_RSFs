@@ -61,7 +61,7 @@ layers <- (layers - mean_vals$mean) / sd_vals$sd
 # Save deer center & scaled
 # Define the output file names. 
 lnames <- c("shrubs", "gramanoids", "developed", "hardwoods", "dist_water")
-output_files <- paste0("data/landscape_data/scaled_rasters/deer_scaled_", lnames, ".tif")
+output_files <- paste0("data/landscape_data/scaled_rasters/pigs_scaled_", lnames, ".tif")
 
 # # Write each layer to a separate file
 writeRaster(layers, output_files, overwrite=TRUE)
