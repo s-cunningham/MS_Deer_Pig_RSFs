@@ -4,7 +4,7 @@ library(tidyterra)
 
 theme_set(theme_bw())
 
-#### Read scaled rasters ####
+#### Read Data ####
 layers <- list.files(path="data/landscape_data/scaled_rasters/", pattern=".tif", full.names=TRUE)
 layers <- layers[str_detect(layers, "pigs")]
 layers <- rast(layers)
@@ -12,21 +12,7 @@ layers <- rast(layers)
 #### Predict across MS counties ####
 ## Read in coefficients
 # Betas
-betas <- read_csv("output/pigs_glm_betas.csv") %>%
-  # Pivot so that covariates are in a in a column, and beta coefficients in another column
-  pivot_longer(1:ncol(.), names_to="covariate", values_to="beta")
-# Standard error
-se <- read_csv("output/pigs_glm_se.csv") %>%
-  # Pivot so that covariates are in a in a column, and beta coefficients in another column
-  pivot_longer(1:ncol(.), names_to="covariate", values_to="se")
-
-# Join into a single data frame
-betas <- left_join(betas, se, by=c("covariate"))
-
-# Extract coefficients and their variance-covariance matrix for SE plotting
-coefs <- readRDS("output/pigs_vcov.rds")
-beta_hat <- coefs[[1]]
-vcov_mat <- coefs[[2]]
+betas <- read_csv("output/pigs_mixed_effects_betas.csv") 
 
 ## Read county shapefile
 counties <- vect("data/landscape_data/county_nrcs_a_ms.shp")
@@ -44,47 +30,22 @@ for (i in 1:length(split_counties)) {
   
   # Mask layers to county
   cty_layers <- crop(layers, cty, mask=TRUE)
-
+  
   # Predict (w(x) = exp(x*beta))
   # hardwoods + evergreen + herbwetl + shrubs + gramanoids + developed + dist_Swater + I(dist_Swater^2) + dist_Pwater + I(dist_Pwater^2)
   pred <- exp(betas$beta[1]*cty_layers[["hardwoods"]] +
-              betas$beta[2]*cty_layers[["shrubs"]] +
-              betas$beta[3]*cty_layers[["gramanoids"]] +
-              betas$beta[4]*cty_layers[["developed"]] +
-              betas$beta[5]*cty_layers[["dist_water"]] +
-              betas$beta[6]*(cty_layers[["dist_water"]]^2))
+                betas$beta[2]*cty_layers[["shrubs"]] +
+                betas$beta[3]*cty_layers[["gramanoids"]] +
+                betas$beta[4]*cty_layers[["developed"]] +
+                betas$beta[5]*cty_layers[["dist_water"]] +
+                betas$beta[6]*(cty_layers[["dist_water"]]^2))
   
   # create filename
   filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_mean.tif")
   
   writeRaster(pred, filename, overwrite=TRUE)
   
-  #### Plotting standard error ####
-  # Create the squared covariate
-  x_sq <- cty_layers[["dist_water"]]^2
-  names(x_sq) <- "water2"  # name it to match the model formula
-
-  # Add it to the covariate stack
-  cty_layers <- c(cty_layers, x_sq)
   
-  # Prediction matrix (X_pred)
-  # Get the raster values as a matrix (rows = cells, cols = covariates)
-  X_pred <- values(cty_layers, mat = TRUE)
-  
-  eta_var <- rowSums((X_pred %*% vcov_mat * X_pred))  # efficient shortcut
-  eta_se <- sqrt(eta_var)
-  
-  # Just need 1 layer to form a template
-  template <- cty_layers[[1]]
-  
-  # Convert to raster
-  r_se <- template; values(r_se) <- eta_se
-  names(r_se) <- "SE"
-  
-  # create filename
-  filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_SE.tif")
-  
-  writeRaster(r_se, filename, overwrite=TRUE)
 }
 
 #### Combine county rasters into full state ####
@@ -113,7 +74,6 @@ pred <- classify(pred, m)
 
 # Remove islands
 pred <- mask(pred, ms)
-pred <- crop(pred, ms) 
 
 # Remove water
 pred <- mask(pred, water, inverse=TRUE)
@@ -126,7 +86,7 @@ m <- c(minmax(pred)[1], 0, 0,
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 rc1 <- classify(pred, rclmat, include.lowest=TRUE)
 plot(rc1)
-  
+
 # linear stretch (so that values >=0)
 predls <- (pred - minmax(pred)[1])/(minmax(pred)[2]-minmax(pred)[1])
 
@@ -209,44 +169,4 @@ pt_preds <- extract(pred, pigsSV)$RSF
 obs <- pigs$case
 
 Boyce(obs=obs, pred=pt_preds)
-
-
-#### Uncertainty ####
-
-## List county rasters
-files <- list.files(path="output/pig_county_preds/", pattern="_SE.tif$", full.names=TRUE)
-
-## Read all files in as rasters
-rlist <- lapply(files, rast)
-
-## Convert to SpatRasterCollection
-rsrc <- sprc(rlist)
-
-## mosaic
-se_rast <- mosaic(rsrc)
-
-# rename layer
-names(se_rast) <- "SE"
-
-# Read in MS shapefile (to drop islands)
-ms <- project(ms, se_rast)
-
-# Remove islands
-se_rast <- mask(se_rast, ms)
-
-# Read in permanent water mask
-water <- project(water, se_rast)
-
-# Remove water
-se_rast <- mask(se_rast, water, inverse=TRUE)
-
-plot(se_rast)
-
-# Replace all values >10 with 10
-se_rast <- clamp(se_rast, upper=10, values=TRUE)
-
-# plot SE raster (clamped at 10)
-writeRaster(se_rast, "results/predictions/pigs_rsf_se_30m.tif", overwrite=TRUE)
-
-
 

@@ -4,29 +4,34 @@ library(tidyterra)
 
 theme_set(theme_bw())
 
-#### Read scaled rasters ####
+#### Read in scaled rasters ####
 layers <- list.files(path="data/landscape_data/scaled_rasters/", pattern=".tif", full.names=TRUE)
-layers <- layers[str_detect(layers, "pigs")]
+layers <- layers[str_detect(layers, "deer")]
 layers <- rast(layers)
+
+names(layers) <- c("developed","water_dist","foodcrops","gramanoids","hardwoods","shrubs")  
+
+# Read in MS shapefile (to drop islands)
+ms <- vect("data/landscape_data/mississippi_ACEA.shp")
+ms <- project(ms, layers)
+
+# Read in permanent water mask
+water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
+water <- project(water, layers)
 
 #### Predict across MS counties ####
 ## Read in coefficients
 # Betas
-betas <- read_csv("output/pigs_glm_betas.csv") %>%
-  # Pivot so that covariates are in a in a column, and beta coefficients in another column
-  pivot_longer(1:ncol(.), names_to="covariate", values_to="beta")
-# Standard error
-se <- read_csv("output/pigs_glm_se.csv") %>%
-  # Pivot so that covariates are in a in a column, and beta coefficients in another column
-  pivot_longer(1:ncol(.), names_to="covariate", values_to="se")
+betas <- read_csv("output/deer_mixed_effects_betas.csv") 
 
-# Join into a single data frame
-betas <- left_join(betas, se, by=c("covariate"))
+beta_hat <- readRDS("output/deer_mixed_effects_beta.RDS")
+names(beta_hat) <- c("allhardwoods", "gramanoids", "foodcrops", "shrubs", "developed", "water_dist", "water2")
+  
+# Covariance
+vcov_beta <- readRDS("output/deer_mixed_effects_vcov.RDS")
 
-# Extract coefficients and their variance-covariance matrix for SE plotting
-coefs <- readRDS("output/pigs_vcov.rds")
-beta_hat <- coefs[[1]]
-vcov_mat <- coefs[[2]]
+# drop intercept
+vcov_beta <- vcov_beta[-1,-1]
 
 ## Read county shapefile
 counties <- vect("data/landscape_data/county_nrcs_a_ms.shp")
@@ -44,26 +49,27 @@ for (i in 1:length(split_counties)) {
   
   # Mask layers to county
   cty_layers <- crop(layers, cty, mask=TRUE)
-
+  
   # Predict (w(x) = exp(x*beta))
   # hardwoods + evergreen + herbwetl + shrubs + gramanoids + developed + dist_Swater + I(dist_Swater^2) + dist_Pwater + I(dist_Pwater^2)
   pred <- exp(betas$beta[1]*cty_layers[["hardwoods"]] +
-              betas$beta[2]*cty_layers[["shrubs"]] +
-              betas$beta[3]*cty_layers[["gramanoids"]] +
-              betas$beta[4]*cty_layers[["developed"]] +
-              betas$beta[5]*cty_layers[["dist_water"]] +
-              betas$beta[6]*(cty_layers[["dist_water"]]^2))
+                betas$beta[2]*cty_layers[["gramanoids"]] +
+                betas$beta[3]*cty_layers[["foodcrops"]] +
+                betas$beta[4]*cty_layers[["shrubs"]] +
+                betas$beta[5]*cty_layers[["developed"]] +
+                betas$beta[6]*cty_layers[["water_dist"]] +
+                betas$beta[7]*(cty_layers[["water_dist"]]^2))
   
   # create filename
-  filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_mean.tif")
+  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_mean.tif")
   
   writeRaster(pred, filename, overwrite=TRUE)
   
   #### Plotting standard error ####
   # Create the squared covariate
-  x_sq <- cty_layers[["dist_water"]]^2
+  x_sq <- cty_layers[["water_dist"]]^2
   names(x_sq) <- "water2"  # name it to match the model formula
-
+  
   # Add it to the covariate stack
   cty_layers <- c(cty_layers, x_sq)
   
@@ -71,25 +77,48 @@ for (i in 1:length(split_counties)) {
   # Get the raster values as a matrix (rows = cells, cols = covariates)
   X_pred <- values(cty_layers, mat = TRUE)
   
-  eta_var <- rowSums((X_pred %*% vcov_mat * X_pred))  # efficient shortcut
-  eta_se <- sqrt(eta_var)
+  # rearrange column order
+  X_pred <- X_pred[,c("hardwoods", "gramanoids", "foodcrops", "shrubs", "developed", "water_dist", "water2")]
+  
+  # Efficient matrix math
+  SE <- sqrt(rowSums((X_pred %*% vcov_beta) * X_pred))
+  
+  # Back transform
+  eta <- X_pred %*% beta_hat
+  upper <- eta + 1.96 * SE
+  lower <- eta - 1.96 * SE
   
   # Just need 1 layer to form a template
   template <- cty_layers[[1]]
   
   # Convert to raster
-  r_se <- template; values(r_se) <- eta_se
-  names(r_se) <- "SE"
+  se_raster <- template # template raster
+  terra::values(se_raster) <- SE
+  names(se_raster) <- "SE"
   
-  # create filename
-  filename <- paste0("output/pig_county_preds/pig_pred_", split_counties[[i]]$COUNTYNAME, "_SE.tif")
+  # create filename & save raster
+  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_SE.tif")
+  writeRaster(se_raster, filename, overwrite=TRUE)
   
-  writeRaster(r_se, filename, overwrite=TRUE)
+  # Lower
+  lci_raster <- template # template raster
+  terra::values(lci_raster) <- lower
+  names(lci_raster) <- "lower"
+  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
+  writeRaster(lci_raster, filename, overwrite=TRUE)
+  
+  # Upper
+  uci_raster <- template # template raster
+  terra::values(uci_raster) <- upper
+  names(uci_raster) <- "upper"
+  filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
+  writeRaster(uci_raster, filename, overwrite=TRUE)
+  
 }
 
 #### Combine county rasters into full state ####
 ## List county rasters
-files <- list.files(path="output/pig_county_preds/", pattern="_mean.tif$", full.names=TRUE)
+files <- list.files(path="output/deer_county_preds/", pattern="_mean.tif$", full.names=TRUE)
 
 ## Read all files in as rasters
 rlist <- lapply(files, rast)
@@ -113,7 +142,7 @@ pred <- classify(pred, m)
 
 # Remove islands
 pred <- mask(pred, ms)
-pred <- crop(pred, ms) 
+pred <- crop(pred, ms)
 
 # Remove water
 pred <- mask(pred, water, inverse=TRUE)
@@ -126,7 +155,7 @@ m <- c(minmax(pred)[1], 0, 0,
 rclmat <- matrix(m, ncol=3, byrow=TRUE)
 rc1 <- classify(pred, rclmat, include.lowest=TRUE)
 plot(rc1)
-  
+
 # linear stretch (so that values >=0)
 predls <- (pred - minmax(pred)[1])/(minmax(pred)[2]-minmax(pred)[1])
 
@@ -189,32 +218,31 @@ names(predls) <- "RSF"
 
 ## Write rasters
 # Save ASCII for RAMAS
-writeRaster(pred90, "results/predictions/pigs_rsf_predicted.asc", NAflag=-9999, overwrite=TRUE)
+writeRaster(pred90, "results/predictions/deer_rsf_predicted.asc", NAflag=-9999, overwrite=TRUE)
 # additionally save mean predictions as .tif for plotting (both resampled and original 30x30m)
-writeRaster(pred90, "results/predictions/pigs_rsf_predicted_90m.tif", overwrite=TRUE)
-writeRaster(pred, "results/predictions/pigs_rsf_predicted_30m.tif", overwrite=TRUE)
-writeRaster(predls, "results/predictions/pigs_rsf_predicted_linStr_30m.tif", overwrite=TRUE)
+writeRaster(pred90, "results/predictions/deer_rsf_predicted_90m.tif", overwrite=TRUE)
+writeRaster(pred, "results/predictions/deer_rsf_predicted_30m.tif", overwrite=TRUE)
+writeRaster(predls, "results/predictions/deer_rsf_predicted_linStr_30m.tif", overwrite=TRUE)
 # plot binned rsf values (log scale)
-writeRaster(rc1, "results/predictions/pigs_rsf_bins_30m.tif", overwrite=TRUE)
+writeRaster(rc1, "results/predictions/deer_rsf_bins_30m.tif", overwrite=TRUE)
 
 
 library(modEvA)
 
 # Calculate continuous Boyce index
-pigs <- read_csv("output/pigs_used_avail_covariates.csv")
+deer <- read_csv("output/deer_used_avail_covariates.csv")
 
-pigsSV <- vect(pigs, geom=c("X", "Y"), crs=crs(pred))
-pt_preds <- extract(pred, pigsSV)$RSF
+deerSV <- vect(deer, geom=c("X", "Y"), crs=crs(pred))
+pt_preds <- extract(predls, deerSV)$RSF
 
-obs <- pigs$case
+obs <- deer$case
 
 Boyce(obs=obs, pred=pt_preds)
 
 
-#### Uncertainty ####
 
 ## List county rasters
-files <- list.files(path="output/pig_county_preds/", pattern="_SE.tif$", full.names=TRUE)
+files <- list.files(path="output/deer_county_preds/", pattern="_SE.tif$", full.names=TRUE)
 
 ## Read all files in as rasters
 rlist <- lapply(files, rast)
@@ -243,10 +271,10 @@ se_rast <- mask(se_rast, water, inverse=TRUE)
 plot(se_rast)
 
 # Replace all values >10 with 10
-se_rast <- clamp(se_rast, upper=10, values=TRUE)
+# se_rast <- clamp(se_rast, upper=10, values=TRUE)
 
 # plot SE raster (clamped at 10)
-writeRaster(se_rast, "results/predictions/pigs_rsf_se_30m.tif", overwrite=TRUE)
+writeRaster(se_rast, "results/predictions/deer_rsf_se_30m.tif", overwrite=TRUE)
 
 
 

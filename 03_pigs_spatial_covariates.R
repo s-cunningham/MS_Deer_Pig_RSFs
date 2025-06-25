@@ -98,7 +98,7 @@ dat_pigs <- extract(layers, pigs_v)
 # Join extracted data back to location data frame
 pigs <- bind_cols(pigs, dat_pigs)
 
-cor(pigs[,7:22])
+cor(pigs[,7:ncol(pigs)])
 
 # write file so we don't always have to wait for the rasters to do stuff
 write_csv(pigs, "output/pigs_used_avail_covariates.csv")

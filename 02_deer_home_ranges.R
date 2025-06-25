@@ -4,6 +4,7 @@ library(sf)
 library(adehabitatLT)
 library(ctmm)
 library(patchwork)
+library(tidyterra)
 
 ## Set ggplot theme
 theme_set(theme_bw())
@@ -267,7 +268,7 @@ deer <- deer %>% filter(key!="87924_Delta_5" | (key=="87924_Delta_5" & x>151000)
 
 # Save
 write_csv(deer, "output/segmented_deer.csv")
-# deer <- read_csv("output/segmented_deer.csv")
+deer <- read_csv("output/segmented_deer.csv")
 
 # how many days in each segment?
 ndays <- deer %>% mutate(day=format(date, "%Y-%m-%d")) %>% group_by(key) %>% reframe(ndays=length(unique(day)))
@@ -351,7 +352,7 @@ for (i in 1:length(ids)) {
   })
 }
 saveRDS(out, "results/home_ranges/raw_deer_AKDEs.rds") # Maybe can restart...with 43
-# out <- readRDS("results/home_ranges/raw_deer_AKDEs.rds")
+out <- readRDS("results/home_ranges/raw_deer_AKDEs.rds")
 
 # Take just the AKDE
 akde <- lapply(out, function(x) x[[4]]) 
@@ -415,6 +416,9 @@ library(terra)
 ## read a template raster (30 x 30, doesn't really matter which as long as projection is correct & has cells)
 cdl <- rast("data/landscape_data/CDL2023_MS50km_30m_nlcdproj.tif")
 
+# aggregate cells
+cdl_agg <- aggregate(cdl, fact=6, fun="which.max", cores=2)
+
 # project to match raster
 ud <- st_transform(ud, st_crs(cdl))
 
@@ -428,8 +432,8 @@ cell_list <- list()
 for (i in 1:nrow(ud)) {
   
   # Clip raster (mask & crop extent) to AKDE
-  temp <- mask(cdl, vect(ud$geometry[i]))
-  temp <- crop(cdl, vect(ud$geometry[i]))
+  temp <- mask(cdl_agg , vect(ud$geometry[i]))
+  temp <- crop(cdl_agg , vect(ud$geometry[i]))
   
   # Convert to points
   pts <- as.points(temp, values=FALSE, na.rm=TRUE, na.all=FALSE)
@@ -445,7 +449,7 @@ for (i in 1:nrow(ud)) {
   # convert to polygons
   pols <- as.polygons(temp[["cell_no"]])
   # Extract the cell numbers that have a point in them
-  grid <- extract(pols, pts)[,-1]
+  grid <- terra::extract(pols, pts)[,-1]
   # subset the polygon grid by only the cells that have points in them
   grid <- pols[grid]
   
@@ -478,6 +482,7 @@ for (i in 1:nrow(ud)) {
 }
 # Save available points
 write_csv(avail, "output/deer_avail_pts.csv")
+avail <- read_csv("output/deer_avail_pts.csv")
 avail <- avail %>% unite("key", c("id", "burst"), sep="_") 
 
 ## Now on to the used locations
@@ -526,6 +531,7 @@ for (i in 1:nrow(ud)) {
   used <- bind_rows(used, temp)
 }
 write_csv(used, "output/deer_used_locs.csv")
+used <- read_csv("output/deer_used_locs.csv")
 
 # Organize so used data matches available data
 used <- used %>%
@@ -534,6 +540,146 @@ used <- used %>%
 
 ## Combine used and available points
 dat <- bind_rows(used, avail)
+
+# Check ratio of used:avail
+ratios <- dat %>% group_by(key, case) %>% count() %>%
+  pivot_wider(names_from=case, values_from=n) %>%
+  rename(used=`1`, avail=`0`) %>%
+  mutate(n_avail_used=avail/used) %>%
+  mutate(pts_needed_for_2x=used*2,
+         additional_pts_needed=pts_needed_for_2x-avail)
+
+# Sample more points where necessary
+un.id <- unique(dat$key)
+for (i in 1:length(un.id)) {
+  
+  # Subset for this individual
+  used_i <- used %>% filter(key == un.id[i])
+  grid_i <- avail %>% filter(key == un.id[i])
+  
+  r <- ratios %>% filter(key == un.id[i])
+  
+  # If already sufficient, just keep the grid points
+  if (r$avail >= r$used) {
+    next
+  }
+  
+  # Get cell IDs for grid-based points
+  # Clip raster (mask & crop extent) to AKDE
+  temp <- mask(cdl, vect(ud$geometry[i]))
+  temp <- crop(cdl, vect(ud$geometry[i]))
+  
+  # ggplot() +
+  #   geom_spatraster(data=temp) +
+  #   geom_spatvector(data=ud$geometry[i], fill=NA, color="white") +
+  #   geom_point(data=used_i, aes(x=X, y=Y), color="green", shape=3, alpha=0.5) +
+  #   geom_point(data=grid_i, aes(x=X, y=Y), color="red", shape=4) +
+  #   ggtitle(un.id[i])
+  
+  # Function to get unique cell IDs for availability points
+  cells <- cellFromXY(temp, as.matrix(grid_i[,c("X", "Y")]))
+  cells <- unique(cells)
+  
+  n_try <- r$additional_pts_needed
+  
+  # Generate candidate random points
+  pts_rand <- spatSample(temp, size=n_try, method="regular", as.points = TRUE)
+  coords <- as.data.frame(crds(pts_rand))
+  colnames(coords) <- c("X", "Y")
+  coords$key <- un.id[i]
+  
+  # Get cell IDs and filter out any duplicates with grid points
+  cell_rand <- cellFromXY(temp, as.matrix(coords[,c("X", "Y")]))
+  new_idx <- !(cell_rand %in% cells)
+  
+  # Keep only unique cells
+  coords_new <- coords[new_idx, ]
+  
+  # Filter to home range
+  # Convert to points
+  pts <- vect(coords_new, geom=c("X", "Y"), crs=crs(temp))
+  
+  # Clip points to AKDE
+  pts <- crop(pts, vect(ud$geometry[i]))
+  
+  p <- ggplot() +
+    geom_spatraster(data=temp) +
+    geom_spatvector(data=ud$geometry[i], fill=NA, color="white") +
+    geom_point(data=used_i, aes(x=X, y=Y), color="green", shape=3, alpha=0.5) +
+    geom_point(data=grid_i, aes(x=X, y=Y), color="red", shape=4) +
+    geom_spatvector(data=pts, color="red", shape=8, alpha=0.4) +
+    ggtitle(un.id[i])
+  print(p)
+  
+  # add to current available points
+  coords_new$case <- 0
+  
+  # Convert back to data frame
+  pts <- as.data.frame(pts, geom="XY") 
+  pts <- pts %>% as_tibble() %>%
+    select(key, x, y) %>%
+    rename(X=x, Y=y) %>%
+    mutate(case=0)
+  
+  avail <- bind_rows(avail, pts)
+  # if (nrow(grid_i) >= r$used*1.5) {}
+}
+
+# I think I duplicated some rows
+avail <- avail %>% distinct()
+
+## Combine used and available points
+dat <- bind_rows(used, avail)
+
+# Check ratio of used:avail
+ratios <- dat %>% group_by(key, case) %>% count() %>%
+  pivot_wider(names_from=case, values_from=n) %>%
+  rename(used=`1`, avail=`0`) %>%
+  mutate(n_avail_used=avail/used) %>%
+  mutate(pts_needed_for_2x=used*2,
+         additional_pts_needed=pts_needed_for_2x-avail)
+
+# which deer still have more used than available?
+low <- ratios %>% filter(n_avail_used < 1)
+un.low <- unique(low$key)
+
+low <- low %>% mutate(mult_size=ceiling(used/avail))
+
+# Subsample problematic individuals
+sub_set <- data.frame()
+for (i in 1:length(un.low)) {
+  
+  temp <- used %>% 
+    filter(key==un.low[i]) 
+  
+  mult <- as.vector(low[low$key==un.low[i], "mult_size"])
+  
+  # keep every other point
+  temp <- temp %>% 
+    filter(row_number() %% mult$mult_size == 0)
+  
+  # save subset
+  sub_set <- bind_rows(sub_set, temp)
+
+}
+
+# n <- sub_set %>% group_by(key) %>% count()
+# l2 <- left_join(low, n, by="key")
+# l2 <- l2 %>%
+#   mutate(check=if_else(n>avail, 1, 0))
+
+used <- used %>% filter(!(key %in% un.low))
+used <- bind_rows(used, sub_set)
+## Combine used and available points
+dat <- bind_rows(used, avail)
+
+# Check ratio of used:avail
+ratios <- dat %>% group_by(key, case) %>% count() %>%
+  pivot_wider(names_from=case, values_from=n) %>%
+  rename(used=`1`, avail=`0`) %>%
+  mutate(n_avail_used=avail/used) %>%
+  mutate(pts_needed_for_2x=used*2,
+         additional_pts_needed=pts_needed_for_2x-avail)
 
 # save data
 write_csv(dat, "output/deer_used_avail_locations.csv")

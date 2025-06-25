@@ -4,6 +4,7 @@ library(sf)
 library(adehabitatLT)
 library(ctmm)
 library(patchwork)
+library(tidyterra)
 
 ## Set ggplot theme
 theme_set(theme_bw())
@@ -194,7 +195,7 @@ pigs <- pigs_res %>%
   dplyr::select(id, key, x:rel.angle)
 
 ## Need to do this manually, and make sure to add the segmented data to 'deer'
-s <- lv_func(pigs_res, "19219_Delta", 30)
+s <- lv_func(pigs_res, "19212_Delta", 30)
 
 # Add segmented data to full dataset
 pigs <- bind_rows(pigs, s)
@@ -216,6 +217,8 @@ ggplot(temp, aes(x=date, y=R2n, color=date)) +
 ggplot(temp) +
   geom_histogram(aes(x=y))
 
+# write_csv(pigs, "output/pigs_filtered_segmented.csv")
+pigs <- read_csv("output/pigs_filtered_segmented.csv")
 ## Set up data
 # Convert to lat/long (WGS84)
 pigs_sf <- pigs %>% 
@@ -292,7 +295,7 @@ for (i in 1:length(ids)) {
 }
 
 saveRDS(out, "results/home_ranges/raw_pigs_AKDEs.rds")
-
+out <- readRDS("results/home_ranges/raw_pigs_AKDEs.rds")
 
 # Take just the AKDE
 akde <- lapply(out, function(x) x[[4]]) 
@@ -356,6 +359,9 @@ library(terra)
 ## read a template raster (30 x 30, doesn't really matter which as long as projection is correct & has cells)
 cdl <- rast("data/landscape_data/CDL2023_MS50km_30m_nlcdproj.tif")
 
+# aggregate cells
+cdl_agg <- aggregate(cdl, fact=7, fun="which.max", cores=2)
+
 # project to match raster
 ud <- st_transform(ud, st_crs(cdl))
 
@@ -369,8 +375,8 @@ cell_list <- list()
 for (i in 1:nrow(ud)) {
   
   # Clip raster (mask & crop extent) to AKDE
-  temp <- mask(cdl, vect(ud$geometry[i]))
-  temp <- crop(cdl, vect(ud$geometry[i]))
+  temp <- mask(cdl_agg , vect(ud$geometry[i]))
+  temp <- crop(cdl_agg , vect(ud$geometry[i]))
   
   # Convert to points
   pts <- as.points(temp, values=FALSE, na.rm=TRUE, na.all=FALSE)
@@ -395,7 +401,7 @@ for (i in 1:nrow(ud)) {
   
   # Save as shapefile
   filename <- paste0("output/pigs_avail_cells/", ud$id[i], "_", ud$burst[i], "-avail.shp")
-  st_write(grid, filename, append=FALSE)
+  # st_write(grid, filename, append=FALSE)
   
   # convert back to sf
   pts <- st_as_sf(pts)
@@ -413,6 +419,7 @@ for (i in 1:nrow(ud)) {
 }
 # Save available points
 write_csv(avail, "output/pigs_avail_pts.csv")
+avail <- read_csv("output/pigs_avail_pts.csv")
 
 ## Now on to the used locations
 pigs_sf <- pigs %>% 
@@ -455,6 +462,7 @@ for (i in 1:nrow(ud)) {
   used <- bind_rows(used, temp)
 }
 write_csv(used, "output/pigs_used_locs.csv")
+used <- read_csv("output/pigs_used_locs.csv")
 
 # Organize so used data matches available data
 used <- used %>%
@@ -466,6 +474,113 @@ used <- used %>%
 ## Combine used and available points
 avail <- avail %>% rename(key=id)
 dat <- bind_rows(used, avail)
+
+
+# Check ratio of used:avail
+ratios <- dat %>% group_by(key, case) %>% count() %>%
+  pivot_wider(names_from=case, values_from=n) %>%
+  rename(used=`1`, avail=`0`) %>%
+  mutate(n_avail_used=avail/used) %>%
+  mutate(pts_needed_for_2x=used*2,
+         additional_pts_needed=pts_needed_for_2x-avail)
+
+# Sample more points where necessary
+un.id <- unique(dat$key)
+for (i in 1:length(un.id)) {
+  
+  # Subset for this individual
+  used_i <- used %>% filter(key == un.id[i])
+  grid_i <- avail %>% filter(key == un.id[i])
+  
+  r <- ratios %>% filter(key == un.id[i])
+  
+  # If already sufficient, just keep the grid points
+  if (r$avail >= r$used) {
+    next
+  }
+  
+  # Get cell IDs for grid-based points
+  # Clip raster (mask & crop extent) to AKDE
+  temp <- mask(cdl, vect(ud$geometry[i]))
+  temp <- crop(cdl, vect(ud$geometry[i]))
+  
+  # ggplot() +
+  #   geom_spatraster(data=temp) +
+  #   geom_spatvector(data=ud$geometry[i], fill=NA, color="white") +
+  #   geom_point(data=used_i, aes(x=X, y=Y), color="green", shape=3, alpha=0.5) +
+  #   geom_point(data=grid_i, aes(x=X, y=Y), color="red", shape=4) +
+  #   ggtitle(un.id[i])
+  
+  # Function to get unique cell IDs for availability points
+  cells <- cellFromXY(temp, as.matrix(grid_i[,c("X", "Y")]))
+  cells <- unique(cells)
+  
+  n_try <- r$additional_pts_needed
+  
+  # Generate candidate random points
+  pts_rand <- spatSample(temp, size=n_try, method="regular", as.points = TRUE)
+  coords <- as.data.frame(crds(pts_rand))
+  colnames(coords) <- c("X", "Y")
+  coords$key <- un.id[i]
+  
+  # Get cell IDs and filter out any duplicates with grid points
+  cell_rand <- cellFromXY(temp, as.matrix(coords[,c("X", "Y")]))
+  new_idx <- !(cell_rand %in% cells)
+  
+  # Keep only unique cells
+  coords_new <- coords[new_idx, ]
+  
+  # Filter to home range
+  # Convert to points
+  pts <- vect(coords_new, geom=c("X", "Y"), crs=crs(temp))
+  
+  # Clip points to AKDE
+  pts <- crop(pts, vect(ud$geometry[i]))
+  
+  p <- ggplot() +
+    geom_spatraster(data=temp) +
+    geom_spatvector(data=ud$geometry[i], fill=NA, color="white") +
+    geom_point(data=used_i, aes(x=X, y=Y), color="green", shape=3, alpha=0.5) +
+    geom_point(data=grid_i, aes(x=X, y=Y), color="red", shape=4) +
+    geom_spatvector(data=pts, color="red", shape=8, alpha=0.4) +
+    ggtitle(un.id[i])
+  print(p)
+  
+  # add to current available points
+  coords_new$case <- 0
+  
+  # Convert back to data frame
+  pts <- as.data.frame(pts, geom="XY") 
+  pts <- pts %>% as_tibble() %>%
+    select(key, x, y) %>%
+    rename(X=x, Y=y) %>%
+    mutate(case=0)
+  
+  avail <- bind_rows(avail, pts)
+  # if (nrow(grid_i) >= r$used*1.5) {}
+}
+
+# I think I duplicated some rows
+avail <- avail %>% distinct()
+
+## Combine used and available points
+dat <- bind_rows(used, avail)
+
+# Check ratio of used:avail
+ratios <- dat %>% group_by(key, case) %>% count() %>%
+  pivot_wider(names_from=case, values_from=n) %>%
+  rename(used=`1`, avail=`0`) %>%
+  mutate(n_avail_used=avail/used) %>%
+  mutate(pts_needed_for_2x=used*2,
+         additional_pts_needed=pts_needed_for_2x-avail)
+
+# Drop IDs with HRs that are too big
+dat <- dat %>% filter(key!="19212_Delta_4")
+
+low <- ratios %>% filter(n_avail_used < 1)
+un.low <- unique(low$key)
+
+dat <- dat %>% filter(key!="19211_Delta_1")
 
 # save data
 write_csv(dat, "output/pigs_used_avail_locations.csv")

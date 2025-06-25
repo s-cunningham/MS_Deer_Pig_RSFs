@@ -23,17 +23,31 @@ un.id <- unique(deer$key)
 ## Run the full mixed-effects RSF
 system.time(
   rsf <- glmmTMB(case ~ allhardwoods + gramanoids + foodcrops + shrubs + developed + water_dist + I(water_dist^2) +
-                 (allhardwoods + gramanoids + foodcrops + shrubs + developed + water_dist | key), 
-               data=deer, family=binomial(link = "logit"), weight=weight)
+                   (1 + allhardwoods + gramanoids + foodcrops + shrubs + developed + water_dist | key), 
+                 data=deer, family=binomial(link = "logit"), weight=weight)
 )
-
 
 summary(rsf)
 
 saveRDS(rsf, "output/deer_mixed_model_rsf.RDS")
+rsf <- readRDS("output/deer_mixed_model_rsf.RDS")
 
+resid_all <- residuals(rsf, type = "pearson")
+deer$residuals <- resid_all
 
+ggplot(deer, aes(x = key, y = residuals)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Residuals by Individual", y = "Pearson Residual") +
+  theme(axis.text.x=element_text(angle=90))
+
+# Get fixed effect coefficients
 beta <- fixef(rsf)$cond
+
+# drop intercept and save named vector
+beta <- beta[-1]
+saveRDS(beta, "output/deer_mixed_effects_beta.RDS")
+
 beta <- as.data.frame(beta)
 beta <- rownames_to_column(beta, var="covariate")
 
@@ -41,4 +55,8 @@ beta <- beta %>% filter(covariate!='(Intercept)') %>%
   mutate(covariate=if_else(covariate=="I(dist_water^2)", "Water2", covariate))
 
 write_csv(beta, "output/deer_mixed_effects_betas.csv")
+
+# Covariance matrix of fixed effects
+vcov_beta <- vcov(rsf)$cond
+saveRDS(vcov_beta, "output/deer_mixed_effects_vcov.RDS")
 

@@ -46,8 +46,8 @@ for (i in 1:length(un.id)) {
 
 }
 
-pigs_rsf <- pigs_rsf[-c(14,29)]
-un.id <- un.id[-c(14,29)]
+pigs_rsf <- pigs_rsf[-c(13,18,28)]
+un.id <- un.id[-c(13,18,28)]
 
 saveRDS(pigs_rsf, "output/pigs_glms.RDS")
 # reduced_glms <- readRDS("output/pigs_reduced_glms.RDS")

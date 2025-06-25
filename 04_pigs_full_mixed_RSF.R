@@ -19,12 +19,12 @@ pigs <- pigs %>%
 ## Set up to loop by individual
 un.id <- unique(pigs$key)
 
-cor(pigs[,c("hardwoods","shrubs","gramanoids","developed","dist_water")])
+cor(pigs[,c("hardwoods","shrubs","gramanoids","foodcrops","developed","dist_water")])
 
 ## Run the mixed-effects RSF (~40 min)
 system.time(
   rsf_model <- glmmTMB(
-    formula = case ~ hardwoods + gramanoids + developed + dist_water + I(dist_water^2) + (1 + hardwoods + gramanoids + developed + dist_water | key),  # Random intercept + slopes
+    formula = case ~ hardwoods + shrubs + developed + dist_water + I(dist_water^2) + (1 + hardwoods + shrubs + developed + dist_water | key),  # Random intercept + slopes
     data = pigs,
     family = binomial(link = "logit"),  # Logistic regression
     weights = weights,
@@ -34,6 +34,7 @@ system.time(
 summary(rsf_model)
 
 saveRDS(rsf_model, "output/pigs_mixed_model_rsf.RDS")
+rsf_model <- readRDS("output/pigs_mixed_model_rsf.RDS")
 
 resid_all <- residuals(rsf_model, type = "pearson")
 pigs$residuals <- resid_all
@@ -44,11 +45,13 @@ ggplot(pigs, aes(x = key, y = residuals)) +
   labs(title = "Residuals by Individual", y = "Pearson Residual") +
   theme(axis.text.x=element_text(angle=90))
 
-ggplot(pigs, aes(x = key, y = residuals)) +
-  geom_jitter(width = 0.2, alpha = 0.5) +
-  theme_minimal()
-
+# Get fixed effect coefficients
 beta <- fixef(rsf_model)$cond
+
+# drop intercept and save named vector
+beta <- beta[-1]
+saveRDS(beta, "output/pigs_mixed_effects_beta.RDS")
+
 beta <- as.data.frame(beta)
 beta <- rownames_to_column(beta, var="covariate")
 
@@ -56,3 +59,8 @@ beta <- beta %>% filter(covariate!='(Intercept)') %>%
   mutate(covariate=if_else(covariate=="I(dist_water^2)", "Water2", covariate))
 
 write_csv(beta, "output/pigs_mixed_effects_betas.csv")
+
+# Covariance matrix of fixed effects
+vcov_beta <- vcov(rsf_model)$cond
+saveRDS(vcov_beta, "output/pigs_mixed_effects_vcov.RDS")
+
