@@ -15,7 +15,16 @@ library(exactextractr)
 deer <- read_csv("output/deer_used_avail_covariates.csv")
 
 # Center and scale covariates
-deer[,7:19] <- scale(deer[,7:19])
+lyrs <- read_csv("output/deer_raster_mean_sds.csv")
+
+deer <- deer %>%
+  mutate(allhardwoods=(allhardwoods-lyrs$mean[1]) / lyrs$sd[1],
+         shrubs=(shrubs-lyrs$mean[2]) / lyrs$sd[2],
+         gramanoids=(gramanoids-lyrs$mean[3]) / lyrs$sd[3],
+         foodcrops=(foodcrops-lyrs$mean[4]) / lyrs$sd[4],
+         developed=(developed-lyrs$mean[5]) / lyrs$sd[5],
+         water_dist=(water_dist-lyrs$mean[6]) / lyrs$sd[6]) 
+
 
 ## Set up to loop by individual
 un.id <- unique(deer$key)
@@ -115,7 +124,7 @@ deerSD <- read_csv("output/deer_used_avail_covariates.csv") %>%
   select(Hardwoods, Graminoids, Shrubs, Crops, Developed, Water, Water2)
 
 # Center and scale
-deerSD <- scale(deerSD)
+deerSD <- scale(deerSD) # need to change this
 
 deerSD <- attr(deerSD, "scaled:scale")
 

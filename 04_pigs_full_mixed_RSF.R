@@ -8,13 +8,15 @@ pigs <- read_csv("output/pigs_used_avail_covariates.csv")
 lyrs <- read_csv("output/pigs_raster_mean_sds.csv")
 
 pigs <- pigs %>%
-  mutate(hardwoods=(hardwoods-lyrs$mean[1]) / lyrs$sd[1],
-         shrubs=(shrubs-lyrs$mean[2]) / lyrs$sd[2],
-         gramanoids=(gramanoids-lyrs$mean[3]) / lyrs$sd[3],
-         foodcrops=(foodcrops-lyrs$mean[4]) / lyrs$sd[4],
-         developed=(developed-lyrs$mean[5]) / lyrs$sd[5],
-         dist_water=(dist_water-lyrs$mean[6]) / lyrs$sd[6]) %>%
-  rename(weights=weight)
+  mutate(shrubs=(shrubs-unlist(unname(lyrs[lyrs$layer=="shrubs", 2]))) / unlist(unname(lyrs[lyrs$layer=="shrubs", 3])),
+         gramanoids=(gramanoids-unlist(unname(lyrs[lyrs$layer=="gramanoids", 2]))) / unlist(unname(lyrs[lyrs$layer=="gramanoids", 3])),
+         foodcrops=(foodcrops-unlist(unname(lyrs[lyrs$layer=="foodcrops", 2]))) / unlist(unname(lyrs[lyrs$layer=="foodcrops", 3])),
+         developed=(developed-unlist(unname(lyrs[lyrs$layer=="developed", 2]))) / unlist(unname(lyrs[lyrs$layer=="developed", 3])),
+         # herbwetlands=(herbwetlands-unlist(unname(lyrs[lyrs$layer=="herbwetlands", 2]))) / unlist(unname(lyrs[lyrs$layer=="herbwetlands", 3])),
+         hardwoods=(hardwoods-unlist(unname(lyrs[lyrs$layer=="hardwoods", 2]))) / unlist(unname(lyrs[lyrs$layer=="hardwoods", 3])),
+         # bottomland=(bottomland-unlist(unname(lyrs[lyrs$layer=="bottomland", 2]))) / unlist(unname(lyrs[lyrs$layer=="bottomland", 3])),
+         # decidmixed=(decidmixed-unlist(unname(lyrs[lyrs$layer=="decidmixed", 2]))) / unlist(unname(lyrs[lyrs$layer=="decidmixed", 3])),
+         dist_water=(dist_water-unlist(unname(lyrs[lyrs$layer=="dist_water", 2]))) / unlist(unname(lyrs[lyrs$layer=="dist_water", 3]))) 
 
 ## Set up to loop by individual
 un.id <- unique(pigs$key)
@@ -24,10 +26,10 @@ cor(pigs[,c("hardwoods","shrubs","gramanoids","foodcrops","developed","dist_wate
 ## Run the mixed-effects RSF (~40 min)
 system.time(
   rsf_model <- glmmTMB(
-    formula = case ~ hardwoods + shrubs + developed + dist_water + I(dist_water^2) + (1 + hardwoods + shrubs + developed + dist_water | key),  # Random intercept + slopes
+    formula = case ~ hardwoods + shrubs + gramanoids + developed + dist_water + I(dist_water^2) + (1 + hardwoods + shrubs + gramanoids + developed + dist_water | key),  # Random intercept + slopes
     data = pigs,
     family = binomial(link = "logit"),  # Logistic regression
-    weights = weights,
+    weights = weight,
   )
 )
 
@@ -64,3 +66,5 @@ write_csv(beta, "output/pigs_mixed_effects_betas.csv")
 vcov_beta <- vcov(rsf_model)$cond
 saveRDS(vcov_beta, "output/pigs_mixed_effects_vcov.RDS")
 
+# look at coefficient SDs
+summary(rsf_model)$varcor

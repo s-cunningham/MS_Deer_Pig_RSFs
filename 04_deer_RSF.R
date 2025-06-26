@@ -56,10 +56,10 @@ for (i in 1:length(un.id)) {
   temp <- deer %>% filter(key==un.id[i])
 
   # Fit model and print the iteration for IDs that have warnings
-  rsf <- tryCatch(bayesglm(case ~ allhardwoods + gramanoids + foodcrops + shrubs + developed + poly(water_dist, 2), 
+  rsf <- tryCatch(bayesglm(case ~ allhardwoods + gramanoids + foodcrops + shrubs + developed + water_dist + I(water_dist^2), 
                            data=temp, family=binomial(link = "logit"), weight=weight), warning=function(w) print(i))
   
-  # car::vif(rsf)
+  # print(car::vif(rsf))
   
   # add model object to list
   deer_rsf[[i]] <- rsf
@@ -67,8 +67,8 @@ for (i in 1:length(un.id)) {
 }
 
 # Drop individuals that have complete separation
-deer_rsf <- deer_rsf[-c(5,33,40,42,65,68)]
-un.id <- un.id[-c(5,33,40,42,65,68)]
+deer_rsf <- deer_rsf[-c(20,22,34,36)]
+un.id <- un.id[-c(20,22,34,36)]
 
 #### Summarize coefficients ####
 # get covariance matrices
@@ -86,7 +86,7 @@ which(flag==1)
 
 # how much of dataset? 
 deer$ID <- as.numeric(factor(deer$key, labels=1:length(unique(deer$key))))
-bad <- c(4,5,31,33,36,40,42,63,65,68,70,83)
+bad <- c(36,38,39,44,48,52,69,82,86)
 bad2 <- deer %>% filter(ID %in% bad)
 
 wonky <- bad2 %>% group_by(key, case) %>% count()
@@ -110,8 +110,7 @@ r_glms <- do.call(bind_rows, r_glms)
 r_glms <- r_glms %>% 
   as_tibble() %>%
   rename(intercept=`(Intercept)`, 
-         water_dist=`poly(water_dist, 2)1`,
-         water_dist2=`poly(water_dist, 2)2`) %>%  
+         water_dist2=`I(water_dist^2)`) %>%  
   # drop intercept
   dplyr::select(-intercept) %>%
   # Reorder

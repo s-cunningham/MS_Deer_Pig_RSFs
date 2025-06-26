@@ -156,8 +156,138 @@ rclmat <- matrix(m, ncol=3, byrow=TRUE)
 rc1 <- classify(pred, rclmat, include.lowest=TRUE)
 plot(rc1)
 
+# update layer and variable names
+varnames(pred) <- "DeerResourceSelection"
+names(pred) <- "RSF"
+
+
+#### Check Boyce ####
+library(modEvA)
+
+# Calculate continuous Boyce index
+deer <- read_csv("output/deer_used_avail_covariates.csv")
+
+deerSV <- vect(deer, geom=c("X", "Y"), crs=crs(pred))
+pt_preds <- extract(pred, deerSV)$RSF
+
+obs <- deer$case
+
+Boyce(obs=obs, pred=pt_preds)
+
+## List county rasters
+files <- list.files(path="output/deer_county_preds/", pattern="_SE.tif$", full.names=TRUE)
+
+## Read all files in as rasters
+rlist <- lapply(files, rast)
+
+## Convert to SpatRasterCollection
+rsrc <- sprc(rlist)
+
+## mosaic
+se_rast <- mosaic(rsrc)
+
+# rename layer
+names(se_rast) <- "SE"
+
+# Read in MS shapefile (to drop islands)
+ms <- project(ms, se_rast)
+
+# Remove islands
+se_rast <- mask(se_rast, ms)
+
+# Read in permanent water mask
+water <- project(water, se_rast)
+
+# Remove water
+se_rast <- mask(se_rast, water, inverse=TRUE)
+
+plot(se_rast)
+
+# Replace all values >10 with 10
+# se_rast <- clamp(se_rast, upper=10, values=TRUE)
+
+# plot SE raster (clamped at 10)
+writeRaster(se_rast, "results/predictions/deer_rsf_se_30m.tif", overwrite=TRUE)
+
+
+
+#### Lower bound CI ####
+## List county rasters
+files <- list.files(path="output/deer_county_preds/", pattern="_LCI.tif$", full.names=TRUE)
+
+## Read all files in as rasters
+rlist <- lapply(files, rast)
+
+## Convert to SpatRasterCollection
+rsrc <- sprc(rlist)
+
+## mosaic
+lci_rast <- mosaic(rsrc)
+
+# rename layer
+names(lci_rast) <- "LCI"
+
+# Read in MS shapefile (to drop islands)
+ms <- project(ms, lci_rast)
+
+# Remove islands
+lci_rast <- mask(lci_rast, ms)
+
+# Read in permanent water mask
+water <- project(water, lci_rast)
+
+# Remove water
+lci_rast <- mask(lci_rast, water, inverse=TRUE)
+lci_rast <- crop(lci_rast, ms)
+
+plot(lci_rast)
+
+#### Upper bound CI ####
+## List county rasters
+files <- list.files(path="output/deer_county_preds/", pattern="_UCI.tif$", full.names=TRUE)
+
+## Read all files in as rasters
+rlist <- lapply(files, rast)
+
+## Convert to SpatRasterCollection
+rsrc <- sprc(rlist)
+
+## mosaic
+uci_rast <- mosaic(rsrc)
+
+# rename layer
+names(uci_rast) <- "UCI"
+
+# Read in MS shapefile (to drop islands)
+ms <- project(ms, uci_rast)
+
+# Remove islands
+uci_rast <- mask(uci_rast, ms)
+
+# Read in permanent water mask
+water <- project(water, uci_rast)
+
+# Remove water
+uci_rast <- mask(uci_rast, water, inverse=TRUE)
+uci_rast <- crop(uci_rast, ms)
+
+plot(uci_rast)
+
+# Resample to 90 m
+
+
+
+#### Set up to write rasters for RAMAS ####
+
+# Check min/max
+minmax(pred)
+minmax(lci_rast)
+minmax(uci_rast)
+
 # linear stretch (so that values >=0)
 predls <- (pred - minmax(pred)[1])/(minmax(pred)[2]-minmax(pred)[1])
+lcils <- (lci_rast - minmax(lci_rast)[1])/(minmax(lci_rast)[2]-minmax(lci_rast)[1])
+ucils <- (uci_rast - minmax(uci_rast)[1])/(minmax(uci_rast)[2]-minmax(uci_rast)[1])
 
 ## Calculate quantiles
 qrtls <- global(predls, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
@@ -207,18 +337,29 @@ pred90 <- crop(pred90, predls)
 global(pred90, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
 
 # update layer and variable names
-varnames(pred) <- "PigResourceSelection"
-names(pred) <- "RSF"
-
-varnames(pred90) <- "PigResourceSelection"
+varnames(pred90) <- "DeerResourceSelection"
 names(pred90) <- "RSF"
 
-varnames(predls) <- "PigResourceSelection"
+varnames(predls) <- "DeerResourceSelection"
 names(predls) <- "RSF"
 
+## Conf. Int
+
+# Resample confidence interval rasters
+lci90 <- resample(lcils, temp_rast)
+lci90 <- crop(lci90, lcils)
+
+uci90 <- resample(ucils, temp_rast)
+uci90 <- crop(uci90, ucils)
+
 ## Write rasters
-# Save ASCII for RAMAS
+
+# Save ASCIIs for RAMAS
 writeRaster(pred90, "results/predictions/deer_rsf_predicted.asc", NAflag=-9999, overwrite=TRUE)
+writeRaster(lci90, "results/predictions/deer_rsf_lowerCI.asc", NAflag=-9999, overwrite=TRUE)
+writeRaster(uci90, "results/predictions/deer_rsf_upperCI.asc", NAflag=-9999, overwrite=TRUE)
+
+
 # additionally save mean predictions as .tif for plotting (both resampled and original 30x30m)
 writeRaster(pred90, "results/predictions/deer_rsf_predicted_90m.tif", overwrite=TRUE)
 writeRaster(pred, "results/predictions/deer_rsf_predicted_30m.tif", overwrite=TRUE)
@@ -226,55 +367,11 @@ writeRaster(predls, "results/predictions/deer_rsf_predicted_linStr_30m.tif", ove
 # plot binned rsf values (log scale)
 writeRaster(rc1, "results/predictions/deer_rsf_bins_30m.tif", overwrite=TRUE)
 
+# Lower CI
+writeRaster(lci_rast, "results/predictions/deer_rsf_LCI_30m.tif", overwrite=TRUE)
 
-library(modEvA)
-
-# Calculate continuous Boyce index
-deer <- read_csv("output/deer_used_avail_covariates.csv")
-
-deerSV <- vect(deer, geom=c("X", "Y"), crs=crs(pred))
-pt_preds <- extract(predls, deerSV)$RSF
-
-obs <- deer$case
-
-Boyce(obs=obs, pred=pt_preds)
-
-
-
-## List county rasters
-files <- list.files(path="output/deer_county_preds/", pattern="_SE.tif$", full.names=TRUE)
-
-## Read all files in as rasters
-rlist <- lapply(files, rast)
-
-## Convert to SpatRasterCollection
-rsrc <- sprc(rlist)
-
-## mosaic
-se_rast <- mosaic(rsrc)
-
-# rename layer
-names(se_rast) <- "SE"
-
-# Read in MS shapefile (to drop islands)
-ms <- project(ms, se_rast)
-
-# Remove islands
-se_rast <- mask(se_rast, ms)
-
-# Read in permanent water mask
-water <- project(water, se_rast)
-
-# Remove water
-se_rast <- mask(se_rast, water, inverse=TRUE)
-
-plot(se_rast)
-
-# Replace all values >10 with 10
-# se_rast <- clamp(se_rast, upper=10, values=TRUE)
-
-# plot SE raster (clamped at 10)
-writeRaster(se_rast, "results/predictions/deer_rsf_se_30m.tif", overwrite=TRUE)
+# Upper CI
+writeRaster(uci_rast, "results/predictions/deer_rsf_UCI_30m.tif", overwrite=TRUE)
 
 
 

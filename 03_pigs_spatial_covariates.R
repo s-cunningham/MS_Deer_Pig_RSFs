@@ -23,7 +23,7 @@ pigs <- read_csv("output/pigs_used_avail_locations.csv") %>%
 # Plot the ratio of used to available points
 pigs %>% group_by(key, case) %>% count() %>% 
   pivot_wider(names_from="case", values_from="n") %>%
-  mutate(ratioUA=`1`/`0`) %>% 
+  mutate(ratioUA=`0`/`1`) %>% 
   ggplot() + geom_density(aes(x=ratioUA))
 
 # Read in rasters
@@ -31,6 +31,9 @@ rast_list <- c("data/landscape_data/shrublands_210m_sum.tif",
                "data/landscape_data/gramanoids_210m_sum.tif", 
                "data/landscape_data/palatable_crops_210m_sum.tif",
                "data/landscape_data/developed_210m_sum.tif",
+               # "data/landscape_data/herbwetlands_210_sum.tif",
+               # "data/landscape_data/bottomlandHW_210m_sum.tif",
+               # "data/landscape_data/decidmixed_210m_sum.tif",
                "data/landscape_data/allhardwoods_210m_sum.tif") 
 layers <- rast(rast_list)
 
@@ -51,26 +54,6 @@ layers <- c(layers, water)
 # Rename layers
 names(layers) <- c("shrubs", "gramanoids", "foodcrops","developed", "hardwoods", "dist_water")
 
-# Read in MS shapefile (to drop islands)
-ms <- vect("data/landscape_data/mississippi_ACEA.shp")
-ms <- project(ms, layers)
-
-# Remove islands
-layers <- mask(layers, ms)
-
-# Read in permanent water mask
-water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
-water <- project(water, layers)
-
-# Remove water
-layers <- mask(layers, water, inverse=TRUE)
-
-# put the layer names back
-names(layers) <-  c("shrubs", "gramanoids", "foodcrops","developed", "hardwoods", "dist_water")
-
-# crop to map extent
-layers <- crop(layers, ms)
-
 # Get mean and sd from entire covariate rasters
 mean_vals <- global(layers, "mean", na.rm = TRUE)
 sd_vals   <- global(layers, "sd", na.rm = TRUE)
@@ -81,6 +64,12 @@ cov_scaled <- (layers - mean_vals$mean) / sd_vals$sd
 rast_cs <- bind_cols(mean_vals, sd_vals)
 rast_cs <- rownames_to_column(rast_cs, var="layer")
 write_csv(rast_cs, "output/pigs_raster_mean_sds.csv")
+
+lnames <- names(layers)
+output_files <- paste0("data/landscape_data/scaled_rasters/pigs_scaled_", lnames, ".tif")
+
+# # Write each layer to a separate file
+writeRaster(cov_scaled, output_files, overwrite=TRUE)
 
 #### Extract covariates and used and available locations ####
 
