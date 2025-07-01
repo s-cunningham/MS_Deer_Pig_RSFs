@@ -37,10 +37,11 @@ quantile(vp90$RSF, probs=c(0.5))
 # linear stretch
 # deer
 (1.429825 - minmax(deer90)[1])/(minmax(deer90)[2]-minmax(deer90)[1])
+(0 - minmax(deer90)[1])/(minmax(deer90)[2]-minmax(deer90)[1])
 
 # pigs
 (1.877943 - minmax(pigs90)[1])/(minmax(pigs90)[2]-minmax(pigs90)[1])
-
+(0 - minmax(pigs90)[1])/(minmax(pigs90)[2]-minmax(pigs90)[1])
 
 ## full
 pigs90ls <- (pigs90 - minmax(pigs90)[1])/(minmax(pigs90)[2]-minmax(pigs90)[1])
@@ -53,3 +54,40 @@ global(deer90ls, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm
 
 pigs90 <- rast("results/predictions/pigs_rsf_predicted_90m.tif")
 global(pigs90ls, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
+
+m <- c(0, 0.5810711, 0,
+       0.5810711, 1, 1)
+rclmat <- matrix(m, ncol=3, byrow=TRUE)
+rc1 <- classify(pigs90 , rclmat, include.lowest=TRUE)
+plot(rc1)
+
+
+#####
+
+# Make plot of >0 and not 
+m <- c(minmax(pigs30)[1], 0, 0,
+       0, minmax(pigs30)[2], 1)
+rclmat <- matrix(m, ncol=3, byrow=TRUE)
+rc_p <- classify(pigs30, rclmat, include.lowest=TRUE)
+plot(rc_p)
+names(rc_p) <- "pigs"
+
+# Make plot of >0 and not 
+m <- c(minmax(deer30)[1], 0, 0,
+       0, minmax(deer30)[2], 1)
+rclmat <- matrix(m, ncol=3, byrow=TRUE)
+rc_d <- classify(deer30, rclmat, include.lowest=TRUE)
+plot(rc_d)
+names(rc_d) <- "deer"
+
+rc_rasts <- c(rc_d, rc_p)
+rc_rasts <- as.factor(rc_rasts)
+
+ggplot() +
+  geom_spatraster(data=rc_rasts) +
+  scale_fill_grass_d(palette="viridis", direction=1) +
+  facet_wrap(~lyr) +
+  theme_void() +
+  theme(strip.text=element_blank())
+ggsave("figs/selection_above_0.svg")
+
