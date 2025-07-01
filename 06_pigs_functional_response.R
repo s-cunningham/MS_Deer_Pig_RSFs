@@ -15,7 +15,14 @@ library(exactextractr)
 pigs <- read_csv("output/pigs_used_avail_covariates.csv")
 
 # Center and scale covariates
-pigs[,7:19] <- scale(pigs[,7:19])
+lyrs <- read_csv("output/pigs_raster_mean_sds.csv")
+
+pigs <- pigs %>%
+  mutate(hardwoods=(hardwoods-lyrs$mean[4]) / lyrs$sd[4],
+         shrubs=(shrubs-lyrs$mean[1]) / lyrs$sd[1],
+         gramanoids=(gramanoids-lyrs$mean[2]) / lyrs$sd[2],
+         developed=(developed-lyrs$mean[3]) / lyrs$sd[3],
+         dist_water=(dist_water-lyrs$mean[5]) / lyrs$sd[5]) 
 
 ## Set up to loop by individual
 un.id <- unique(pigs$key)
@@ -104,22 +111,8 @@ landcov_fracs <- bind_rows(landcov_fracs, mean_dist)
 #### Coefficients ####
 # read in models
 pigs_rsf <- readRDS("output/pigs_glms.RDS")
-pigsSD <- read_csv("output/pigs_used_avail_covariates.csv") %>%
-  # Select just the variables from the model
-  select("shrubs", "gramanoids", "developed", "hardwoods", "dist_water") %>%
-  # Create squared water
-  mutate(Water2=dist_water^2) %>%
-  # rename to match landcover data
-  rename(Hardwoods=hardwoods, Graminoids=gramanoids, Shrubs=shrubs, Developed=developed,
-         Water=dist_water) %>%
-  # reorder to match glms
-  select(Hardwoods, Shrubs, Graminoids, Developed, Water, Water2)
 
 # Center and scale
-pigsSD <- scale(pigsSD)
-
-pigsSD <- attr(pigsSD, "scaled:scale")
-
 # extract mean coeficients and combine into a single table
 r_glms <- lapply(pigs_rsf, coef)
 r_glms <- lapply(r_glms, as.data.frame)
@@ -142,15 +135,15 @@ r_glms <- r_glms %>%
 
 # Unscale
 r_glms <- r_glms %>%
-  mutate(Hardwoods=Hardwoods / pigsSD[1],
-         Shrubs=Shrubs / pigsSD[2],
-         Graminoids=Graminoids / pigsSD[3],
-         Developed=Developed / pigsSD[4],
-         Water=Water / pigsSD[5],
-         Water2=Water2 / pigsSD[6])
+  mutate(Hardwoods=Hardwoods / lyrs$sd[4],
+         Shrubs=Shrubs / lyrs$sd[1],
+         Graminoids=Graminoids / lyrs$sd[2],
+         Developed=Developed / lyrs$sd[3],
+         Water=Water / lyrs$sd[5],
+         Water2=Water2 / lyrs$sd[6])
 
 # Add IDs 
-r_glms$key <- un.id
+r_glms$key <- un.id[-c(13,18,28)]
 
 # Pivot longer
 r_glms <- r_glms %>%

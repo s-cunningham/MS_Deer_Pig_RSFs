@@ -18,13 +18,12 @@ deer <- read_csv("output/deer_used_avail_covariates.csv")
 lyrs <- read_csv("output/deer_raster_mean_sds.csv")
 
 deer <- deer %>%
-  mutate(allhardwoods=(allhardwoods-lyrs$mean[1]) / lyrs$sd[1],
-         shrubs=(shrubs-lyrs$mean[2]) / lyrs$sd[2],
-         gramanoids=(gramanoids-lyrs$mean[3]) / lyrs$sd[3],
+  mutate(allhardwoods=(allhardwoods-lyrs$mean[5]) / lyrs$sd[5],
+         shrubs=(shrubs-lyrs$mean[1]) / lyrs$sd[1],
+         gramanoids=(gramanoids-lyrs$mean[2]) / lyrs$sd[2],
          foodcrops=(foodcrops-lyrs$mean[4]) / lyrs$sd[4],
-         developed=(developed-lyrs$mean[5]) / lyrs$sd[5],
+         developed=(developed-lyrs$mean[3]) / lyrs$sd[3],
          water_dist=(water_dist-lyrs$mean[6]) / lyrs$sd[6]) 
-
 
 ## Set up to loop by individual
 un.id <- unique(deer$key)
@@ -121,12 +120,19 @@ deerSD <- read_csv("output/deer_used_avail_covariates.csv") %>%
   rename(Hardwoods=allhardwoods, Graminoids=gramanoids, Shrubs=shrubs, Crops=foodcrops, Developed=developed,
          Water=water_dist) %>%
   # reorder to match glms
-  select(Hardwoods, Graminoids, Shrubs, Crops, Developed, Water, Water2)
+  select(Hardwoods, Graminoids, Shrubs, Crops, Developed, Water) %>%
+  mutate(Water2=Water^2)
 
 # Center and scale
-deerSD <- scale(deerSD) # need to change this
+deerSD <- deerSD %>%
+  mutate(Hardwoods=(Hardwoods-lyrs$mean[5]) / lyrs$sd[5],
+         Shrubs=(Shrubs-lyrs$mean[1]) / lyrs$sd[1],
+         Graminoids=(Graminoids-lyrs$mean[2]) / lyrs$sd[2],
+         Crops=(Crops-lyrs$mean[4]) / lyrs$sd[4],
+         Developed=(Developed-lyrs$mean[3]) / lyrs$sd[3],
+         Water=(Water-lyrs$mean[6]) / lyrs$sd[6],
+         Water2=(Water2-lyrs$mean[7]) / lyrs$sd[7]) 
 
-deerSD <- attr(deerSD, "scaled:scale")
 
 # extract mean coeficients and combine into a single table
 r_glms <- lapply(deer_rsf, coef)
@@ -150,16 +156,16 @@ r_glms <- r_glms %>%
 
 # Unscale
 r_glms <- r_glms %>%
-  mutate(Hardwoods=Hardwoods / deerSD[1],
-         Graminoids=Graminoids / deerSD[2],
-         Shrubs=Shrubs / deerSD[3],
-         Crops=Crops / deerSD[4],
-         Developed=Developed / deerSD[5],
-         Water=Water / deerSD[6],
-         Water2=Water2 / deerSD[7])
+  mutate(Hardwoods=Hardwoods / lyrs$sd[5],
+         Graminoids=Graminoids / lyrs$sd[2],
+         Shrubs=Shrubs / lyrs$sd[1],
+         Crops=Crops / lyrs$sd[4],
+         Developed=Developed / lyrs$sd[3],
+         Water=Water / lyrs$sd[6],
+         Water2=Water2 / lyrs$sd[7])
 
 # Add IDs 
-r_glms$key <- un.id
+r_glms$key <- un.id[-c(20,22,34,36)]
 
 # Pivot longer
 r_glms <- r_glms %>%

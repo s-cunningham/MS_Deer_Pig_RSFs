@@ -23,12 +23,20 @@ ext(water) <- ext(layers)
 
 layers <- c(layers, water)
 
+w2 <- water^2
+
+layers <- c(layers, w2)
+
 # Rename layers
-names(layers) <- c("shrubs", "gramanoids", "developed", "foodcrops", "hardwoods", "water_dist")
+names(layers) <- c("shrubs", "gramanoids", "developed", "foodcrops", "hardwoods", "water_dist", "water2")
 
 # Get mean and sd from entire covariate rasters
 mean_vals <- global(layers, "mean", na.rm = TRUE)
 sd_vals   <- global(layers, "sd", na.rm = TRUE)
+
+rast_cs <- dplyr::bind_cols(mean_vals, sd_vals)
+rast_cs <- rownames_to_column(rast_cs, var="layer")
+write_csv(rast_cs, "output/deer_raster_mean_sds.csv")
 
 # Apply to covariate rasters
 layers <- (layers - mean_vals$mean) / sd_vals$sd
@@ -63,12 +71,21 @@ ext(water) <- ext(layers)
 
 layers <- c(layers, water)
 
+#
+w2 <- water^2
+layers <- c(layers, w2)
+
 # Rename layers
-names(layers) <- c("shrubs", "gramanoids", "developed", "hardwoods", "dist_water")
+names(layers) <- c("shrubs", "gramanoids", "developed", "hardwoods", "dist_water", "water2")
 
 # Get mean and sd from entire covariate rasters
 mean_vals <- global(layers, "mean", na.rm = TRUE)
 sd_vals   <- global(layers, "sd", na.rm = TRUE)
+
+rast_cs <- dplyr::bind_cols(mean_vals, sd_vals)
+rast_cs <- rownames_to_column(rast_cs, var="layer")
+write_csv(rast_cs, "output/pigs_raster_mean_sds.csv")
+
 
 # Apply to covariate rasters
 layers <- (layers - mean_vals$mean) / sd_vals$sd

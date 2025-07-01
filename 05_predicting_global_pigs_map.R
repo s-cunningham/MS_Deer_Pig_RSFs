@@ -9,8 +9,6 @@ layers <- list.files(path="data/landscape_data/scaled_rasters/", pattern=".tif",
 layers <- layers[str_detect(layers, "pigs")]
 layers <- rast(layers)
 
-layers <- layers[[c("hardwoods", "shrubs", "gramanoids", "developed", "dist_water")]]
-
 #### Predict across MS counties ####
 ## Read in coefficients
 # Betas
@@ -59,7 +57,7 @@ for (i in 1:length(split_counties)) {
   #### Plotting standard error ####
   # Create the squared covariate
   x_sq <- cty_layers[["dist_water"]]^2
-  names(x_sq) <- "water2"  # name it to match the model formula
+  names(x_sq) <- "Water2"  # name it to match the model formula
   
   # Add it to the covariate stack
   cty_layers <- c(cty_layers, x_sq)
@@ -69,7 +67,7 @@ for (i in 1:length(split_counties)) {
   X_pred <- values(cty_layers, mat = TRUE)
   
   # rearrange column order
-  X_pred <- X_pred[,c("hardwoods", "shrubs", "gramanoids", "developed", "dist_water", "water2")]
+  X_pred <- X_pred[,c("hardwoods", "shrubs", "gramanoids", "developed", "dist_water", "Water2")]
   
   # Efficient matrix math
   SE <- sqrt(rowSums((X_pred %*% vcov_beta) * X_pred))
@@ -203,14 +201,6 @@ se_rast <- mask(se_rast, water, inverse=TRUE)
 
 plot(se_rast)
 
-# Replace all values >10 with 10
-# se_rast <- clamp(se_rast, upper=10, values=TRUE)
-
-# plot SE raster (clamped at 10)
-writeRaster(se_rast, "results/predictions/pigs_rsf_se_30m.tif", overwrite=TRUE)
-
-
-
 #### Lower bound CI ####
 ## List county rasters
 files <- list.files(path="output/pig_county_preds/", pattern="_LCI.tif$", full.names=TRUE)
@@ -272,10 +262,6 @@ uci_rast <- mask(uci_rast, water, inverse=TRUE)
 uci_rast <- crop(uci_rast, ms)
 
 plot(uci_rast)
-
-# Resample to 90 m
-
-
 
 #### Set up to write rasters for RAMAS ####
 
@@ -353,12 +339,10 @@ uci90 <- resample(ucils, temp_rast)
 uci90 <- crop(uci90, ucils)
 
 ## Write rasters
-
 # Save ASCIIs for RAMAS
 writeRaster(pred90, "results/predictions/pigs_rsf_predicted.asc", NAflag=-9999, overwrite=TRUE)
 writeRaster(lci90, "results/predictions/pigs_rsf_lowerCI.asc", NAflag=-9999, overwrite=TRUE)
 writeRaster(uci90, "results/predictions/pigs_rsf_upperCI.asc", NAflag=-9999, overwrite=TRUE)
-
 
 # additionally save mean predictions as .tif for plotting (both resampled and original 30x30m)
 writeRaster(pred90, "results/predictions/pigs_rsf_predicted_90m.tif", overwrite=TRUE)
@@ -373,5 +357,7 @@ writeRaster(lci_rast, "results/predictions/pigs_rsf_LCI_30m.tif", overwrite=TRUE
 # Upper CI
 writeRaster(uci_rast, "results/predictions/pigs_rsf_UCI_30m.tif", overwrite=TRUE)
 
+# SE
+writeRaster(se_rast, "results/predictions/pigs_rsf_se_30m.tif", overwrite=TRUE)
 
 

@@ -12,14 +12,17 @@ ms <- vect("data/landscape_data/mississippi_ACEA.shp")
 # List patch .asc files
 patches <- list.files(path="results/exported_patches/", pattern=".ASC", full.names=TRUE)  # note that the pattern argument is case-sensitive, and RAMAS writes ASCII files as .ASC instead of .asc like R
 
-# grab 1 set per species
-patches <- patches[str_detect(patches, "2")]
+# # grab 1 set per species
+# patches <- patches[str_detect(patches, "2")]
 
 # Make raster "stack"
 patches <- rast(patches)
 
 # Define projection
 crs(patches) <- crs(ms)
+
+# rename because I switched the pig patches
+names(patches) <- c("deer_core","deer_highlymarginal","deer_marginal","pigs_core","pigs_marginal","pigs_highlymarginal")
 
 # Reclassify so that 0 becomes NA (backround is 0, patches are numbered starting with 1), and all patches receive same class value (1)
 # If you want to show different patches, don't do the second part
@@ -47,26 +50,26 @@ polylist <- lapply(as.list(patches), as.polygons)
 names(polylist) <- names(patches)
 
 ## Calculate area
-area_deer <- expanse(polylist[["deer_core_22_patch"]], unit="km")
-area_pigs <- expanse(polylist[["pigs_core_27_patch"]], unit="km")
+area_deer <- expanse(polylist[["deer_core"]], unit="km")
+area_pigs <- expanse(polylist[["pigs_core"]], unit="km")
 
 # Core deer & core pig habitat overlap 
-ovp1 <- terra::union(polylist$deer_core_22_patch, polylist$pigs_core_27_patch)
+ovp1 <- terra::union(polylist$deer_core, polylist$pigs_core)
 expanse(ovp1, unit="km")[[3]]
 
 ovp1 <- ovp1 %>%
-  mutate(deer_core_22_patch=coalesce(deer_core_22_patch,0),
-         pigs_core_27_patch=coalesce(pigs_core_27_patch,0),
-         overlap=deer_core_22_patch+pigs_core_27_patch) %>%
+  mutate(deer_core=coalesce(deer_core,0),
+         pigs_core=coalesce(pigs_core,0),
+         overlap=deer_core+pigs_core) %>%
   select(overlap)
 
 writeVector(ovp1, "output/overlap_raster.shp", overwrite=TRUE)
 
-nonovp <- erase(polylist$pigs_core_27_patch - polylist$deer_core_22_patch)
+nonovp <- erase(polylist$pigs_core - polylist$deer_core)
 expanse(nonovp, unit="km")
 
 # Core deer & core pig habitat overlap - marginal
-ovp2 <- terra::union(polylist$deer_marginal_22_patch, polylist$pigs_marginal_27_patch)
+ovp2 <- terra::union(polylist$deer_marginal, polylist$pigs_marginal)
 expanse(ovp2, unit="km")[[3]]
 
 ovp2 <- ovp2 %>%
@@ -81,9 +84,9 @@ ovp2 <- ovp2 %>%
 ## How much deer core area in CWD zones?
 # read CWD counties shapefile
 cwd <- vect("data/landscape_data/2024CWDpositive_counties.shp")
-cwd <- project(cwd, crs(polylist$deer_core_22_patch))
+cwd <- project(cwd, crs(polylist$deer_core))
 
-cwd_deer_core <- crop(polylist$deer_core_22_patch, cwd)   
+cwd_deer_core <- crop(polylist$deer_core, cwd)   
 expanse(cwd_deer_core, unit="km")  
   
   
@@ -95,11 +98,11 @@ patch_vals <- c(3,2,1)
 patch_class <- c("Core", "Marginal", "Highly Marginal")
 
 ## Mosaic rasters
-deer_mn <- mosaic(patches["deer_highlymargina_22_patch"], patches["deer_marginal_22_patch"], fun = "sum")
-deer_mn <- mosaic(deer_mn, patches["deer_core_22_patch"], fun="sum")
+deer_mn <- mosaic(patches["deer_highlymarginal"], patches["deer_marginal"], fun = "sum")
+deer_mn <- mosaic(deer_mn, patches["deer_core"], fun="sum")
 
-pigs_mn <- mosaic(patches["pigs_highlymarginal_27_patch"], patches["pigs_marginal_27_patch"], fun = "sum")
-pigs_mn <- mosaic(pigs_mn, patches["pigs_core_27_patch"], fun="sum")
+pigs_mn <- mosaic(patches["pigs_highlymarginal"], patches["pigs_marginal"], fun = "sum")
+pigs_mn <- mosaic(pigs_mn, patches["pigs_core"], fun="sum")
 
 ## Reclassify
 # Add patch types to raster
@@ -141,4 +144,4 @@ deer_patches + pig_patches +
         legend.title=element_text(size=12))
 
 ggsave(file="figs/Fig4_patches.svg")
-# 10.4 x 9 in image
+# Saving 9.89 x 9 in image

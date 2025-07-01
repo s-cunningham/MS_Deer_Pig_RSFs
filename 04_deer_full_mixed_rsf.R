@@ -41,6 +41,15 @@ ggplot(deer, aes(x = key, y = residuals)) +
   labs(title = "Residuals by Individual", y = "Pearson Residual") +
   theme(axis.text.x=element_text(angle=90))
 
+# Get fixed effect standard errors
+se <- summary(rsf)$coefficients$cond[,"Std. Error"]
+se <- se[-1]
+se <- t(t(se))
+se <- as.data.frame(se)
+se <- rownames_to_column(se, var="covariate")
+write_csv(se, "output/deer_mixed_effects_se.csv")
+
+
 # Get fixed effect coefficients
 beta <- fixef(rsf)$cond
 

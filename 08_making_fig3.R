@@ -34,7 +34,8 @@ d_map <- ggplot() +
   guides(fill=guide_legend(nrow=1,direction="horizontal")) +
   theme_void() +
   theme(legend.position="bottom",
-        legend.title=element_blank()) +
+        legend.title=element_blank(),
+        legend.text=element_blank()) +
   annotation_north_arrow(
     which_north = TRUE,
     pad_x = unit(0.05, "npc"),
@@ -49,7 +50,8 @@ p_map <- ggplot() +
   guides(fill=guide_legend(nrow=1,direction="horizontal")) +
   theme_void() +
   theme(legend.position="bottom",
-        legend.title=element_blank()) +
+        legend.title=element_blank(),
+        legend.text=element_blank()) +
   annotation_scale(
     height = unit(0.015, "npc"),
     width_hint = 0.5,
@@ -61,30 +63,38 @@ maps <- d_map + p_map + plot_layout(guides = 'collect') & theme(legend.position 
 
 
 ## Read regression coefficients
-beta_d <- read_csv("output/deer_glm_betas.csv") %>%
+beta_d <- read_csv("output/deer_mixed_effects_betas.csv") %>%
+  # switch format
+  pivot_wider(names_from="covariate", values_from="beta") %>%
   # rename all hardwoods column to match pigs
-  rename(hardwoods=allhardwoods, water=water_dist, water2=water_dist2) %>%
+  rename(hardwoods=allhardwoods, water=water_dist, water2=`I(water_dist^2)`) %>%
   # add column for species
   mutate(species="deer")
-beta_p <- read_csv("output/pigs_glm_betas.csv") %>%
+beta_p <- read_csv("output/pigs_mixed_effects_betas.csv") %>%
+  # switch format
+  pivot_wider(names_from="covariate", values_from="beta") %>%
   # reorder columns to match deer
-  select(hardwoods, gramanoids, shrubs, developed:water2) %>%
+  select(hardwoods, gramanoids, shrubs, developed:Water2) %>%
   # rename water
-  rename(water=dist_water) %>%
+  rename(water=dist_water, water2=Water2) %>%
   # add column for species
   mutate(species="pigs")
 
 # Read beta standard errors
-se_d <- read_csv("output/deer_glm_se.csv") %>%
+se_d <- read_csv("output/deer_mixed_effects_se.csv") %>%
+  # switch format
+  pivot_wider(names_from="covariate", values_from="V1") %>%
   # rename all hardwoods column to match pigs
-  rename(hardwoods=allhardwoods, water=water_dist, water2=water_dist2) %>%
+  rename(hardwoods=allhardwoods, water=water_dist, water2=`I(water_dist^2)`) %>%
   # add column for species
   mutate(species="deer")
-se_p <- read_csv("output/pigs_glm_se.csv") %>%
+se_p <- read_csv("output/pigs_mixed_effects_se.csv") %>%
+  # switch format
+  pivot_wider(names_from="covariate", values_from="V1") %>%
+  # rename water
+  rename(water=dist_water, water2=`I(dist_water^2)`) %>%
   # reorder columns to match deer
   select(hardwoods, gramanoids, shrubs, developed:water2) %>%
-  # rename water
-  rename(water=dist_water) %>%
   # add column for species
   mutate(species="pigs")
 
@@ -157,7 +167,7 @@ covar_labels <- c("Hardwoods", "Graminoids", "Shrubs", "Crops", "Developed",
 # Create plot showing beta coefficients
 coef_plt <- ggplot() +
   geom_hline(yintercept=0, color="gray") +
-  scale_y_continuous(limits = c(-2.5, 2.50), breaks = seq(-2.5, 2.5, by=0.50)) +
+  # scale_y_continuous(limits = c(-3, 2), breaks = seq(-2.5, 2.5, by=0.50)) +
   scale_x_continuous(breaks=1:13, labels=covar_labels) +
   geom_segment(data=coefs, aes(x=x, xend=xend, y=beta, yend=beta, color=beta)) +
   scale_color_gradientn(colours=c("#440154", "#3b528b", "#21918c", "#5ec962", "#fde725")) +
@@ -184,4 +194,4 @@ maps / free(coef_plt) + plot_layout(design = layout)
 
 # save figure
 ggsave("figs/new_figure3.svg")
-# Saving 6.52 x 9 in image
+# Saving 7.71 x 9 in image

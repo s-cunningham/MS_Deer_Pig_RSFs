@@ -104,4 +104,4 @@ deer_plt / pigs_plt
 
 # save figure
 ggsave("figs/functional_response_plot.svg")
-# Saving 12.3 x 5.08 in image
+# Saving 13.1 x 5.89 in image

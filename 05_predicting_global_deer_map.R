@@ -9,8 +9,6 @@ layers <- list.files(path="data/landscape_data/scaled_rasters/", pattern=".tif",
 layers <- layers[str_detect(layers, "deer")]
 layers <- rast(layers)
 
-names(layers) <- c("developed","water_dist","foodcrops","gramanoids","hardwoods","shrubs")  
-
 # Read in MS shapefile (to drop islands)
 ms <- vect("data/landscape_data/mississippi_ACEA.shp")
 ms <- project(ms, layers)
@@ -23,9 +21,11 @@ water <- project(water, layers)
 ## Read in coefficients
 # Betas
 betas <- read_csv("output/deer_mixed_effects_betas.csv") 
+betas[betas$covariate=="allhardwoods",1] <- "hardwoods"
+betas[betas$covariate=="I(water_dist^2)",1] <- "water2"
 
 beta_hat <- readRDS("output/deer_mixed_effects_beta.RDS")
-names(beta_hat) <- c("allhardwoods", "gramanoids", "foodcrops", "shrubs", "developed", "water_dist", "water2")
+names(beta_hat) <- c("hardwoods", "gramanoids", "foodcrops", "shrubs", "developed", "water_dist", "water2")
   
 # Covariance
 vcov_beta <- readRDS("output/deer_mixed_effects_vcov.RDS")

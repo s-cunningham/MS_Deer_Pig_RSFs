@@ -21,10 +21,7 @@ pigs <- pigs %>%
          gramanoids=(gramanoids-unlist(unname(lyrs[lyrs$layer=="gramanoids", 2]))) / unlist(unname(lyrs[lyrs$layer=="gramanoids", 3])),
          foodcrops=(foodcrops-unlist(unname(lyrs[lyrs$layer=="foodcrops", 2]))) / unlist(unname(lyrs[lyrs$layer=="foodcrops", 3])),
          developed=(developed-unlist(unname(lyrs[lyrs$layer=="developed", 2]))) / unlist(unname(lyrs[lyrs$layer=="developed", 3])),
-         herbwetlands=(herbwetlands-unlist(unname(lyrs[lyrs$layer=="herbwetlands", 2]))) / unlist(unname(lyrs[lyrs$layer=="herbwetlands", 3])),
          hardwoods=(hardwoods-unlist(unname(lyrs[lyrs$layer=="hardwoods", 2]))) / unlist(unname(lyrs[lyrs$layer=="hardwoods", 3])),
-         bottomland=(bottomland-unlist(unname(lyrs[lyrs$layer=="bottomland", 2]))) / unlist(unname(lyrs[lyrs$layer=="bottomland", 3])),
-         decidmixed=(decidmixed-unlist(unname(lyrs[lyrs$layer=="decidmixed", 2]))) / unlist(unname(lyrs[lyrs$layer=="decidmixed", 3])),
          dist_water=(dist_water-unlist(unname(lyrs[lyrs$layer=="dist_water", 2]))) / unlist(unname(lyrs[lyrs$layer=="dist_water", 3]))) 
 
 ## Set up to loop by individual

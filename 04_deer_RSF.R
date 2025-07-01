@@ -80,17 +80,17 @@ vcov_mat <- lapply(vcov_mat, function(v) {
   v[idx, idx, drop = FALSE]
 })
 
-flag <- lapply(vcov_mat, function(x) sum(diag(x) > 100)) %>% unlist()
-flag <- ifelse(flag==2, 1, flag)
-which(flag==1)
-
-# how much of dataset? 
-deer$ID <- as.numeric(factor(deer$key, labels=1:length(unique(deer$key))))
-bad <- c(36,38,39,44,48,52,69,82,86)
-bad2 <- deer %>% filter(ID %in% bad)
-
-wonky <- bad2 %>% group_by(key, case) %>% count()
-deer %>% filter(!(ID %in% bad)) %>% group_by(case) %>% count()
+# flag <- lapply(vcov_mat, function(x) sum(diag(x) > 100)) %>% unlist()
+# flag <- ifelse(flag==2, 1, flag)
+# which(flag==1)
+# 
+# # how much of dataset? 
+# deer$ID <- as.numeric(factor(deer$key, labels=1:length(unique(deer$key))))
+# bad <- c(36,38,39,44,48,52,69,82,86)
+# bad2 <- deer %>% filter(ID %in% bad)
+# 
+# wonky <- bad2 %>% group_by(key, case) %>% count()
+# deer %>% filter(!(ID %in% bad)) %>% group_by(case) %>% count()
 
 
 # Drop individuals that have complete separation

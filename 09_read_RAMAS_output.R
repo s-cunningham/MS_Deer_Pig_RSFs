@@ -1,21 +1,21 @@
 ## This script reads in text files with RAMAS results (Area and Carrying Capacity), then summarizes total K and area
 
 library(tidyverse)
-
+library(ggtext)
 
 source("00_functions.R")
 
 # Read file with threshold values
-dat <- read_csv("data/logrsf_cutoffs.csv") %>%
+dat <- read_csv("data/logrsf_cutoffs.csv") %>% ## this probably needs to be updated
   mutate(bin=gsub(" ", "",bin))
 
 ## abundance
-N <- list.files(path="results/simulations/", pattern="_abundance.txt$", full.names=TRUE)
+N <- list.files(path="results/simulations/", pattern="_pop.txt$", full.names=TRUE)
 N <- lapply(N, ramas_abun)
 N <- do.call("bind_rows", N)
 
 # Drop density dependence
-N <- N %>% filter(densDep=="exp" & bin!="10") %>% select(-densDep)
+# N <- N %>% filter(densDep=="exp" & bin!="10") %>% select(-densDep)
 
 ggplot(N) +
   geom_line(aes(x=time, y=average, group=factor(bin), color=factor(bin))) +
@@ -34,13 +34,9 @@ N <- left_join(N, dat, by=c("species", "bin"))
 N <- N %>%
   mutate(species=if_else(species=="deer", "White-tailed Deer", "Wild Pigs"))
 
-zero_line <- data.frame(species=c("White-tailed Deer", "Wild Pigs"),
-                        cutoff=c(0.884, 0.808))
-
 ggplot(N) +
   geom_hline(yintercept=1, linewidth=0.5) +
-  geom_vline(data=zero_line, aes(xintercept=cutoff), linewidth=0.2) +
-  geom_point(aes(x=cutoff, y=lambda_mgm, group=density, color=density)) +
+  geom_point(aes(x=bin, y=lambda_mgm, group=density, color=density)) +
   facet_grid(species~density) +
   theme_bw()
 
@@ -58,10 +54,8 @@ area <- area %>%
   # replace actual density number with low and high
   mutate(density=if_else(density==14 | density==8, "low", "high"))
   
-area <- left_join(area, dat, by=c("species", "bin"))
-
 ggplot(area) +
-  geom_point(aes(x=cutoff, y=Areakm2, group=density, color=density)) +
+  geom_point(aes(x=bin, y=Areakm2, group=density, color=density)) +
   facet_wrap(vars(species)) +
   theme_bw()
 
@@ -72,27 +66,56 @@ K <- do.call("bind_rows", K)
 
 K <- K %>%
   # drop patches that have K of < 5
-  filter(K >= 5) %>%
+  # filter(K >= 5) %>%
   # summarize by species, density and bin
-  group_by(species, density, bin) %>%
+  group_by(species, density, bin, value) %>%
   reframe(K=sum(K), N0=sum(N0), avgHS=mean(AvgHS)) %>% # might need to recalculate avgHS
   # replace actual density number with low and high
   mutate(density=if_else(density==14 | density==8, "low", "high")) 
 
-# Join to cutoff value
-K <- left_join(K, dat, by=c("species", "bin"))
-
 K <- K %>%
   mutate(species=if_else(species=="deer", "White-tailed Deer", "Wild Pigs"))
 
-zero_line <- data.frame(species=c("White-tailed Deer", "Wild Pigs"),
-                        cutoff=c(0.884, 0.808))
 
-ggplot() +
-  geom_vline(data=zero_line, aes(xintercept=cutoff), linewidth=0.2) +
-  geom_point(data=K, aes(x=cutoff, y=K, group=density, shape=density, color=density)) +
-  scale_shape_manual(values=c(21, 23)) +
-  facet_wrap(vars(species)) +
+
+
+
+Kbins <- K %>% filter(str_detect(bin, "\\d")) %>%
+  select(-N0, -avgHS) %>%
+  pivot_wider(names_from="value", values_from="K") %>%
+  # create column for dodging
+  mutate(bin=as.numeric(bin))
+
+ggplot(Kbins) +
+  geom_segment(aes(x=bin, y=UCI, yend=LCI, group=density, color=density)) +
+  geom_point(aes(x=bin, y=mean)) +
+  facet_grid(.~species)
+
+Kpatch <- K %>% filter(!str_detect(bin, "\\d")) %>%
+  select(-N0, -avgHS) %>%
+  pivot_wider(names_from="value", values_from="K")
+
+Kpatch$bin <- factor(Kpatch$bin, levels=c("core", "marginal", "highlymarginal"), labels=c("Core", "Marginal", "Highly\nMarginal"))
+Kpatch$density <- factor(Kpatch$density, levels=c("high", "low"), labels=c("22 deer | 27 pigs", "14.3 deer | 8 pigs"))
+
+ggplot(Kpatch) +
+  geom_linerange(aes(x=bin, ymin=UCI, ymax=LCI, color=density),position=position_dodge(.2), linewidth=1) +
+  geom_point(aes(x=bin, y=mean, color=density), position=position_dodge(.2), size=2) +
+  scale_color_manual(values=c("#21918c","#440154"), name='Density (animals/km<sup>2</sup>)') +
+  scale_y_continuous(breaks=seq(0, 3000000, by=500000), labels=c(0,0.5,1,1.5,2,2.5,3)) +
+  xlab("Patch Type") + ylab("Carrying Capacity (in millions)") +
+  guides(
+    colour = guide_legend(position = "inside")
+  ) + 
+  facet_grid(~species) +
   theme_classic() +
-  theme(panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
-
+  theme(legend.position.inside=c(0,1),
+        legend.justification=c(0,1),
+        legend.title = element_markdown(),
+        legend.text=element_text(size=10),
+        legend.background = element_rect(fill=NA),
+        strip.text=element_blank(),
+        axis.title=element_text(size=11),
+        axis.text=element_text(size=10),
+        panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
+ggsave("figs/patch_carrying_capacity.svg")
