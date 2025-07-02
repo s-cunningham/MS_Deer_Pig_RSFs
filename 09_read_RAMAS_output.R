@@ -5,31 +5,52 @@ library(ggtext)
 
 source("00_functions.R")
 
-# Read file with threshold values
-dat <- read_csv("data/logrsf_cutoffs.csv") %>% ## this probably needs to be updated
-  mutate(bin=gsub(" ", "",bin))
-
 ## abundance
-N <- list.files(path="results/simulations/", pattern="_pop.txt$", full.names=TRUE)
+N <- list.files(path="results/simulations/", pattern="_pop1.txt$", full.names=TRUE)
 N <- lapply(N, ramas_abun)
 N <- do.call("bind_rows", N)
 
-# Drop density dependence
-# N <- N %>% filter(densDep=="exp" & bin!="10") %>% select(-densDep)
+N <- N %>% 
+  # Filter to keep only rows with 0 or no digits
+  filter(str_detect(bin, "0") | !str_detect(bin, "\\d")) %>%
+  # drop marginal
+  filter(bin!="marginal") %>%
+  # make 'above0' layer 'marginal'
+  mutate(bin=if_else(bin=="0", "marginal", bin)) %>%
+  # drop mean column (didn't do CIs for pop simulation)
+  select(-value) %>%
+  # convert density to categorical
+  mutate(density=if_else(density==14 | density==8, "low", "high")) %>%
+  # keep just the high densityies
+  filter(density=="high")
+
+# Reorder so patches are not in alphabetical order
+N$bin <- factor(N$bin, levels=c("core", "marginal", "highlymarginal"), labels=c("Core", "Marginal", "Highly\nMarginal"))
 
 ggplot(N) +
-  geom_line(aes(x=time, y=average, group=factor(bin), color=factor(bin))) +
-  facet_wrap(vars(species, density))
+  geom_ribbon(aes(x=time, ymin=lowerSD, ymax=upperSD, group=bin, color=bin, fill=bin), alpha=0.3) +
+  scale_y_continuous(breaks=seq(0, 30000000, by=5000000), labels=seq(0,30, by=5)) +
+  geom_line(aes(x=time, y=average, group=bin, color=bin)) +
+  scale_color_manual(values=c("#fde725","#21918c","#440154"), name="Patch Type") + 
+  scale_fill_manual(values=c("#fde725","#21918c","#440154"), name="Patch Type") + 
+  facet_grid(.~species) +
+  guides(
+    colour = guide_legend(position = "inside"),
+    fill = guide_legend(position = "inside")
+  ) + 
+  ylab("Abundance (in millions)") +
+  theme_classic() +
+  theme(panel.border=element_rect(color="black", fill=NA),
+        legend.position.inside=c(0,1),
+        legend.justification=c(0,1),
+        legend.background=element_rect(fill=NA))
 
 # Calculate lambda and geometric mean for each scenario
-N <- N %>%
+pop_growth <- N %>%
   group_by(species, density, bin) %>%
   reframe(lambda=lambda_calc(average)) %>%
   group_by(species, density, bin) %>%
-  reframe(lambda_mgm=gm_mean(lambda)) %>%
-  mutate(density=if_else(density==14 | density==8, "low", "high")) 
-
-N <- left_join(N, dat, by=c("species", "bin"))
+  reframe(lambda_mgm=gm_mean(lambda)) 
 
 N <- N %>%
   mutate(species=if_else(species=="deer", "White-tailed Deer", "Wild Pigs"))
@@ -39,9 +60,6 @@ ggplot(N) +
   geom_point(aes(x=bin, y=lambda_mgm, group=density, color=density)) +
   facet_grid(species~density) +
   theme_bw()
-
-
-
 
 ## Patch area
 area <- list.files(path="results/simulations/", pattern="_area.txt$", full.names=TRUE)
@@ -73,13 +91,11 @@ K <- K %>%
   # replace actual density number with low and high
   mutate(density=if_else(density==14 | density==8, "low", "high")) 
 
+# Relabel species
 K <- K %>%
   mutate(species=if_else(species=="deer", "White-tailed Deer", "Wild Pigs"))
 
-
-
-
-
+## Look at quantile bins
 Kbins <- K %>% filter(str_detect(bin, "\\d")) %>%
   select(-N0, -avgHS) %>%
   pivot_wider(names_from="value", values_from="K") %>%
@@ -91,11 +107,24 @@ ggplot(Kbins) +
   geom_point(aes(x=bin, y=mean)) +
   facet_grid(.~species)
 
-Kpatch <- K %>% filter(!str_detect(bin, "\\d")) %>%
+## Look at patch types
+Kpatch <- K %>% 
+  # Filter to keep only rows with 0 or no digits
+  filter(str_detect(bin, "0") | !str_detect(bin, "\\d")) %>%
+  # Drop initial abundance and average suitability value
   select(-N0, -avgHS) %>%
-  pivot_wider(names_from="value", values_from="K")
+  # drop marginal
+  filter(bin!="marginal") %>%
+  # make 'above0' layer 'marginal'
+  mutate(bin=if_else(bin=="0", "marginal", bin)) %>%
+  # pivot to wide format
+  pivot_wider(names_from="value", values_from="K") %>%
+  # reorder columns
+  select(species, density, bin, UCI, mean, LCI)
 
+# Reorder patch types so that they're in order of size, not alphabetical
 Kpatch$bin <- factor(Kpatch$bin, levels=c("core", "marginal", "highlymarginal"), labels=c("Core", "Marginal", "Highly\nMarginal"))
+# Relabel density to be more informative for plot
 Kpatch$density <- factor(Kpatch$density, levels=c("high", "low"), labels=c("22 deer | 27 pigs", "14.3 deer | 8 pigs"))
 
 ggplot(Kpatch) +
@@ -119,3 +148,4 @@ ggplot(Kpatch) +
         axis.text=element_text(size=10),
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 ggsave("figs/patch_carrying_capacity.svg")
+# Saving 7.18 x 4.26 in image

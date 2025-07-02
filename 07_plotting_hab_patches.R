@@ -22,7 +22,9 @@ patches <- rast(patches)
 crs(patches) <- crs(ms)
 
 # rename because I switched the pig patches
-names(patches) <- c("deer_core","deer_highlymarginal","deer_marginal","pigs_core","pigs_marginal","pigs_highlymarginal")
+names(patches) <- c("deer_marginal","deer_core","deer_highlymarginal","deer_extra","pigs_marginal","pigs_core","pigs_extra","pigs_highlymarginal")
+
+patches <- patches[[c(2,1,3,6,5,8)]]
 
 # Reclassify so that 0 becomes NA (backround is 0, patches are numbered starting with 1), and all patches receive same class value (1)
 # If you want to show different patches, don't do the second part
@@ -40,6 +42,7 @@ for (i in 1:dim(patches)[3]) {
   # write raster
   writeRaster(patch, filename, overwrite=TRUE)
 }
+
 # Reclassify all patches as 1
 patches <- ifel(patches>=1, 1, patches)
 
@@ -50,9 +53,19 @@ polylist <- lapply(as.list(patches), as.polygons)
 names(polylist) <- names(patches)
 
 ## Calculate area
-area_deer <- expanse(polylist[["deer_core"]], unit="km")
-area_pigs <- expanse(polylist[["pigs_core"]], unit="km")
+# Core
+expanse(polylist[["deer_core"]], unit="km")
+expanse(polylist[["pigs_core"]], unit="km")
 
+# Marginal
+expanse(polylist[["deer_marginal"]], unit="km")
+expanse(polylist[["pigs_marginal"]], unit="km")
+
+# Highly marginal
+expanse(polylist[["deer_highlymarginal"]], unit="km")
+expanse(polylist[["pigs_highlymarginal"]], unit="km")
+
+## Calculate area overlap
 # Core deer & core pig habitat overlap 
 ovp1 <- terra::union(polylist$deer_core, polylist$pigs_core)
 expanse(ovp1, unit="km")[[3]]
@@ -63,8 +76,9 @@ ovp1 <- ovp1 %>%
          overlap=deer_core+pigs_core) %>%
   select(overlap)
 
-writeVector(ovp1, "output/overlap_raster.shp", overwrite=TRUE)
+writeVector(ovp1, "output/overlap.shp", overwrite=TRUE)
 
+# find remaining (non-overlapping area)
 nonovp <- erase(polylist$pigs_core - polylist$deer_core)
 expanse(nonovp, unit="km")
 
@@ -73,12 +87,14 @@ ovp2 <- terra::union(polylist$deer_marginal, polylist$pigs_marginal)
 expanse(ovp2, unit="km")[[3]]
 
 ovp2 <- ovp2 %>%
-  mutate(deer_marginal_22_patch=coalesce(deer_marginal_22_patch,0),
-         pigs_marginal_27_patch=coalesce(pigs_marginal_27_patch,0),
-         overlap=deer_marginal_22_patch+pigs_marginal_27_patch) %>%
+  mutate(deer_marginal=coalesce(deer_marginal,0),
+         pigs_marginal=coalesce(pigs_marginal,0),
+         overlap=deer_marginal+pigs_marginal) %>%
   select(overlap)
 
-
+# Core deer & core pig habitat overlap - highly marginal
+ovp3 <- terra::union(polylist$deer_highlymarginal, polylist$pigs_highlymarginal)
+expanse(ovp3, unit="km")[[3]]
 
 
 ## How much deer core area in CWD zones?
@@ -112,7 +128,8 @@ levels(deer_mn) <- list(data.frame(ID = patch_vals,
 levels(pigs_mn) <- list(data.frame(ID = patch_vals,
                                    patch = patch_class))
 
-## Plot
+#### Plot ####
+# Deer plot
 deer_patches <- ggplot() +
   geom_spatraster(data=deer_mn) +
   scale_fill_viridis_d(option="D", direction=-1, name="Patch Type:", na.value="transparent", na.translate=FALSE) +
@@ -124,6 +141,7 @@ deer_patches <- ggplot() +
     pad_y = unit(0.85, "npc"),
     style = north_arrow_minimal()) 
 
+# Pig plot
 pig_patches <- ggplot() +
   geom_spatraster(data=pigs_mn) +
   scale_fill_viridis_d(option="D", direction=-1, name="Patch Type:", na.value="transparent", na.translate=FALSE) +
@@ -136,6 +154,7 @@ pig_patches <- ggplot() +
     pad_y = unit(0.01, "npc"),
     text_cex = .9) 
 
+# Combine plot with patchwork
 deer_patches + pig_patches +
   # plot_annotation(tag_levels = 'a', tag_prefix="(", tag_suffix=")") +
   plot_layout(guides = 'collect') & 
@@ -143,5 +162,6 @@ deer_patches + pig_patches +
         legend.text=element_text(size=11),
         legend.title=element_text(size=12))
 
+# Save maps
 ggsave(file="figs/Fig4_patches.svg")
-# Saving 9.89 x 9 in image
+# Saving 9.95 x 9 in image
