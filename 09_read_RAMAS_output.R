@@ -10,17 +10,17 @@ N <- list.files(path="results/simulations/", pattern="_pop1.txt$", full.names=TR
 N <- lapply(N, ramas_abun)
 N <- do.call("bind_rows", N)
 
-N <- N %>% 
+N <- N |> 
   # Filter to keep only rows with 0 or no digits
-  filter(str_detect(bin, "0") | !str_detect(bin, "\\d")) %>%
+  filter(str_detect(bin, "0") | !str_detect(bin, "\\d")) |>
   # drop marginal
-  filter(bin!="marginal") %>%
+  filter(bin!="marginal") |>
   # make 'above0' layer 'marginal'
-  mutate(bin=if_else(bin=="0", "marginal", bin)) %>%
+  mutate(bin=if_else(bin=="0", "marginal", bin)) |>
   # drop mean column (didn't do CIs for pop simulation)
-  select(-value) %>%
+  select(-value) |>
   # convert density to categorical
-  mutate(density=if_else(density==14 | density==8, "low", "high")) %>%
+  mutate(density=if_else(density==14 | density==8, "low", "high")) |>
   # keep just the high densityies
   filter(density=="high")
 
@@ -46,79 +46,45 @@ ggplot(N) +
         legend.background=element_rect(fill=NA))
 
 # Calculate lambda and geometric mean for each scenario
-pop_growth <- N %>%
-  group_by(species, density, bin) %>%
-  reframe(lambda=lambda_calc(average)) %>%
-  group_by(species, density, bin) %>%
+pop_growth <- N |>
+  group_by(species, density, bin) |>
+  reframe(lambda=lambda_calc(average)) |>
+  group_by(species, density, bin) |>
   reframe(lambda_mgm=gm_mean(lambda)) 
 
-N <- N %>%
+N <- N |>
   mutate(species=if_else(species=="deer", "White-tailed Deer", "Wild Pigs"))
-
-ggplot(N) +
-  geom_hline(yintercept=1, linewidth=0.5) +
-  geom_point(aes(x=bin, y=lambda_mgm, group=density, color=density)) +
-  facet_grid(species~density) +
-  theme_bw()
-
-## Patch area
-area <- list.files(path="results/simulations/", pattern="_area.txt$", full.names=TRUE)
-area <- lapply(area, ramas_area) %>% suppressWarnings()
-area <- do.call("bind_rows", area)
-
-area <- area %>%
-  group_by(species, density, bin) %>%
-  reframe(Areakm2=sum(Area_km2)) %>%
-  # replace actual density number with low and high
-  mutate(density=if_else(density==14 | density==8, "low", "high"))
-  
-ggplot(area) +
-  geom_point(aes(x=bin, y=Areakm2, group=density, color=density)) +
-  facet_wrap(vars(species)) +
-  theme_bw()
 
 ## Carrying capacity
 K <- list.files(path="results/simulations/", pattern="_K.txt$", full.names=TRUE)
 K <- lapply(K, ramas_K)
 K <- do.call("bind_rows", K)
 
-K <- K %>%
+K <- K |>
   # drop patches that have K of < 5
-  # filter(K >= 5) %>%
+  # filter(K >= 5) |>
   # summarize by species, density and bin
-  group_by(species, density, bin, value) %>%
-  reframe(K=sum(K), N0=sum(N0), avgHS=mean(AvgHS)) %>% # might need to recalculate avgHS
+  group_by(species, density, bin, value) |>
+  reframe(K=sum(K), N0=sum(N0), avgHS=mean(AvgHS)) |> # might need to recalculate avgHS
   # replace actual density number with low and high
   mutate(density=if_else(density==14 | density==8, "low", "high")) 
 
 # Relabel species
-K <- K %>%
+K <- K |>
   mutate(species=if_else(species=="deer", "White-tailed Deer", "Wild Pigs"))
 
-## Look at quantile bins
-Kbins <- K %>% filter(str_detect(bin, "\\d")) %>%
-  select(-N0, -avgHS) %>%
-  pivot_wider(names_from="value", values_from="K") %>%
-  # create column for dodging
-  mutate(bin=as.numeric(bin))
-
-ggplot(Kbins) +
-  geom_segment(aes(x=bin, y=UCI, yend=LCI, group=density, color=density)) +
-  geom_point(aes(x=bin, y=mean)) +
-  facet_grid(.~species)
-
 ## Look at patch types
-Kpatch <- K %>% 
+Kpatch <- K |> 
   # Filter to keep only rows with 0 or no digits
-  filter(str_detect(bin, "0") | !str_detect(bin, "\\d")) %>%
+  filter(str_detect(bin, "0") | !str_detect(bin, "\\d")) |>
   # Drop initial abundance and average suitability value
-  select(-N0, -avgHS) %>%
+  select(-N0, -avgHS) |>
   # drop marginal
-  filter(bin!="marginal") %>%
+  filter(bin!="marginal") |>
   # make 'above0' layer 'marginal'
-  mutate(bin=if_else(bin=="0", "marginal", bin)) %>%
+  mutate(bin=if_else(bin=="0", "marginal", bin)) |>
   # pivot to wide format
-  pivot_wider(names_from="value", values_from="K") %>%
+  pivot_wider(names_from="value", values_from="K") |>
   # reorder columns
   select(species, density, bin, UCI, mean, LCI)
 
@@ -149,3 +115,17 @@ ggplot(Kpatch) +
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 ggsave("figs/patch_carrying_capacity.svg")
 # Saving 7.18 x 4.26 in image
+
+
+Kpatch <- Kpatch %>% arrange(species, density, bin)
+
+
+Nt <- N %>%
+  filter(species=="White-tailed Deer" & density=="high" & bin=="Highly\nMarginal")
+
+y <- Nt$average[2:nrow(Nt)] - Nt$average[1:(nrow(Nt)-1)]
+
+x <- Nt$average[1:(nrow(Nt)-1)]
+
+plot(y=y, x=x)
+

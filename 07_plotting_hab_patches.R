@@ -70,10 +70,10 @@ expanse(polylist[["pigs_highlymarginal"]], unit="km")
 ovp1 <- terra::union(polylist$deer_core, polylist$pigs_core)
 expanse(ovp1, unit="km")[[3]]
 
-ovp1 <- ovp1 %>%
+ovp1 <- ovp1 |>
   mutate(deer_core=coalesce(deer_core,0),
          pigs_core=coalesce(pigs_core,0),
-         overlap=deer_core+pigs_core) %>%
+         overlap=deer_core+pigs_core) |>
   select(overlap)
 
 writeVector(ovp1, "output/overlap.shp", overwrite=TRUE)
@@ -86,10 +86,10 @@ expanse(nonovp, unit="km")
 ovp2 <- terra::union(polylist$deer_marginal, polylist$pigs_marginal)
 expanse(ovp2, unit="km")[[3]]
 
-ovp2 <- ovp2 %>%
+ovp2 <- ovp2 |>
   mutate(deer_marginal=coalesce(deer_marginal,0),
          pigs_marginal=coalesce(pigs_marginal,0),
-         overlap=deer_marginal+pigs_marginal) %>%
+         overlap=deer_marginal+pigs_marginal) |>
   select(overlap)
 
 # Core deer & core pig habitat overlap - highly marginal

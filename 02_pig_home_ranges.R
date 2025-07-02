@@ -14,13 +14,13 @@ theme_set(theme_bw())
 lv_func <- function(x, id_, lmin=30) {
   
   # Subset by ID
-  temp <- x %>% 
+  temp <- x |> 
     # Filter by ID
-    filter(id==id_) %>%
+    filter(id==id_) |>
     # Select only columns we need to converting back to ltraj
-    dplyr::select(id:date) %>%
+    dplyr::select(id:date) |>
     # Convert to data.frame
-    as.data.frame() %>%
+    as.data.frame() |>
     # Make date a POSIX-formatted column
     mutate(date = as.POSIXct(date, tz="America/Denver"))
   
@@ -48,13 +48,13 @@ lv_func <- function(x, id_, lmin=30) {
   # Convert to data frame
   df <- ld(fp)
   # remove some columns we don't need (i.e. match pigs_res)
-  df <- df %>% as_tibble() %>%
+  df <- df |> as_tibble() |>
     # reorder columns
-    dplyr::select(id, x:rel.angle, burst) %>%
+    dplyr::select(id, x:rel.angle, burst) |>
     # Remove extra characters ("Segment.") so that we only have a number in the burst column
-    mutate(burst=gsub("Segment.", "", burst)) %>%
+    mutate(burst=gsub("Segment.", "", burst)) |>
     # Combine ID with the segment number
-    unite(key, c("id", "burst"), sep="_", remove=FALSE) %>%
+    unite(key, c("id", "burst"), sep="_", remove=FALSE) |>
     # Reorder columns
     dplyr::select(id, key, x:rel.angle)
   
@@ -63,19 +63,19 @@ lv_func <- function(x, id_, lmin=30) {
 }
 
 #### Read in pigs location data ####
-pigs <- read_csv("data/location_data/pigs_filtered.csv") %>%
+pigs <- read_csv("data/location_data/pigs_filtered.csv") |>
   mutate(month=as.numeric(format(timestamp, "%m")),
-         year=as.numeric(format(timestamp, "%Y"))) %>%
-  dplyr::select(PigID:study,month,year,timestamp,X,Y)# %>%
+         year=as.numeric(format(timestamp, "%Y"))) |>
+  dplyr::select(PigID:study,month,year,timestamp,X,Y)# |>
 # filter(PigID != "35493_Noxubee_2022")
 
-pigs %>% group_by(study) %>% reframe(range=range(timestamp))
+pigs |> group_by(study) |> reframe(range=range(timestamp))
 
 # Create track of all individuals
 pigs_tr <- make_track(pigs, X, Y, timestamp, id=PigID, crs=32616)
 
 # Check sampling rate of all individuals
-trk_info <- pigs_tr %>% summarize_sampling_rate_many(c("id"), time_unit="min")
+trk_info <- pigs_tr |> summarize_sampling_rate_many(c("id"), time_unit="min")
 
 # List individual IDs
 un.id <- unique(pigs$PigID)
@@ -96,18 +96,18 @@ tr_sum <- data.frame()
 for (i in 1:length(un.id)) {
   
   # Filter to ID
-  dat <- pigs_tr %>% filter(id==un.id[i])
+  dat <- pigs_tr |> filter(id==un.id[i])
   
   # Filter all locations to ~4 hours
   dat <- track_resample(dat, rate=hours(4), tolerance=minutes(5))
-  s <- dat %>% summarize_sampling_rate_many(c("id"), time_unit="hour")
+  s <- dat |> summarize_sampling_rate_many(c("id"), time_unit="hour")
   tr_sum <- bind_rows(tr_sum, s)
   
   # Create column for only dates, count how many unique days
-  dat <- dat %>% mutate(date=as.Date(format(t_, "%Y-%m-%d"))) 
+  dat <- dat |> mutate(date=as.Date(format(t_, "%Y-%m-%d"))) 
   
   # How many locations on each day?
-  nobs <- dat %>% group_by(date) %>% count() %>% filter(n>=5)
+  nobs <- dat |> group_by(date) |> count() |> filter(n>=5)
   un.days <- unique(nobs$date)
   
   # Skip to next individual if less than 30 days of data
@@ -126,7 +126,7 @@ for (i in 1:length(un.id)) {
     dist <- c(dist, df[[1]]$dist)
     
     df <- ld(df)
-    df <- df %>% as_tibble() %>%
+    df <- df |> as_tibble() |>
       dplyr::select(id, x:rel.angle)
     
     # Save resampled data
@@ -134,10 +134,10 @@ for (i in 1:length(un.id)) {
   } # if statement
 } # i
 
-tr_sum <- tr_sum %>% as_tibble()
-tr_sum2 <- tr_sum %>% separate(id, into=c("pigid", "study"), sep="_", remove=FALSE)
+tr_sum <- tr_sum |> as_tibble()
+tr_sum2 <- tr_sum |> separate(id, into=c("pigid", "study"), sep="_", remove=FALSE)
 
-pigs <- pigs_res %>% 
+pigs <- pigs_res |> 
   # Filter out NAs
   filter(!is.na(x)) 
 
@@ -145,7 +145,7 @@ pigs <- pigs_res %>%
 quantile(pigs_res$dist, probs=c(0.9, 0.95, 0.99), na.rm=TRUE)
 
 # Filter 99th percentiles 
-pigs_res <- pigs_res %>% filter(dist < (1415.3430*2))
+pigs_res <- pigs_res |> filter(dist < (1415.3430*2))
 
 #### 3. Determine which animals need to be split ####
 pigs_res <- as_tibble(pigs_res)
@@ -153,7 +153,7 @@ un.id <- unique(pigs_res$id)
 ## Look through plots and manually list which IDs probably will need to be segmented, as well as those that might need to be filtered by dates to remove patchy data
 for (i in 1:length(un.id)) {
   
-  temp <- pigs_res %>% filter(id==un.id[i])
+  temp <- pigs_res |> filter(id==un.id[i])
   
   p1 <- ggplot(temp, aes(x=x, y=y, color=date)) +
     geom_path() + geom_point() +
@@ -166,32 +166,32 @@ for (i in 1:length(un.id)) {
   
 }
 
-pigs_res <- pigs_res %>% filter(id!="26622_Eastern" | (id=="26622_Eastern" & x>339000 & y<3739000))
-pigs_res <- pigs_res %>% filter(id!="30252_Noxubee" | (id=="30252_Noxubee" & x>329000 & y>3683500))
-pigs_res <- pigs_res %>% filter(id!="26641_Eastern" | (id=="26641_Eastern" & x<340000))
-pigs_res <- pigs_res %>% filter(id!="26628_Noxubee" | (id=="26628_Noxubee" & x>326000 & x<330000))
-pigs_res <- pigs_res %>% filter(id!="152320_Northern" | (id=="152320_Northern" & R2n<5E06))
-pigs_res <- pigs_res %>% filter(id!="19223_Delta" | (id=="19223_Delta" & R2n<5E07))
-pigs_res <- pigs_res %>% filter(id!="19212_Delta" | (id=="19212_Delta" & R2n<2E08))
-pigs_res <- pigs_res %>% filter(id!="19210_Delta" | (id=="19210_Delta" & R2n<2E07))
-pigs_res <- pigs_res %>% filter(id!="19207_Delta" | (id=="19207_Delta" & x<182500))
-pigs_res <- pigs_res %>% filter(id!="377123_Delta" | (id=="377123_Delta" & x>204500))
+pigs_res <- pigs_res |> filter(id!="26622_Eastern" | (id=="26622_Eastern" & x>339000 & y<3739000))
+pigs_res <- pigs_res |> filter(id!="30252_Noxubee" | (id=="30252_Noxubee" & x>329000 & y>3683500))
+pigs_res <- pigs_res |> filter(id!="26641_Eastern" | (id=="26641_Eastern" & x<340000))
+pigs_res <- pigs_res |> filter(id!="26628_Noxubee" | (id=="26628_Noxubee" & x>326000 & x<330000))
+pigs_res <- pigs_res |> filter(id!="152320_Northern" | (id=="152320_Northern" & R2n<5E06))
+pigs_res <- pigs_res |> filter(id!="19223_Delta" | (id=="19223_Delta" & R2n<5E07))
+pigs_res <- pigs_res |> filter(id!="19212_Delta" | (id=="19212_Delta" & R2n<2E08))
+pigs_res <- pigs_res |> filter(id!="19210_Delta" | (id=="19210_Delta" & R2n<2E07))
+pigs_res <- pigs_res |> filter(id!="19207_Delta" | (id=="19207_Delta" & x<182500))
+pigs_res <- pigs_res |> filter(id!="377123_Delta" | (id=="377123_Delta" & x>204500))
 
 pigs_res$burst <- 1
-pigs_res <- pigs_res %>% dplyr::select(id,burst,x:rel.angle)
+pigs_res <- pigs_res |> dplyr::select(id,burst,x:rel.angle)
 
 ## List of IDs that will likely need to be segmented
 to_segment <- c("19219_Delta", "19212_Delta")
 
 # Subset data without deer that need to be segmented (so that we can add the segments onto it)
-pigs <- pigs_res %>% 
+pigs <- pigs_res |> 
   # Filter out NAs
-  filter(!is.na(x)) %>%
+  filter(!is.na(x)) |>
   # Remove IDs that will be segmented
-  filter(!(id %in% to_segment)) %>%
+  filter(!(id %in% to_segment)) |>
   # Create a 'key' column to match the output from the Lavielle function
-  mutate(burst=1) %>%
-  unite("key", c("id", "burst"), sep="_", remove=FALSE) %>%
+  mutate(burst=1) |>
+  unite("key", c("id", "burst"), sep="_", remove=FALSE) |>
   dplyr::select(id, key, x:rel.angle)
 
 ## Need to do this manually, and make sure to add the segmented data to 'deer'
@@ -201,14 +201,14 @@ s <- lv_func(pigs_res, "19212_Delta", 30)
 pigs <- bind_rows(pigs, s)
 
 # how many days in each segment?
-ndays <- pigs %>% mutate(day=format(date, "%Y-%m-%d")) %>% group_by(id) %>% reframe(ndays=length(unique(day)))
-short <- ndays %>% filter(ndays<30)
+ndays <- pigs |> mutate(day=format(date, "%Y-%m-%d")) |> group_by(id) |> reframe(ndays=length(unique(day)))
+short <- ndays |> filter(ndays<30)
 
 # Removed anything with less than 3 weeks of data
-pigs <- pigs %>% filter(!(id %in% short$id))
+pigs <- pigs |> filter(!(id %in% short$id))
 
 # Ending up with some HRs that are likely much too large
-temp <- pigs %>% filter(key=="19212_Delta_3")
+temp <- pigs |> filter(key=="19212_Delta_3")
 ggplot(temp, aes(x=x, y=y, color=date)) +
   geom_path() + geom_point() 
 ggplot(temp, aes(x=date, y=R2n, color=date)) +
@@ -221,28 +221,28 @@ ggplot(temp) +
 pigs <- read_csv("output/pigs_filtered_segmented.csv")
 ## Set up data
 # Convert to lat/long (WGS84)
-pigs_sf <- pigs %>% 
+pigs_sf <- pigs |> 
   # Remove rows without coordinates
-  filter(!is.na(x)) %>% 
+  filter(!is.na(x)) |> 
   # Convert to sf object
-  st_as_sf(coords=c("x", "y"), crs=32616) %>%
+  st_as_sf(coords=c("x", "y"), crs=32616) |>
   # Reproject
   st_transform(crs=4326)
 # save lat/lon
-ll <- pigs_sf %>% st_coordinates() %>% as_tibble() %>% 
+ll <- pigs_sf |> st_coordinates() |> as_tibble() |> 
   rename(location.long=X, location.lat=Y)
 
-pigs <- pigs %>% 
-  filter(!is.na(x)) %>% 
+pigs <- pigs |> 
+  filter(!is.na(x)) |> 
   bind_cols(ll)
 
 # Drop extra forays from 19212_Delta_3
-pigs <- pigs %>% 
+pigs <- pigs |> 
   filter(!(key=="19212_Delta_3" & y<3752500)) 
 
-dat <- pigs %>%      
+dat <- pigs |>      
   # need the lat long, etc. in a specific order 
-  dplyr::select(key, location.long, location.lat, date) %>% 
+  dplyr::select(key, location.long, location.lat, date) |> 
   # also need columns to have a specific name
   rename(individual.local.identifier=key, timestamp=date)
 
@@ -308,17 +308,17 @@ ids <- unlist(ids)
 size$id <- ids
 
 # Fix units and reorganzie
-size <- size %>%
+size <- size |>
   # Create a column for the rowname
-  rownames_to_column(var="unit") %>%
+  rownames_to_column(var="unit") |>
   # Convert to tibble
-  as_tibble() %>%
+  as_tibble() |>
   # Extract the unit from the rowname
-  mutate(unit=str_extract(unit, pattern = "(?<=\\().*(?=\\))")) %>%
+  mutate(unit=str_extract(unit, pattern = "(?<=\\().*(?=\\))")) |>
   # Convert ha to sq km
   mutate(low=if_else(unit=="hectares",low/100,low),
          est=if_else(unit=="hectares",est/100,est),
-         high=if_else(unit=="hectares",high/100,high)) %>%
+         high=if_else(unit=="hectares",high/100,high)) |>
   # Reorder columns
   dplyr::select(id, low:high) 
 # Note: all AKDEs are now in sqare kilometers
@@ -335,17 +335,17 @@ poly <- lapply(poly, st_transform, crs=32616)
 ud <- do.call(rbind, poly)
 
 # Clean up full set of polygons
-ud <- ud %>% 
+ud <- ud |> 
   # Separate name into important parts (key, 99%, and estimate vs CI)
-  separate(1, into=c("id", "level", "which"), sep=" ") %>%
+  separate(1, into=c("id", "level", "which"), sep=" ") |>
   # Remove rowname
-  remove_rownames() %>%
+  remove_rownames() |>
   # Remove the level column, we know they are all 99%
-  dplyr::select(-level) %>%
+  dplyr::select(-level) |>
   # Now filter by rows to just the estimate (drop confidence intervals)
-  filter(which=="est") #%>%
+  filter(which=="est") #|>
 # Separate id into different pieces
-# separate(1, into=c("id", "study", "burst"), sep="_") %>%
+# separate(1, into=c("id", "study", "burst"), sep="_") |>
 # put id and study back together
 # unite("id", 1:2, sep="_")
 
@@ -407,9 +407,9 @@ for (i in 1:nrow(ud)) {
   pts <- st_as_sf(pts)
   
   # convert to tibble and add identifying info, as well as a 0 for available
-  pts <- pts %>% 
-    st_coordinates() %>% 
-    as_tibble() %>%
+  pts <- pts |> 
+    st_coordinates() |> 
+    as_tibble() |>
     mutate(id = ud$id[i],
            burst = ud$burst[i],
            case = 0)
@@ -422,13 +422,13 @@ write_csv(avail, "output/pigs_avail_pts.csv")
 avail <- read_csv("output/pigs_avail_pts.csv")
 
 ## Now on to the used locations
-pigs_sf <- pigs %>% 
+pigs_sf <- pigs |> 
   # Remove rows without coordinates
-  filter(!is.na(x)) %>% 
+  filter(!is.na(x)) |> 
   # Convert to sf object
-  st_as_sf(coords=c("x", "y"), crs=32616) %>%
+  st_as_sf(coords=c("x", "y"), crs=32616) |>
   # remove some columns
-  dplyr::select(key, geometry) %>%
+  dplyr::select(key, geometry) |>
   # reproject to ud
   st_transform(crs=st_crs(ud))
 
@@ -440,17 +440,17 @@ for (i in 1:nrow(ud)) {
   poly <- vect(ud$geometry[i])
   
   # filter to single ID and convert to SpatVector
-  temp <- pigs_sf %>% filter(key==ud$id[i]) 
+  temp <- pigs_sf |> filter(key==ud$id[i]) 
   temp <- vect(temp)
   
   # Clip points to AKDE
   temp <- crop(temp, poly)
   
   ## Convert back to tibble
-  xy <- temp %>% st_as_sf() %>% st_coordinates() %>% as_tibble()
+  xy <- temp |> st_as_sf() |> st_coordinates() |> as_tibble()
   
   # remove geometry column
-  temp <- temp %>% st_as_sf() %>% st_drop_geometry()
+  temp <- temp |> st_as_sf() |> st_drop_geometry()
   
   # add xy coordinates back on
   temp <- bind_cols(temp, xy)
@@ -465,22 +465,22 @@ write_csv(used, "output/pigs_used_locs.csv")
 used <- read_csv("output/pigs_used_locs.csv")
 
 # Organize so used data matches available data
-used <- used %>%
+used <- used |>
   # split key
-  # separate("key", into=c("rm1", "rm2", "burst"), sep="_") %>%
+  # separate("key", into=c("rm1", "rm2", "burst"), sep="_") |>
   # drop extra columns
   dplyr::select(X, Y, key, case)
 
 ## Combine used and available points
-avail <- avail %>% rename(key=id)
+avail <- avail |> rename(key=id)
 dat <- bind_rows(used, avail)
 
 
 # Check ratio of used:avail
-ratios <- dat %>% group_by(key, case) %>% count() %>%
-  pivot_wider(names_from=case, values_from=n) %>%
-  rename(used=`1`, avail=`0`) %>%
-  mutate(n_avail_used=avail/used) %>%
+ratios <- dat |> group_by(key, case) |> count() |>
+  pivot_wider(names_from=case, values_from=n) |>
+  rename(used=`1`, avail=`0`) |>
+  mutate(n_avail_used=avail/used) |>
   mutate(pts_needed_for_2x=used*2,
          additional_pts_needed=pts_needed_for_2x-avail)
 
@@ -489,10 +489,10 @@ un.id <- unique(dat$key)
 for (i in 1:length(un.id)) {
   
   # Subset for this individual
-  used_i <- used %>% filter(key == un.id[i])
-  grid_i <- avail %>% filter(key == un.id[i])
+  used_i <- used |> filter(key == un.id[i])
+  grid_i <- avail |> filter(key == un.id[i])
   
-  r <- ratios %>% filter(key == un.id[i])
+  r <- ratios |> filter(key == un.id[i])
   
   # If already sufficient, just keep the grid points
   if (r$avail >= r$used) {
@@ -551,9 +551,9 @@ for (i in 1:length(un.id)) {
   
   # Convert back to data frame
   pts <- as.data.frame(pts, geom="XY") 
-  pts <- pts %>% as_tibble() %>%
-    select(key, x, y) %>%
-    rename(X=x, Y=y) %>%
+  pts <- pts |> as_tibble() |>
+    select(key, x, y) |>
+    rename(X=x, Y=y) |>
     mutate(case=0)
   
   avail <- bind_rows(avail, pts)
@@ -561,26 +561,26 @@ for (i in 1:length(un.id)) {
 }
 
 # I think I duplicated some rows
-avail <- avail %>% distinct()
+avail <- avail |> distinct()
 
 ## Combine used and available points
 dat <- bind_rows(used, avail)
 
 # Check ratio of used:avail
-ratios <- dat %>% group_by(key, case) %>% count() %>%
-  pivot_wider(names_from=case, values_from=n) %>%
-  rename(used=`1`, avail=`0`) %>%
-  mutate(n_avail_used=avail/used) %>%
+ratios <- dat |> group_by(key, case) |> count() |>
+  pivot_wider(names_from=case, values_from=n) |>
+  rename(used=`1`, avail=`0`) |>
+  mutate(n_avail_used=avail/used) |>
   mutate(pts_needed_for_2x=used*2,
          additional_pts_needed=pts_needed_for_2x-avail)
 
 # Drop IDs with HRs that are too big
-dat <- dat %>% filter(key!="19212_Delta_4")
+dat <- dat |> filter(key!="19212_Delta_4")
 
-low <- ratios %>% filter(n_avail_used < 1)
+low <- ratios |> filter(n_avail_used < 1)
 un.low <- unique(low$key)
 
-dat <- dat %>% filter(key!="19211_Delta_1")
+dat <- dat |> filter(key!="19211_Delta_1")
 
 # save data
 write_csv(dat, "output/pigs_used_avail_locations.csv")

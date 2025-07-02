@@ -16,13 +16,13 @@ deer <- read_csv("output/deer_used_avail_covariates.csv")
 # Center and scale covariates
 lyrs <- read_csv("output/deer_raster_mean_sds.csv")
 
-deer <- deer %>%
+deer <- deer |>
   mutate(allhardwoods=(allhardwoods-lyrs$mean[1]) / lyrs$sd[1],
          shrubs=(shrubs-lyrs$mean[2]) / lyrs$sd[2],
          gramanoids=(gramanoids-lyrs$mean[3]) / lyrs$sd[3],
          foodcrops=(foodcrops-lyrs$mean[4]) / lyrs$sd[4],
          developed=(developed-lyrs$mean[5]) / lyrs$sd[5],
-         water_dist=(water_dist-lyrs$mean[6]) / lyrs$sd[6]) %>%
+         water_dist=(water_dist-lyrs$mean[6]) / lyrs$sd[6]) |>
   # create squared term
   mutate(water_dist2 = water_dist^2)
 
@@ -30,14 +30,14 @@ deer <- deer %>%
 un.id <- unique(deer$key)
 
 # Check ratio of used:available for each deer
-ua <- deer %>% 
-  dplyr::select(key, case) %>% 
-  group_by(key, case) %>%
-  count() %>%
-  ungroup() %>%
-  pivot_wider(names_from="case", values_from="n") %>%
+ua <- deer |> 
+  dplyr::select(key, case) |> 
+  group_by(key, case) |>
+  count() |>
+  ungroup() |>
+  pivot_wider(names_from="case", values_from="n") |>
   mutate(used_avail=`1`/`0`,
-         npts=`1`+`0`) %>%
+         npts=`1`+`0`) |>
   dplyr::select(key, npts, used_avail)
 
 
@@ -53,7 +53,7 @@ set.seed(1)
 for (i in 1:length(un.id)) {
   
   # Filter by ID
-  temp <- deer %>% filter(key==un.id[i])
+  temp <- deer |> filter(key==un.id[i])
 
   # Fit model and print the iteration for IDs that have warnings
   rsf <- tryCatch(bayesglm(case ~ allhardwoods + gramanoids + foodcrops + shrubs + developed + water_dist + I(water_dist^2), 
@@ -80,17 +80,17 @@ vcov_mat <- lapply(vcov_mat, function(v) {
   v[idx, idx, drop = FALSE]
 })
 
-# flag <- lapply(vcov_mat, function(x) sum(diag(x) > 100)) %>% unlist()
+# flag <- lapply(vcov_mat, function(x) sum(diag(x) > 100)) |> unlist()
 # flag <- ifelse(flag==2, 1, flag)
 # which(flag==1)
 # 
 # # how much of dataset? 
 # deer$ID <- as.numeric(factor(deer$key, labels=1:length(unique(deer$key))))
 # bad <- c(36,38,39,44,48,52,69,82,86)
-# bad2 <- deer %>% filter(ID %in% bad)
+# bad2 <- deer |> filter(ID %in% bad)
 # 
-# wonky <- bad2 %>% group_by(key, case) %>% count()
-# deer %>% filter(!(ID %in% bad)) %>% group_by(case) %>% count()
+# wonky <- bad2 |> group_by(key, case) |> count()
+# deer |> filter(!(ID %in% bad)) |> group_by(case) |> count()
 
 
 # Drop individuals that have complete separation
@@ -107,14 +107,14 @@ r_glms <- lapply(r_glms, t)
 r_glms <- lapply(r_glms, as.data.frame)
 r_glms <- do.call(bind_rows, r_glms)
 
-r_glms <- r_glms %>% 
-  as_tibble() %>%
+r_glms <- r_glms |> 
+  as_tibble() |>
   rename(intercept=`(Intercept)`, 
-         water_dist2=`I(water_dist^2)`) %>%  
+         water_dist2=`I(water_dist^2)`) |>  
   # drop intercept
-  dplyr::select(-intercept) %>%
+  dplyr::select(-intercept) |>
   # Reorder
-  dplyr::select(allhardwoods:water_dist2) %>%
+  dplyr::select(allhardwoods:water_dist2) |>
   # fill with 0
   mutate(across(allhardwoods:water_dist2, \(x) coalesce(x, 0)))
 
@@ -129,7 +129,7 @@ beta_list <- lapply(1:nrow(r_glms), function(i) {
 r_glms$id <- un.id
 
 # Calculate mean across all individuals
-glm_betas <- r_glms %>% 
+glm_betas <- r_glms |> 
   reframe(across(allhardwoods:water_dist2, \(x) mean(x, na.rm = TRUE)))
 
 write_csv(glm_betas, "output/deer_glm_betas.csv")
@@ -165,12 +165,12 @@ se <- lapply(deer_rsf, se.coef)
 se <- do.call(bind_rows, se)
 
 # rename intercept and add ID column
-se <- se %>%
-  rename(intercept=`(Intercept)`, water_dist2=`I(water_dist^2)`) %>%  
+se <- se |>
+  rename(intercept=`(Intercept)`, water_dist2=`I(water_dist^2)`) |>  
   # drop intercept
-  dplyr::select(-intercept) %>%
+  dplyr::select(-intercept) |>
   # Reorder
-  dplyr::select(allhardwoods:water_dist2) %>%
+  dplyr::select(allhardwoods:water_dist2) |>
   # fill with 0
   mutate(across(allhardwoods:water_dist2, \(x) coalesce(x, 0)))
 
@@ -178,7 +178,7 @@ se <- se %>%
 se$id <- un.id
 
 # Calculate mean across all individuals
-glm_se <- se %>% 
+glm_se <- se |> 
   reframe(across(allhardwoods:water_dist2, \(x) mean(x, na.rm = TRUE)))
 
 write_csv(glm_se, "output/deer_glm_se.csv")

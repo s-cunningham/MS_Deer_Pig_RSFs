@@ -31,7 +31,7 @@ water <- project(water, layers)
 
 ## Read in coefficients
 # Betas
-betas <- read_csv("output/deer_glm_betas.csv") %>%
+betas <- read_csv("output/deer_glm_betas.csv") |>
   # Pivot so that covariates are in a in a column, and beta coefficients in another column
   pivot_longer(1:ncol(.), names_to="covariate", values_to="beta")
 

@@ -14,13 +14,13 @@ theme_set(theme_bw())
 lv_func <- function(x, id_, lmin=30) {
   
   # Subset by ID
-  temp <- x %>% 
+  temp <- x |> 
     # Filter by ID
-    filter(id==id_) %>%
+    filter(id==id_) |>
     # Select only columns we need to converting back to ltraj
-    dplyr::select(id:date) %>%
+    dplyr::select(id:date) |>
     # Convert to data.frame
-    as.data.frame() %>%
+    as.data.frame() |>
     # Make date a POSIX-formatted column
     mutate(date = as.POSIXct(date, tz="America/Denver"))
   
@@ -48,13 +48,13 @@ lv_func <- function(x, id_, lmin=30) {
   # Convert to data frame
   df <- ld(fp)
   # remove some columns we don't need (i.e. match pigs_res)
-  df <- df %>% as_tibble() %>%
+  df <- df |> as_tibble() |>
     # reorder columns
-    dplyr::select(id, x:rel.angle, burst) %>%
+    dplyr::select(id, x:rel.angle, burst) |>
     # Remove extra characters ("Segment.") so that we only have a number in the burst column
-    mutate(burst=gsub("Segment.", "", burst)) %>%
+    mutate(burst=gsub("Segment.", "", burst)) |>
     # Combine ID with the segment number
-    unite(key, c("id", "burst"), sep="_", remove=FALSE) %>%
+    unite(key, c("id", "burst"), sep="_", remove=FALSE) |>
     # Reorder columns
     dplyr::select(id, key, x:rel.angle)
   
@@ -64,20 +64,20 @@ lv_func <- function(x, id_, lmin=30) {
 
 #### Deer ####
 # Read in deer location data
-deer <- read_csv("data/location_data/deer_filtered.csv") %>%
-          mutate(timestamp=as_datetime(timestamp, tz="America/Chicago")) %>%
+deer <- read_csv("data/location_data/deer_filtered.csv") |>
+          mutate(timestamp=as_datetime(timestamp, tz="America/Chicago")) |>
           mutate(month=as.numeric(format(timestamp, "%m")),
-                 year=as.numeric(format(timestamp, "%Y"))) %>%
-          dplyr::select(DeerID:study,month,year,timestamp,X,Y) # %>%
+                 year=as.numeric(format(timestamp, "%Y"))) |>
+          dplyr::select(DeerID:study,month,year,timestamp,X,Y) # |>
           # unite("DeerID", c(1,5), sep="_") # separate by year
 
-deer %>% group_by(study) %>% reframe(range=range(timestamp))
+deer |> group_by(study) |> reframe(range=range(timestamp))
 
 # Create track of all individuals
 deer_tr <- make_track(deer, X, Y, timestamp, id=DeerID, crs=32616)
 
 # Check sampling rate of all individuals
-trk_info <- deer_tr %>% summarize_sampling_rate_many(c("id"), time_unit="min")
+trk_info <- deer_tr |> summarize_sampling_rate_many(c("id"), time_unit="min")
 
 # List individual IDs
 un.id <- unique(deer$DeerID)
@@ -98,18 +98,18 @@ tr_sum <- data.frame()
 for (i in 1:length(un.id)) {
   
   # Filter to ID
-  dat <- deer_tr %>% filter(id==un.id[i])
+  dat <- deer_tr |> filter(id==un.id[i])
   
   # Filter all locations to ~4 hours
   dat <- track_resample(dat, rate=hours(4), tolerance=minutes(5))
-  s <- dat %>% summarize_sampling_rate_many(c("id"), time_unit="hour")
+  s <- dat |> summarize_sampling_rate_many(c("id"), time_unit="hour")
   tr_sum <- bind_rows(tr_sum, s)
   
   # Create column for only dates, count how many unique days
-  dat <- dat %>% mutate(date=as.Date(format(t_, "%Y-%m-%d"))) 
+  dat <- dat |> mutate(date=as.Date(format(t_, "%Y-%m-%d"))) 
 
   # How many locations on each day?
-  nobs <- dat %>% group_by(date) %>% count() %>% filter(n>=5)
+  nobs <- dat |> group_by(date) |> count() |> filter(n>=5)
   un.days <- unique(nobs$date)
 
   # Skip to next individual if less than 90 days of data
@@ -128,7 +128,7 @@ for (i in 1:length(un.id)) {
     dist <- c(dist, df[[1]]$dist)
     
     df <- ld(df)
-    df <- df %>% as_tibble() %>%
+    df <- df |> as_tibble() |>
               dplyr::select(id, x:rel.angle)
     
     # Save resampled data
@@ -136,38 +136,38 @@ for (i in 1:length(un.id)) {
   } # if statement
 } # i
 
-tr_sum <- tr_sum %>% as_tibble()
+tr_sum <- tr_sum |> as_tibble()
 
 ## Check distribution of how far they move in 4 hours
 quantile(deer_res$dist, probs=c(0.9, 0.95, 0.99), na.rm=TRUE)
 
 # Filter 99th percentiles 
-deer_res <- deer_res %>% filter(dist < (1415.3430*2))
+deer_res <- deer_res |> filter(dist < (1415.3430*2))
 
 # Check
 hist(deer_res$dist)
 
 ## Some manual filtering
 # 152311_North
-deer_res <- deer_res %>% filter((id!="152311_North") | (id=="152311_North" & date <= "2023-12-31 23:59:59"))
+deer_res <- deer_res |> filter((id!="152311_North") | (id=="152311_North" & date <= "2023-12-31 23:59:59"))
 
 # 87924_Delta
-deer_res <- deer_res %>% filter((id!="87924_Delta") | (id=="87924_Delta" & (date>="2021-06-30 23:59:59" & date<="2022-09-10 23:59:59")))
+deer_res <- deer_res |> filter((id!="87924_Delta") | (id=="87924_Delta" & (date>="2021-06-30 23:59:59" & date<="2022-09-10 23:59:59")))
 
 # 87899_Delta
-deer_res <- deer_res %>% filter((id!="87899_Delta") | (id=="87899_Delta" & date<="2022-12-01 00:00:00"))
+deer_res <- deer_res |> filter((id!="87899_Delta") | (id=="87899_Delta" & date<="2022-12-01 00:00:00"))
 
 # 81864_Delta
-deer_res <- deer_res %>% filter((id!="81864_Delta") | (id=="81864_Delta" & (date>="2021-08-25 00:00:00" & date<="2022-02-01 00:00:00")))
+deer_res <- deer_res |> filter((id!="81864_Delta") | (id=="81864_Delta" & (date>="2021-08-25 00:00:00" & date<="2022-02-01 00:00:00")))
 
 # 259_Central
-deer_res <- deer_res %>% filter((id!="259_Central") | (id=="259_Central" & date <= "2017-09-15 00:00:00"))
+deer_res <- deer_res |> filter((id!="259_Central") | (id=="259_Central" & date <= "2017-09-15 00:00:00"))
 
 # 252_Central
-deer_res <- deer_res %>% filter((id!="252_Central") | (id=="252_Central" & date <= "2017-05-01 00:00:00"))
+deer_res <- deer_res |> filter((id!="252_Central") | (id=="252_Central" & date <= "2017-05-01 00:00:00"))
 
 # 27_Central
-deer_res <- deer_res %>% filter((id!="27_Central") | (id=="27_Central" & (date>="2018-08-31 00:00:00" & date<="2019-03-27 23:59:59")))
+deer_res <- deer_res |> filter((id!="27_Central") | (id=="27_Central" & (date>="2018-08-31 00:00:00" & date<="2019-03-27 23:59:59")))
 
 #### 3. Determine which animals need to be split ####
 deer_res <- as_tibble(deer_res)
@@ -175,7 +175,7 @@ un.id <- unique(deer_res$id)
 ## Look through plots and manually list which IDs probably will need to be segmented, as well as those that might need to be filtered by dates to remove patchy data
 for (i in 1:length(un.id)) {
   
-  temp <- deer_res %>% filter(id==un.id[i])
+  temp <- deer_res |> filter(id==un.id[i])
 
   p1 <- ggplot(temp, aes(x=x, y=y, color=date)) +
     geom_path() + geom_point() +
@@ -190,27 +190,27 @@ for (i in 1:length(un.id)) {
 
 
 ## Filter 
-deer_res <- deer_res %>% filter(id!="152311_North" | (id=="152311_North" & x<326000 & x>324500))
-deer_res <- deer_res %>% filter(id!="152310_North" | (id=="152310_North" & x<325000))
-deer_res <- deer_res %>% filter(id!="87919_Delta" | (id=="87919_Delta" & x>130000))
-deer_res <- deer_res %>% filter(id!="81864_Delta" | (id=="81864_Delta" & x>130000))
-deer_res <- deer_res %>% filter(id!="47_Central" | (id=="47_Central" & R2n>6E06))
-deer_res <- deer_res %>% filter(id!="348_Central" | (id=="348_Central" & x<197000))
-deer_res <- deer_res %>% filter(id!="340_Central" | (id=="340_Central" & date <= "2019-01-01 23:59:59"))
-deer_res <- deer_res %>% filter(id!="321_Central" | (id=="321_Central" & x<202000 & y>3613000))
-deer_res <- deer_res %>% filter(id!="295_Central" | (id=="295_Central" & x>205000))
-deer_res <- deer_res %>% filter(id!="281_Central" | (id=="281_Central" & y>3609000))
-deer_res <- deer_res %>% filter(id!="277_Central" | (id=="277_Central" & x<202500))
-deer_res <- deer_res %>% filter(id!="273_Central" | (id=="273_Central" & x<201000))
-deer_res <- deer_res %>% filter(id!="262_Central" | (id=="262_Central" & x<204000))
-deer_res <- deer_res %>% filter(id!="252_Central" | (id=="252_Central" & x>198000))
-deer_res <- deer_res %>% filter(id!="19_Central" | (id=="19_Central" & x>201000))
-deer_res <- deer_res %>% filter(id!="27_Central" | (id=="27_Central" & date <= "2019-01-01 23:59:59"))
-deer_res <- deer_res %>% filter(id!="100_Central" | (id=="100_Central" & x<198000))
-deer_res <- deer_res %>% filter(id!="252_Central" | (id=="252_Central" & x>198000))
+deer_res <- deer_res |> filter(id!="152311_North" | (id=="152311_North" & x<326000 & x>324500))
+deer_res <- deer_res |> filter(id!="152310_North" | (id=="152310_North" & x<325000))
+deer_res <- deer_res |> filter(id!="87919_Delta" | (id=="87919_Delta" & x>130000))
+deer_res <- deer_res |> filter(id!="81864_Delta" | (id=="81864_Delta" & x>130000))
+deer_res <- deer_res |> filter(id!="47_Central" | (id=="47_Central" & R2n>6E06))
+deer_res <- deer_res |> filter(id!="348_Central" | (id=="348_Central" & x<197000))
+deer_res <- deer_res |> filter(id!="340_Central" | (id=="340_Central" & date <= "2019-01-01 23:59:59"))
+deer_res <- deer_res |> filter(id!="321_Central" | (id=="321_Central" & x<202000 & y>3613000))
+deer_res <- deer_res |> filter(id!="295_Central" | (id=="295_Central" & x>205000))
+deer_res <- deer_res |> filter(id!="281_Central" | (id=="281_Central" & y>3609000))
+deer_res <- deer_res |> filter(id!="277_Central" | (id=="277_Central" & x<202500))
+deer_res <- deer_res |> filter(id!="273_Central" | (id=="273_Central" & x<201000))
+deer_res <- deer_res |> filter(id!="262_Central" | (id=="262_Central" & x<204000))
+deer_res <- deer_res |> filter(id!="252_Central" | (id=="252_Central" & x>198000))
+deer_res <- deer_res |> filter(id!="19_Central" | (id=="19_Central" & x>201000))
+deer_res <- deer_res |> filter(id!="27_Central" | (id=="27_Central" & date <= "2019-01-01 23:59:59"))
+deer_res <- deer_res |> filter(id!="100_Central" | (id=="100_Central" & x<198000))
+deer_res <- deer_res |> filter(id!="252_Central" | (id=="252_Central" & x>198000))
 
 ## IDs that need trimming
-temp <- deer_res %>% filter(id=="81864_Delta")
+temp <- deer_res |> filter(id=="81864_Delta")
 ggplot(temp, aes(x=x, y=y, color=date)) +
   geom_path() + geom_point() 
 ggplot(temp, aes(x=date, y=R2n, color=date)) +
@@ -223,25 +223,25 @@ to_segment <- c("87924_Delta", "81711_Delta", "90_Central", "97_Central", "344_C
                 "339_Central", "297_Central", "293_Central", "344_Central", "20_Central")
 
 # Subset data without deer that need to be segmented (so that we can add the segments onto it)
-deer <- deer_res %>% 
+deer <- deer_res |> 
           # Filter out NAs
-          filter(!is.na(x)) %>%
+          filter(!is.na(x)) |>
           # Remove IDs that will be segmented
-          filter(!(id %in% to_segment)) %>%
+          filter(!(id %in% to_segment)) |>
           # Create a 'key' column to match the output from the Lavielle function
-          mutate(burst=1) %>%
-          unite("key", c("id", "burst"), sep="_", remove=FALSE) %>%
+          mutate(burst=1) |>
+          unite("key", c("id", "burst"), sep="_", remove=FALSE) |>
           dplyr::select(id, key, x:rel.angle)
 
 ## Need to do this manually, and make sure to add the segmented data to 'deer'
 s <- lv_func(deer_res, "20_Central", 30)
 
 # keep only some segments of 87924_Delta
-# # s <- s %>% filter(key=="87924_Delta_1" | key=="87924_Delta_3" | key=="87924_Delta_4"| key=="87924_Delta_5")
-# s <- s %>% filter(key!="81711_Delta_4")
-# s <- s %>% filter(key!="97_Central_2") %>% mutate(key=if_else(key=="97_Central_3", "97_Central_2", key))
-s <- s %>% filter(key!="293_Central_2")
-# s <- s %>% filter(key!="344_Central_4") %>%
+# # s <- s |> filter(key=="87924_Delta_1" | key=="87924_Delta_3" | key=="87924_Delta_4"| key=="87924_Delta_5")
+# s <- s |> filter(key!="81711_Delta_4")
+# s <- s |> filter(key!="97_Central_2") |> mutate(key=if_else(key=="97_Central_3", "97_Central_2", key))
+s <- s |> filter(key!="293_Central_2")
+# s <- s |> filter(key!="344_Central_4") |>
 #   mutate(key=case_when(key=="344_Central_1" ~ "344_Central_1",
 #                        key=="344_Central_2" ~ "344_Central_2",
 #                        key=="344_Central_3" ~ "344_Central_3",
@@ -262,20 +262,20 @@ deer <- bind_rows(deer, s)
 to_segment[!(to_segment %in% deer$id)]
 
 # Manually remove some points that seem like they aren't connected
-deer <- deer %>% filter(key!="87924_Delta_3" | (key=="87924_Delta_3" & x>157500))
-deer <- deer %>% filter(key!="87924_Delta_4" | (key=="87924_Delta_4" & x<155000))
-deer <- deer %>% filter(key!="87924_Delta_5" | (key=="87924_Delta_5" & x>151000))
+deer <- deer |> filter(key!="87924_Delta_3" | (key=="87924_Delta_3" & x>157500))
+deer <- deer |> filter(key!="87924_Delta_4" | (key=="87924_Delta_4" & x<155000))
+deer <- deer |> filter(key!="87924_Delta_5" | (key=="87924_Delta_5" & x>151000))
 
 # Save
 write_csv(deer, "output/segmented_deer.csv")
 deer <- read_csv("output/segmented_deer.csv")
 
 # how many days in each segment?
-ndays <- deer %>% mutate(day=format(date, "%Y-%m-%d")) %>% group_by(key) %>% reframe(ndays=length(unique(day)))
-short <- ndays %>% filter(ndays <30)
+ndays <- deer |> mutate(day=format(date, "%Y-%m-%d")) |> group_by(key) |> reframe(ndays=length(unique(day)))
+short <- ndays |> filter(ndays <30)
 
 # Removed anything with less than 3 weeks of data
-deer <- deer %>% filter(!(key %in% short$key))
+deer <- deer |> filter(!(key %in% short$key))
 
 # Check unique keys
 unique(deer$key)
@@ -284,25 +284,25 @@ unique(deer$key)
 
 ## Set up data
 # Convert to lat/long (WGS84)
-deer_sf <- deer %>% 
+deer_sf <- deer |> 
               # Remove rows without coordinates
-              filter(!is.na(x)) %>% 
+              filter(!is.na(x)) |> 
               # Convert to sf object
-              st_as_sf(coords=c("x", "y"), crs=32616) %>%
+              st_as_sf(coords=c("x", "y"), crs=32616) |>
               # Reproject
               st_transform(crs=4326)
 
 # save lat/lon
-ll <- deer_sf %>% st_coordinates() %>% as_tibble() %>% 
+ll <- deer_sf |> st_coordinates() |> as_tibble() |> 
           rename(location.long=X, location.lat=Y)
 
-deer <- deer %>% 
-              filter(!is.na(x)) %>% 
+deer <- deer |> 
+              filter(!is.na(x)) |> 
               bind_cols(ll)
 
-dat <- deer %>%      
+dat <- deer |>      
             # need the lat long, etc. in a specific order 
-            dplyr::select(key, location.long, location.lat, date) %>% 
+            dplyr::select(key, location.long, location.lat, date) |> 
             # also need columns to have a specific name
             rename(individual.local.identifier=key, timestamp=date)
 
@@ -365,17 +365,17 @@ ids <- unlist(ids)
 size$id <- ids
 
 # Fix units and reorganzie
-size <- size %>%
+size <- size |>
   # Create a column for the rowname
-  rownames_to_column(var="unit") %>%
+  rownames_to_column(var="unit") |>
   # Convert to tibble
-  as_tibble() %>%
+  as_tibble() |>
   # Extract the unit from the rowname
-  mutate(unit=str_extract(unit, pattern = "(?<=\\().*(?=\\))")) %>%
+  mutate(unit=str_extract(unit, pattern = "(?<=\\().*(?=\\))")) |>
   # Convert ha to sq km
   mutate(low=if_else(unit=="hectares",low/100,low),
          est=if_else(unit=="hectares",est/100,est),
-         high=if_else(unit=="hectares",high/100,high)) %>%
+         high=if_else(unit=="hectares",high/100,high)) |>
   # Reorder columns
   dplyr::select(id, low:high) 
   # Note: all AKDEs are now in sqare kilometers
@@ -392,17 +392,17 @@ poly <- lapply(poly, st_transform, crs=32616)
 ud <- do.call(rbind, poly)
 
 # Clean up full set of polygons
-ud <- ud %>% 
+ud <- ud |> 
   # Separate name into important parts (key, 99%, and estimate vs CI)
-  separate(1, into=c("key", "level", "which"), sep=" ") %>%
+  separate(1, into=c("key", "level", "which"), sep=" ") |>
   # Remove rowname
-  remove_rownames() %>%
+  remove_rownames() |>
   # Remove the level column, we know they are all 99%
-  dplyr::select(-level) %>%
+  dplyr::select(-level) |>
   # Now filter by rows to just the estimate (drop confidence intervals)
-  filter(which=="est") %>%
+  filter(which=="est") |>
   # Separate key into different pieces
-  separate(1, into=c("id", "study", "burst"), sep="_") %>%
+  separate(1, into=c("id", "study", "burst"), sep="_") |>
   # put id and study back together
   unite("id", 1:2, sep="_")
 
@@ -470,9 +470,9 @@ for (i in 1:nrow(ud)) {
   pts <- st_as_sf(pts)
   
   # convert to tibble and add identifying info, as well as a 0 for available
-  pts <- pts %>% 
-    st_coordinates() %>% 
-    as_tibble() %>%
+  pts <- pts |> 
+    st_coordinates() |> 
+    as_tibble() |>
     mutate(id = ud$id[i],
            burst = ud$burst[i],
            case = 0)
@@ -483,16 +483,16 @@ for (i in 1:nrow(ud)) {
 # Save available points
 write_csv(avail, "output/deer_avail_pts.csv")
 avail <- read_csv("output/deer_avail_pts.csv")
-avail <- avail %>% unite("key", c("id", "burst"), sep="_") 
+avail <- avail |> unite("key", c("id", "burst"), sep="_") 
 
 ## Now on to the used locations
-deer_sf <- deer %>% 
+deer_sf <- deer |> 
   # Remove rows without coordinates
-  filter(!is.na(x)) %>% 
+  filter(!is.na(x)) |> 
   # Convert to sf object
-  st_as_sf(coords=c("x", "y"), crs=32616) %>%
+  st_as_sf(coords=c("x", "y"), crs=32616) |>
   # remove some columns
-  dplyr::select(id, key, geometry) %>%
+  dplyr::select(id, key, geometry) |>
   # reproject to ud
   st_transform(crs=st_crs(ud))
 
@@ -509,17 +509,17 @@ for (i in 1:nrow(ud)) {
   poly <- vect(ud$geometry[i])
   
   # filter to single ID and convert to SpatVector
-  temp <- deer_sf %>% filter(key==udkey) 
+  temp <- deer_sf |> filter(key==udkey) 
   temp <- vect(temp)
   
   # Clip points to AKDE
   temp <- crop(temp, poly)
   
   ## Convert back to tibble
-  xy <- temp %>% st_as_sf() %>% st_coordinates() %>% as_tibble()
+  xy <- temp |> st_as_sf() |> st_coordinates() |> as_tibble()
   
   # remove geometry column
-  temp <- temp %>% st_as_sf() %>% st_drop_geometry()
+  temp <- temp |> st_as_sf() |> st_drop_geometry()
   
   # add xy coordinates back on
   temp <- bind_cols(temp, xy)
@@ -534,7 +534,7 @@ write_csv(used, "output/deer_used_locs.csv")
 used <- read_csv("output/deer_used_locs.csv")
 
 # Organize so used data matches available data
-used <- used %>%
+used <- used |>
   # drop extra columns
   dplyr::select(X, Y, key, case)
 
@@ -542,10 +542,10 @@ used <- used %>%
 dat <- bind_rows(used, avail)
 
 # Check ratio of used:avail
-ratios <- dat %>% group_by(key, case) %>% count() %>%
-  pivot_wider(names_from=case, values_from=n) %>%
-  rename(used=`1`, avail=`0`) %>%
-  mutate(n_avail_used=avail/used) %>%
+ratios <- dat |> group_by(key, case) |> count() |>
+  pivot_wider(names_from=case, values_from=n) |>
+  rename(used=`1`, avail=`0`) |>
+  mutate(n_avail_used=avail/used) |>
   mutate(pts_needed_for_2x=used*2,
          additional_pts_needed=pts_needed_for_2x-avail)
 
@@ -554,10 +554,10 @@ un.id <- unique(dat$key)
 for (i in 1:length(un.id)) {
   
   # Subset for this individual
-  used_i <- used %>% filter(key == un.id[i])
-  grid_i <- avail %>% filter(key == un.id[i])
+  used_i <- used |> filter(key == un.id[i])
+  grid_i <- avail |> filter(key == un.id[i])
   
-  r <- ratios %>% filter(key == un.id[i])
+  r <- ratios |> filter(key == un.id[i])
   
   # If already sufficient, just keep the grid points
   if (r$avail >= r$used) {
@@ -616,9 +616,9 @@ for (i in 1:length(un.id)) {
   
   # Convert back to data frame
   pts <- as.data.frame(pts, geom="XY") 
-  pts <- pts %>% as_tibble() %>%
-    select(key, x, y) %>%
-    rename(X=x, Y=y) %>%
+  pts <- pts |> as_tibble() |>
+    select(key, x, y) |>
+    rename(X=x, Y=y) |>
     mutate(case=0)
   
   avail <- bind_rows(avail, pts)
@@ -626,36 +626,36 @@ for (i in 1:length(un.id)) {
 }
 
 # I think I duplicated some rows
-avail <- avail %>% distinct()
+avail <- avail |> distinct()
 
 ## Combine used and available points
 dat <- bind_rows(used, avail)
 
 # Check ratio of used:avail
-ratios <- dat %>% group_by(key, case) %>% count() %>%
-  pivot_wider(names_from=case, values_from=n) %>%
-  rename(used=`1`, avail=`0`) %>%
-  mutate(n_avail_used=avail/used) %>%
+ratios <- dat |> group_by(key, case) |> count() |>
+  pivot_wider(names_from=case, values_from=n) |>
+  rename(used=`1`, avail=`0`) |>
+  mutate(n_avail_used=avail/used) |>
   mutate(pts_needed_for_2x=used*2,
          additional_pts_needed=pts_needed_for_2x-avail)
 
 # which deer still have more used than available?
-low <- ratios %>% filter(n_avail_used < 1)
+low <- ratios |> filter(n_avail_used < 1)
 un.low <- unique(low$key)
 
-low <- low %>% mutate(mult_size=ceiling(used/avail))
+low <- low |> mutate(mult_size=ceiling(used/avail))
 
 # Subsample problematic individuals
 sub_set <- data.frame()
 for (i in 1:length(un.low)) {
   
-  temp <- used %>% 
+  temp <- used |> 
     filter(key==un.low[i]) 
   
   mult <- as.vector(low[low$key==un.low[i], "mult_size"])
   
   # keep every other point
-  temp <- temp %>% 
+  temp <- temp |> 
     filter(row_number() %% mult$mult_size == 0)
   
   # save subset
@@ -663,21 +663,21 @@ for (i in 1:length(un.low)) {
 
 }
 
-# n <- sub_set %>% group_by(key) %>% count()
+# n <- sub_set |> group_by(key) |> count()
 # l2 <- left_join(low, n, by="key")
-# l2 <- l2 %>%
+# l2 <- l2 |>
 #   mutate(check=if_else(n>avail, 1, 0))
 
-used <- used %>% filter(!(key %in% un.low))
+used <- used |> filter(!(key %in% un.low))
 used <- bind_rows(used, sub_set)
 ## Combine used and available points
 dat <- bind_rows(used, avail)
 
 # Check ratio of used:avail
-ratios <- dat %>% group_by(key, case) %>% count() %>%
-  pivot_wider(names_from=case, values_from=n) %>%
-  rename(used=`1`, avail=`0`) %>%
-  mutate(n_avail_used=avail/used) %>%
+ratios <- dat |> group_by(key, case) |> count() |>
+  pivot_wider(names_from=case, values_from=n) |>
+  rename(used=`1`, avail=`0`) |>
+  mutate(n_avail_used=avail/used) |>
   mutate(pts_needed_for_2x=used*2,
          additional_pts_needed=pts_needed_for_2x-avail)
 
