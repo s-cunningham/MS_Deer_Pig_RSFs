@@ -63,6 +63,7 @@ K <- do.call("bind_rows", K)
 K <- K |>
   # drop patches that have K of < 5
   # filter(K >= 5) |>
+  filter(value=="mean") |>
   # summarize by species, density and bin
   group_by(species, density, bin, value) |>
   reframe(K=sum(K), N0=sum(N0), avgHS=mean(AvgHS)) |> # might need to recalculate avgHS
