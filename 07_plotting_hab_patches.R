@@ -105,7 +105,8 @@ cwd <- project(cwd, crs(polylist$deer_core))
 cwd_deer_core <- crop(polylist$deer_core, cwd)   
 expanse(cwd_deer_core, unit="km")  
   
-  
+cwd_deer_marg <- crop(polylist$deer_marginal, cwd)   
+expanse(cwd_deer_marg, unit="km") 
   
 #### Create patch plot for manuscript ####
 ## For each species, combine into multiclass raster (mean predictions)
