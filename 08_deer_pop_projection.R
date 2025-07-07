@@ -7,13 +7,13 @@ Year <- 1:51
 Sims <- 1000
 
 # Variation in Survival
-s_pct_f <- 0.0001
+s_pct_f <- 0.005
 s_pct_m <- 0.02
-a <- 1.35
+a <- 1.62
 b <- 1
 
 # Carrying capacity
-K <- 600000
+K <- 1512638
 
 # Set up deer matrix
 deer.array <- array(0,dim=c(12,length(Year),Sims))
@@ -24,7 +24,8 @@ Fecundity <- c(0, 0.65, 0.76, 0.76, 0.76, 0.76)
 
 # Survival
 # Females
-deer.matrix[c(1,7),1:6] <- Fecundity
+deer.matrix[1,1:6] <- Fecundity
+deer.matrix[7,1:6] <- Fecundity
 deer.matrix[2,1] <- 0.52
 deer.matrix[3,2] <- 0.93
 deer.matrix[4,3] <- 0.84
@@ -44,7 +45,8 @@ w <- Re(eigen(deer.matrix)$vectors[, 1])
 w <- w / sum(w) # normals to equal 1
 
 # Set up initial popualtion size
-N0 <- w * 0.5 * K  # e.g., start at 50% of K
+N0 <- w * 0.8 * K  # e.g., start at 50% of K
+# N0 <- w * 1508996
 
 deer.array[,1,] <- N0
 
@@ -60,7 +62,7 @@ for(i in 1:Sims){
   # Survive & stay
   A_s[6,6] <- rnorm(1, deer.matrix[6,6], s_pct_f)
   # Male survival
-  for (s in 1:5) {
+  for (s in 1:5+6) {
     # Survive & go
     A_s[s+1,s] <- rnorm(1, deer.matrix[s+1,s], s_pct_m)
   }
@@ -79,7 +81,8 @@ for(i in 1:Sims){
 
     # save new matrix
     A_dd <- A_s
-    A_dd[c(1,7), ] <- A_s[c(1,7), ] * density_factor # reduce fecundity
+    A_dd[1, ] <- A_s[1, ] * density_factor # reduce fecundity
+    A_dd[7, ] <- A_s[7, ] * density_factor # reduce fecundity
     
     deer.array[,y,i]<-A_dd%*%deer.array[,y-1,i] #Make sure to multiply matrix x vector (not vice versa)
   }
@@ -89,7 +92,8 @@ N.median<-apply(apply(deer.array,c(2,3),sum),1,median)
 N.20pct<-apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
 N.80pct<-apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
-results<-data.frame(Year,N.median,N.20pct,N.80pct)
+results <- data.frame(Year,N.median,N.20pct,N.80pct)
+results <- results[5:max(Year),]
 
 #Plot population projection
 ggplot(results) +
@@ -100,3 +104,16 @@ ggplot(results) +
   theme_bw() +
   theme(text = element_text(size=16),panel.border = element_blank(), axis.line = element_line(colour="black"),
         panel.grid.major = element_blank(),panel.grid.minor = element_blank()) 
+
+## calculate lambda
+lambda <- results$N.median[2:nrow(results)] / results$N.median[1:(nrow(results)-1)]
+
+
+lambda <- seq(1,2,by=0.01)
+msy <- c()
+for (i in 1:length(lambda)) {
+  msy[i] <- ((lambda[i]-1)*K)/4
+}
+
+
+msy <- ((1.77-1)*1512638)/4
