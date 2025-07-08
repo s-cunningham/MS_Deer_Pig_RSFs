@@ -176,3 +176,39 @@ calibrate_a <- function(A, N0, K_obs) {
   return(result$root)
 }
 
+
+
+simulate_pop_th <- function(theta, A, N0, K_obs, years = 100) {
+  N <- matrix(NA, nrow = length(N0), ncol = years)
+  N[, 1] <- N0
+  
+  for (t in 1:(years - 1)) {
+    N_total <- sum(N[, t])
+    dd_factor <- max(1 - (N_total / K_obs)^theta, 0)
+    
+    A_dd <- A
+    A_dd[1, ] <- A[1, ] * dd_factor  # apply DD to fecundity only
+    N[, t + 1] <- A_dd %*% N[, t]
+  }
+  
+  return(sum(N[, years]))  # total pop at final time step
+}
+
+
+calibrate_theta <- function(A, N0, K_obs, years = 100) {
+  error_fn <- function(theta) simulate_pop_th(theta, A, N0, K_obs, years) - K_obs
+  
+  # Diagnostic plot (optional)
+  theta_vals <- seq(0.01, 50, length.out = 200)
+  errs <- sapply(theta_vals, error_fn)
+  plot(theta_vals, errs, type = "l", main = "Calibration curve for θ")
+  abline(h = 0, col = "red")
+  
+  # Only proceed if the curve crosses 0
+  if (min(errs) > 0 || max(errs) < 0) {
+    stop("Cannot calibrate θ: function does not cross zero in the given range.")
+  }
+  
+  result <- uniroot(error_fn, lower = 0.01, upper = 50)
+  return(result$root)
+}
