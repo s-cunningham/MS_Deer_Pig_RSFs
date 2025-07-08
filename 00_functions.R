@@ -149,3 +149,30 @@ lambda_calc <- function(x) {
   }
   return(lambda)
 }
+
+
+simulate_pop <- function(a, A, N0, K_obs, years = 100) {
+  N <- matrix(NA, nrow = nrow(A), ncol = years)
+  N[, 1] <- N0
+  
+  for (t in 1:(years - 1)) {
+    N_total <- sum(N[, t])
+    dd_factor <- 1 / (1 + a * (N_total / K_obs))
+    
+    A_dd <- A
+    A_dd[1, ] <- A[1, ] * dd_factor  # apply DD to fecundity row
+    N[, t + 1] <- A_dd %*% N[, t]
+  }
+  
+  final_N <- sum(N[, years])
+  return(final_N)
+}
+
+calibrate_a <- function(A, N0, K_obs) {
+  error_fn <- function(a) simulate_pop(a, A, N0, K_obs) - K_obs
+  
+  # Use uniroot to find a where error ≈ 0
+  result <- uniroot(error_fn, lower = 1e-6, upper = 100)
+  return(result$root)
+}
+

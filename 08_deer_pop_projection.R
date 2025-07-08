@@ -1,19 +1,20 @@
 library(ggplot2)
 
+source("00_functions.R")
 
 set.seed(123)
 ##Stochastistic model
-Year <- 1:51
+Year <- 1:100
 Sims <- 1000
 
 # Variation in Survival
 s_pct_f <- 0.005
 s_pct_m <- 0.02
 a <- 1.62
-b <- 1
+# a <- a_calibrated 
 
 # Carrying capacity
-K <- 1512638
+K <- 2347197
 
 # Set up deer matrix
 deer.array <- array(0,dim=c(12,length(Year),Sims))
@@ -45,7 +46,7 @@ w <- Re(eigen(deer.matrix)$vectors[, 1])
 w <- w / sum(w) # normals to equal 1
 
 # Set up initial popualtion size
-N0 <- w * 0.8 * K  # e.g., start at 50% of K
+N0 <- w * 0.01 * K  # e.g., start at 50% of K
 # N0 <- w * 1508996
 
 deer.array[,1,] <- N0
@@ -88,11 +89,12 @@ for(i in 1:Sims){
   }
   
 }
-N.median<-apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct<-apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
-N.80pct<-apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
+N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
+N.mean <- apply(apply(deer.array,c(2,3),sum),1,mean)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
-results <- data.frame(Year,N.median,N.20pct,N.80pct)
+results <- data.frame(Year,N.median,N.mean,N.20pct,N.80pct)
 results <- results[5:max(Year),]
 
 #Plot population projection
@@ -106,14 +108,20 @@ ggplot(results) +
         panel.grid.major = element_blank(),panel.grid.minor = element_blank()) 
 
 ## calculate lambda
-lambda <- results$N.median[2:nrow(results)] / results$N.median[1:(nrow(results)-1)]
+# lambda <- results$N.median[2:nrow(results)] / results$N.median[1:(nrow(results)-1)]
+
+# lambda <- max(Re(eigen(deer.matrix)$values))
 
 
-lambda <- seq(1,2,by=0.01)
-msy <- c()
-for (i in 1:length(lambda)) {
-  msy[i] <- ((lambda[i]-1)*K)/4
-}
+
+net <- results$N.median[2:nrow(results)] - results$N.median[1:(nrow(results)-1)]
+
+peak_idx <- which.max(net)
+msy <- net[peak_idx]
+pop_at_msy <- results$N.median[peak_idx+1]
+
+plot(results$N.median[2:nrow(results)], net, type="l")
+abline(h = msy, lty = 2, col = "blue")  # MSY line
+abline(v = pop_at_msy, lty = 2, col = "red")  # N at MSY
 
 
-msy <- ((1.77-1)*1512638)/4

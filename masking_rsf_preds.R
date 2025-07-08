@@ -37,3 +37,32 @@ global(pm_mask, "mean", na.rm=TRUE)
 
 global(dhm_mask, "mean", na.rm=TRUE)
 global(phm_mask, "mean", na.rm=TRUE)
+
+## Erase part of the rsf raster
+# Erase core (Deer)
+dm_ce <- mask(deer, d_core, inverse=TRUE)
+# mask to only marginal
+dm_ce <- mask(dm_ce, d_marg)
+# summarize
+global(dm_ce, "mean", na.rm=TRUE)
+
+# Erase marginal (Pigs)
+dhm_ce <- mask(deer, d_marg, inverse=TRUE)
+# mask to only very marginal
+dhm_ce <- mask(dhm_ce, d_very)
+# summarize
+global(dhm_ce, "mean", na.rm=TRUE)
+
+# Erase core (Pigs)
+pm_ce <- mask(pigs, p_core, inverse=TRUE)
+# mask to only marginal
+pm_ce <- mask(pm_ce, p_marg)
+# summarize
+global(pm_ce, "mean", na.rm=TRUE)
+
+# Erase marginal (Pigs)
+phm_ce <- mask(pigs, p_marg, inverse=TRUE)
+# mask to only very marginal
+phm_ce <- mask(phm_ce, p_very)
+# summarize
+global(phm_ce, "mean", na.rm=TRUE)
