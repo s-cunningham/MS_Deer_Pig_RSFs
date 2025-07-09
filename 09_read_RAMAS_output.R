@@ -66,13 +66,27 @@ K <- K |>
   # filter(value=="mean") |>
   # summarize by species, density and bin
   group_by(species, density, bin, value) |>
-  reframe(K=sum(K), N0=sum(N0), avgHS=mean(AvgHS)) |> # might need to recalculate avgHS
+  reframe(K=sum(K), N0=sum(N0), avgHS=mean(AvgHS), totHS=sum(TotalHS)) |> # might need to recalculate avgHS
   # replace actual density number with low and high
   mutate(density=if_else(density==14 | density==8, "low", "high")) 
 
 # Relabel species
 K <- K |>
   mutate(species=if_else(species=="deer", "White-tailed Deer", "Wild Pigs"))
+
+K <- K |>
+  filter(value=="mean") |>
+  # Filter to keep only rows with 0 or no digits
+  filter(str_detect(bin, "0") | !str_detect(bin, "\\d")) |>
+  # Drop initial abundance and average suitability value
+  select(-N0, -avgHS) |>
+  # drop marginal
+  filter(bin!="marginal") |>
+  # make 'above0' layer 'marginal'
+  mutate(bin=if_else(bin=="0", "marginal", bin)) |>
+  # pivot to wide format
+  pivot_wider(names_from="value", values_from="K")|>
+  filter(density=="high")
 
 ## Look at patch types
 Kpatch <- K |> 

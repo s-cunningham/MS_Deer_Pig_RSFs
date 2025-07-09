@@ -10,7 +10,7 @@ set.seed(123)
 Year <- 1:100
 
 # Carrying capacity
-K <- 2347197
+K <- 3168716
 
 # Set up deer matrix
 deer.array <- matrix(0,nrow=12, ncol=length(Year))
@@ -108,132 +108,16 @@ ggplot(df) +
   theme(axis.title=element_markdown(face="italic"),
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 
-
-#### Adjust fecundinty only 10-40% ####
-adj <- seq(1.05, 3, by=0.05)
-
-# Empty array to hold pop count
-deer.array <- array(0, dim=c(12,length(Year),length(adj)))
-deer.array[,1,] <- N0
-
-for (i in 1:length(adj)) {
-  
-  A_adj <- deer.matrix
-  A_adj[1, ] <- A_adj[1, ] * adj[i] 
-  A_adj[7, ] <- A_adj[7, ] * adj[i] 
-  
-  a <- calibrate_a(A_adj, N0, K)
-  cat("Calibrated a =", a, "\n")
-  
-  print(Re(eigen(A_adj)$values[1]))
-  
-  for (y in 2:length(Year)){
-    
-    # Density dependent adjustment in fecundity
-    # What was abundance at time step t-1
-    N_t <- sum(deer.array[,y-1,i])
-    
-    # Calcuate density factor
-    density_factor <- 1 / (1 + a * (N_t / K))
-    
-    # save new matrix
-    A_dd <- A_adj
-    A_dd[1, ] <- A_dd[1, ] * density_factor # reduce fecundity
-    A_dd[7, ] <- A_dd[7, ] * density_factor # reduce fecundity
-    
-    # Calculate new pop size
-    deer.array[,y,i] <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
-  }
-  
-}
-
-fec.incr <- apply(deer.array,c(2,3),sum)
-fec.incr <- as.data.frame(fec.incr)
-names(fec.incr) <- adj
-
-fec.incr <- fec.incr |>
-  as_tibble() |>
-  pivot_longer(1:length(adj),names_to="increase", values_to="Nt") |>
-  arrange(increase)
-
-# Calculate net change
-fec.net <- fec.incr |>
-  group_by(increase) |>
-  mutate(net=c(NA, diff(Nt))) |>
-  # drop NA rows
-  filter(!is.na(net))
-
-ggplot(fec.net) +
-  # coord_cartesian(ylim=c(0,309000)) +
-  geom_vline(xintercept=K) +
-  geom_hline(yintercept=220989, linetype=2, color="red") +
-  geom_line(aes(x=Nt, y=net, group=increase, color=increase))
-
-#### Adjust Male Survival only 5-50% ####
-adj <- seq(0.85, 1.5, by=0.05)
-
-# Empty array to hold pop count
-deer.array <- array(0, dim=c(12,length(Year),length(adj)))
-deer.array[,1,] <- N0
-
-for (i in 1:length(adj)) {
-  
-  A_adj <- deer.matrix
-  # A_adj[2:6,1:6] <- A_adj[2:6,1:6] * adj[i] 
-  A_adj[8:12,7:12] <- A_adj[8:12,7:12] * adj[i] 
-  
-  a <- calibrate_a(A_adj, N0, K)
-  cat("Calibrated a =", a, "\n")
-  # a <- 2
-  
-  for (y in 2:length(Year)){
-    
-    # Density dependent adjustment in fecundity
-    # What was abundance at time step t-1
-    N_t <- sum(deer.array[,y-1,i])
-    
-    # Calcuate density factor
-    density_factor <- 1 / (1 + a * (N_t / K))
-    
-    # save new matrix
-    A_dd <- A_adj
-    A_dd[1, ] <- A_dd[1, ] * density_factor # reduce fecundity
-    A_dd[7, ] <- A_dd[7, ] * density_factor # reduce fecundity
-    
-    # Calculate new pop size
-    deer.array[,y,i] <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
-  }
-  
-}
-
-surv.incr <- apply(deer.array,c(2,3),sum)
-surv.incr <- as.data.frame(surv.incr)
-names(surv.incr) <- adj
-
-surv.incr <- surv.incr |>
-  as_tibble() |>
-  pivot_longer(1:length(adj),names_to="increase", values_to="Nt") |>
-  arrange(increase)
-
-# Calculate net change
-surv.net <- surv.incr |>
-  group_by(increase) |>
-  mutate(net=c(NA, diff(Nt))) |>
-  # drop NA rows
-  filter(!is.na(net))
-
-ggplot(surv.net) +
-  # coord_cartesian(ylim=c(0,309000)) +
-  geom_hline(yintercept=220989, linetype=2, color="red") +
-  geom_line(aes(x=Nt, y=net, group=increase, color=increase))
-
-
-#### Adjust Survival and Fecundity 5-90% ####
-adj.f <- seq(1, 1.4, by=0.05)
-adj.s <- seq(1, 1.4, by=0.05)
+#### Adjust Survival and Fecundity ####
+adj.f <- seq(1, 2.5, by=0.04)
+adj.sm <- seq(0.9, 1.8, by=0.04)
+adj.sf <- seq(0.8, 1.2, by=0.04)
 
 # Create all combinations of adjustments
-adj <- expand.grid(f=adj.f, s=adj.s)
+adj <- expand.grid(f=adj.f, sm=adj.sm, sf=adj.sf)
+
+adj <- adj |>
+  distinct()
 
 # Empty array to hold pop count
 deer.array <- array(0, dim=c(12,length(Year),nrow(adj)))
@@ -242,17 +126,39 @@ deer.array[,1,] <- N0
 for (i in 1:nrow(adj)) {
   
   A_adj <- deer.matrix
-  A_adj[1, ] <- A_adj[1, ] * adj[i,1] 
-  A_adj[7, ] <- A_adj[7, ] * adj[i,1] 
-  # A_adj[2:6,1:6] <- A_adj[2:6,1:6]  * adj[i,2]
-  A_adj[8:12,7:12] <- A_adj[8:12,7:12] * adj[i,2] 
-  
+  A_adj[1, ] <- deer.matrix[1, ] * adj[i,1] 
+  A_adj[7, ] <- deer.matrix[7, ] * adj[i,1] 
+  # Female survival
+  for (s in 1:5) {
+    A_adj[s+1,s] <- min(deer.matrix[s+1,s]*adj[i,3], 1)
+  }
+  A_adj[6,6] <- min(deer.matrix[s+1,s]*adj[i,3], 1) 
+  # Male survival
+  for (s in 1:5+6) {
+    # Survive & go
+    A_adj[s+1,s] <- min(deer.matrix[s+1,s], 1)
+  }
+  # Survive & stay
+  A_adj[12,12] <- min(deer.matrix[12,12] * adj[i,2], 1)
+
+  # Check lambda
   print(Re(eigen(A_adj)$values[1]))
   
-  a <- calibrate_a(A_adj, N0, K)
+  a <- calibrate_a(A_adj, N0*100, K)
   cat("Calibrated a =", a, "\n")
   
   for (y in 2:length(Year)){
+    
+    # check buck to doe ratio (see Nagy-Reis et al. 2021 - 1.20)
+    # stable stage of the matrix
+    w <- Re(eigen(A_adj)$vectors[, 1])
+    w <- w / sum(w) # normalize to equal 1
+    # sum males
+    wf <- sum(w[1:6]*deer.array[1:6,y-1,i])
+    wm <- sum(w[7:12]*deer.array[7:12,y-1,i])
+    # buck to doe ratio
+    bdr <- wf/wm
+    
     
     # Density dependent adjustment in fecundity
     # What was abundance at time step t-1
@@ -269,8 +175,13 @@ for (i in 1:nrow(adj)) {
     # Calculate new pop size
     deer.array[,y,i] <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
   }
-  
+
+    
+
 }
+
+# Remove rows with NAs
+
 
 both.incr <- apply(deer.array,c(2,3),sum)
 both.incr <- as.data.frame(both.incr)
@@ -297,3 +208,32 @@ ggplot(both.net) +
   theme(legend.position="none")
 
 
+
+
+both.net |>
+  group_by(increase) |>
+  reframe(max_change=max(net)) |>
+  slice_max(max_change)
+
+# Which combination had MSY closest to observed harvest
+max_pop <- both.net |>
+  filter(increase=="V306")
+
+## Plot line with greatest MSY
+ggplot(both.net) +
+  geom_hline(yintercept=220989, linetype=2, color="red") +
+  geom_smooth(aes(x=Nt, y=net, group=increase), color="gray", alpha=0.1, linewidth=0.1) +
+  geom_line(data=df, aes(x=Nt, y=net), linewidth=1) +
+  geom_smooth(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c") +
+  theme_classic() +
+  theme(legend.position="none")
+
+
+# Population based on matrix with greatest MSY
+i <- 306
+
+A_adj <- deer.matrix
+A_adj[1, ] <- A_adj[1, ] * adj[i,1] 
+A_adj[7, ] <- A_adj[7, ] * adj[i,1] 
+# A_adj[2:6,1:6] <- deer.matrix[2:6,1:6] * adj[i,2] 
+A_adj[8:12,7:12] <- deer.matrix[8:12,7:12] * adj[i,2] 
