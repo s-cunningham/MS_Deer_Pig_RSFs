@@ -833,8 +833,8 @@ sim_plot <- ggplot(allSims) +
 ## Plot line with greatest MSY
 
 df$increase <- "Original Matrix"
-
-
+max_pop$increase <- "New Matrix"
+df <- bind_rows(df, max_pop)
 
 msy_plot <- ggplot(both.net) +
   geom_hline(yintercept=308887, linetype=2, color="black") +
