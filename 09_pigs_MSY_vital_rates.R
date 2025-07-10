@@ -1,5 +1,7 @@
 library(ggplot2)
 library(ggtext)
+library(patchwork)
+
 
 source("00_functions.R")
 
@@ -100,7 +102,7 @@ ggplot(df) +
   
 #### Adjust Survival and Fecundity 5-90% ####
 adj.f <- seq(0.95, 3.0, by=0.1)
-adj.s <- seq(0.75, 1.9, by=0.1)
+adj.s <- seq(0.75, 2.0, by=0.1)
 
 # Create all combinations of adjustments
 adj <- expand.grid(f=adj.f, s=adj.s)
@@ -164,6 +166,7 @@ ggplot(both.net) +
   geom_hline(yintercept=308887, linetype=2, color="red") +
   geom_smooth(aes(x=Nt, y=net, group=increase, color=increase), alpha=0.5, linewidth=0.5) +
   geom_line(data=df, aes(x=Nt, y=net), linewidth=1) +
+  labs(x="N<sub>t</sub>", y="N<sub>t-1</sub> - N<sub>t</sub>") +
   theme(legend.position="none")
 
 
@@ -178,12 +181,15 @@ max_pop <- both.net |>
 
 ## Plot line with greatest MSY
 ggplot(both.net) +
-  geom_hline(yintercept=308887, linetype=2, color="red") +
+  geom_hline(yintercept=308887, linetype=1, color="red") +
   geom_smooth(aes(x=Nt, y=net, group=increase), color="gray", alpha=0.1, linewidth=0.1) +
   geom_line(data=df, aes(x=Nt, y=net), linewidth=1) +
   geom_smooth(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c") +
+  labs(x="N<sub>t</sub>", y="N<sub>t-1</sub> - N<sub>t</sub>") +
   theme_classic() +
-  theme(legend.position="none")
+  theme(legend.position="none",
+        axis.title=element_markdown(),
+        panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 
 
 # Population based on matrix with greatest MSY
@@ -261,13 +267,13 @@ ggplot(results) +
 #### Add in stochasticity in vital rates ####
 
 ##Stochastistic model
-Year <- 1:30
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
-s_pct_f <- 0.08
-s_pct_m <- 0.08
-f_pct <- 0.08
+s_pct_f <- 0.1
+s_pct_m <- 0.1
+f_pct <- 0.1
 
 # Empty array to hold pop count
 pig.array <- array(0,dim=c(6,length(Year),Sims))
@@ -329,8 +335,7 @@ for (i in 1:Sims) {
     
     ## Harvest pigs
     # Randomly select a random number to harvest
-    # h <- rnorm(1, 280000, 15000)
-    h <- rnorm(1, 300000, 10000)
+    h <- rnorm(1, 300000, 15000)
     print(h)
     r <- (N_next[,1] / sum(N_next[,1]))*h
     
@@ -357,14 +362,20 @@ ggplot(results) +
   theme(text = element_text(size=16),panel.border = element_blank(), axis.line = element_line(colour="black"),
         panel.grid.major = element_blank(),panel.grid.minor = element_blank()) 
 
-#### Harvest more ####
-Year <- 1:30
+# Save to add different harvest levels
+results$nHarvest <- "300000" 
+allSims <- results
+
+
+#### 200K per year harvest ####
+##Stochastistic model
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
-s_pct_f <- 0.05
-s_pct_m <- 0.05
-f_pct <- 0.05
+s_pct_f <- 0.1
+s_pct_m <- 0.1
+f_pct <- 0.1
 
 # Empty array to hold pop count
 pig.array <- array(0,dim=c(6,length(Year),Sims))
@@ -376,16 +387,12 @@ w <- w / sum(w) # normals to equal 1
 # Set up initial popualtion size
 N0 <- w * 0.5 * K  # e.g., start at 50% of K
 
-# Pct harvest
-h_rate <- matrix(c(0.7,0.5,0.5,0.2,0.5,0.5), nrow=6, ncol=1)
-
-# Save # harvested
-n_harvest <- array(0,dim=c(6,length(Year),Sims))
-
 # Fill starting population
 pig.array[,1,] <- N0
 
-set.seed(123)
+harvest <- matrix(0, nrow=length(Year), Sims)
+
+set.seed(1)
 for (i in 1:Sims) {
   
   ## Stochasticity on Survival
@@ -412,7 +419,6 @@ for (i in 1:Sims) {
   # Calibrate a
   a <- calibrate_a(A_s, N0, K)
 
-  
   for (y in 2:length(Year)){
     
     # Density dependent adjustment in fecundity
@@ -430,35 +436,33 @@ for (i in 1:Sims) {
     # Calculate new pop size
     N_next <- A_dd %*% pig.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
     
-    if (y > 9) {
-      ## Harvest pigs
-      h <- N_next * h_rate
-      N_next <- N_next - h
-      
-      # Save n harvested
-      n_harvest[,y,i] <- h
-
-    } else {
-      h <- rnorm(1, 300000, 10000)
-      print(h)
-      r <- (N_next[,1] / sum(N_next[,1]))*h
-      
-      N_next <- N_next - r
-    }
+    ## Harvest pigs
+    # Randomly select a random number to harvest
+    h <- rnorm(1, 200000, 15000)
+    
+    harvest[y,i] <- h
+    
+    r <- (N_next[,1] / sum(N_next[,1]))*h
+    
+    N_next <- N_next - r
+    
     # Save abundance
     pig.array[,y,i] <- pmax(N_next, 0) 
   }
 }
-N.median <- apply(apply(pig.array,c(2,3), sum),1, median)
-N.20pct <- apply(apply(pig.array,c(2,3), sum), 1, quantile, probs=0.20)
-N.80pct <- apply(apply(pig.array,c(2,3), sum), 1, quantile, probs=0.80)
+N.median <- apply(apply(pig.array,c(2,3),sum),1,median)
+N.20pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.80)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
+
+
+harvest <- apply(harvest, 1, median)
 
 #Plot population projection
 ggplot(results) +
   coord_cartesian(ylim=c(0, 2100000)) +
-  # geom_hline(yintercept=K) +
+  geom_hline(yintercept=K) +
   geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="purple") +
   geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1) +
   scale_y_continuous(name="Abundance (total population)")+
@@ -466,6 +470,385 @@ ggplot(results) +
   theme(text = element_text(size=16),panel.border = element_blank(), axis.line = element_line(colour="black"),
         panel.grid.major = element_blank(),panel.grid.minor = element_blank()) 
 
-# median harvest
-h.median <- apply(apply(n_harvest,c(2,3),sum),1,median)
+# Save to add different harvest levels
+results$nHarvest <- "200000" 
+allSims <- bind_rows(allSims, results)
 
+#### 400K per year harvest ####
+##Stochastistic model
+Year <- 1:20
+Sims <- 1000
+
+# Variation in Survival
+s_pct_f <- 0.1
+s_pct_m <- 0.1
+f_pct <- 0.1
+
+# Empty array to hold pop count
+pig.array <- array(0,dim=c(6,length(Year),Sims))
+
+# Calculate stable stage distribution
+w <- Re(eigen(A_adj)$vectors[, 1])
+w <- w / sum(w) # normals to equal 1
+
+# Set up initial popualtion size
+N0 <- w * 0.5 * K  # e.g., start at 50% of K
+
+# Fill starting population
+pig.array[,1,] <- N0
+
+harvest <- matrix(0, nrow=length(Year), Sims)
+
+set.seed(1)
+for (i in 1:Sims) {
+  
+  ## Stochasticity on Survival
+  A_s <- A_adj
+  # Female survival
+  for (s in 1:2) {
+    # Survive & go
+    A_s[s+1,s] <-  + rnorm(1, A_adj[s+1,s], A_adj[s+1,s]*s_pct_f)
+  }
+  # Survive & stay
+  A_s[3,3] <- rnorm(1, A_adj[3,3], A_adj[3,3]*s_pct_f)
+  # Male survival
+  for (s in 4:5) {
+    # Survive & go
+    A_s[s+1,s] <- rnorm(1, A_adj[s+1,s], A_adj[s+1,s]*s_pct_m)
+  }
+  # Survive & stay
+  A_s[6,6] <- rnorm(1, A_adj[6,6], A_adj[6,6]*s_pct_m)
+  
+  ## Some stochasticity in fecundity
+  A_s[1,1:3] <- rnorm(3, A_adj[1,1:3], A_adj[1,1:3]*s_pct_m)
+  A_s[4,1:3] <- rnorm(3, A_adj[4,1:3], A_adj[4,1:3]*s_pct_m)
+  
+  # Calibrate a
+  a <- calibrate_a(A_s, N0, K)
+
+  for (y in 2:length(Year)){
+
+    # Density dependent adjustment in fecundity
+    # What was abundance at time step t-1
+    N_t <- sum(pig.array[,y-1,i])
+    
+    # Calcuate density factor
+    density_factor <- 1 / (1 + a * (N_t / K))
+    
+    # save new matrix
+    A_dd <- A_s
+    A_dd[1, ] <- A_dd[1, ] * density_factor # reduce fecundity
+    A_dd[4, ] <- A_dd[4, ] * density_factor # reduce fecundity
+    
+    # Calculate new pop size
+    N_next <- A_dd %*% pig.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
+    
+    if (sum(N_next)>0) {
+      ## Harvest pigs
+      # Randomly select a random number to harvest
+      h <- rnorm(1, 400000, 15000)
+      
+      harvest[y,i] <- h
+      
+      r <- (N_next[,1] / sum(N_next[,1]))*h
+      
+      N_next <- N_next - r
+      
+      # Save abundance
+      pig.array[,y,i] <- pmax(N_next, 0) 
+    }
+  }
+}
+N.median <- apply(apply(pig.array,c(2,3),sum),1,median)
+N.20pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.80)
+
+results <- data.frame(Year,N.median,N.20pct,N.80pct)
+
+harvest <- apply(harvest, 1, median)
+
+#Plot population projection
+ggplot(results) +
+  coord_cartesian(ylim=c(0, 2100000)) +
+  geom_hline(yintercept=K) +
+  geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="purple") +
+  geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1) +
+  scale_y_continuous(name="Abundance (total population)")+
+  theme_bw() +
+  theme(text = element_text(size=16),panel.border = element_blank(), axis.line = element_line(colour="black"),
+        panel.grid.major = element_blank(),panel.grid.minor = element_blank()) 
+
+# Save to add different harvest levels
+results$nHarvest <- "400000"
+allSims <- bind_rows(allSims, results)
+
+
+#### more variable per year harvest ####
+##Stochastistic model
+Year <- 1:20
+Sims <- 1000
+
+# Variation in Survival
+s_pct_f <- 0.1
+s_pct_m <- 0.1
+f_pct <- 0.1
+
+# Empty array to hold pop count
+pig.array <- array(0,dim=c(6,length(Year),Sims))
+
+# Calculate stable stage distribution
+w <- Re(eigen(A_adj)$vectors[, 1])
+w <- w / sum(w) # normals to equal 1
+
+# Set up initial popualtion size
+N0 <- w * 0.5 * K  # e.g., start at 50% of K
+
+# Fill starting population
+pig.array[,1,] <- N0
+
+harvest <- matrix(0, nrow=length(Year), Sims)
+
+set.seed(1)
+for (i in 1:Sims) {
+  
+  ## Stochasticity on Survival
+  A_s <- A_adj
+  # Female survival
+  for (s in 1:2) {
+    # Survive & go
+    A_s[s+1,s] <-  + rnorm(1, A_adj[s+1,s], A_adj[s+1,s]*s_pct_f)
+  }
+  # Survive & stay
+  A_s[3,3] <- rnorm(1, A_adj[3,3], A_adj[3,3]*s_pct_f)
+  # Male survival
+  for (s in 4:5) {
+    # Survive & go
+    A_s[s+1,s] <- rnorm(1, A_adj[s+1,s], A_adj[s+1,s]*s_pct_m)
+  }
+  # Survive & stay
+  A_s[6,6] <- rnorm(1, A_adj[6,6], A_adj[6,6]*s_pct_m)
+  
+  ## Some stochasticity in fecundity
+  A_s[1,1:3] <- rnorm(3, A_adj[1,1:3], A_adj[1,1:3]*s_pct_m)
+  A_s[4,1:3] <- rnorm(3, A_adj[4,1:3], A_adj[4,1:3]*s_pct_m)
+  
+  # Calibrate a
+  a <- calibrate_a(A_s, N0, K)
+
+  for (y in 2:length(Year)){
+    
+    # Density dependent adjustment in fecundity
+    # What was abundance at time step t-1
+    N_t <- sum(pig.array[,y-1,i])
+    
+    # Calcuate density factor
+    density_factor <- 1 / (1 + a * (N_t / K))
+    
+    # save new matrix
+    A_dd <- A_s
+    A_dd[1, ] <- A_dd[1, ] * density_factor # reduce fecundity
+    A_dd[4, ] <- A_dd[4, ] * density_factor # reduce fecundity
+    
+    # Calculate new pop size
+    N_next <- A_dd %*% pig.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
+    if (sum(N_next)>0) {
+    ## Harvest pigs
+    # Randomly select a random number to harvest
+    h <- runif(1, 100000, 450000)
+    
+    harvest[y,i] <- h
+    
+    r <- (N_next[,1] / sum(N_next[,1]))*h
+    
+    N_next <- N_next - r
+    
+    # Save abundance
+    pig.array[,y,i] <- pmax(N_next, 0) 
+    }
+  }
+}
+N.median <- apply(apply(pig.array,c(2,3),sum),1,median)
+N.20pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.80)
+
+results <- data.frame(Year,N.median,N.20pct,N.80pct)
+
+harvest <- apply(harvest, 1, median)
+
+#Plot population projection
+ggplot(results) +
+  coord_cartesian(ylim=c(0, 2100000)) +
+  geom_hline(yintercept=K) +
+  geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="purple") +
+  geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1) +
+  scale_y_continuous(name="Abundance (total population)")+
+  theme_bw() +
+  theme(text = element_text(size=16),panel.border = element_blank(), axis.line = element_line(colour="black"),
+        panel.grid.major = element_blank(),panel.grid.minor = element_blank()) 
+
+# Save to add different harvest levels
+results$nHarvest <- "Variable"
+allSims <- bind_rows(allSims, results)
+
+
+
+
+#### Gradual increase in harvest ####
+##Stochastistic model
+Year <- 1:20
+Sims <- 1000
+
+# Variation in Survival
+s_pct_f <- 0.1
+s_pct_m <- 0.1
+f_pct <- 0.1
+
+# Empty array to hold pop count
+pig.array <- array(0,dim=c(6,length(Year),Sims))
+
+# Calculate stable stage distribution
+w <- Re(eigen(A_adj)$vectors[, 1])
+w <- w / sum(w) # normals to equal 1
+
+# Set up initial popualtion size
+N0 <- w * 0.5 * K  # e.g., start at 50% of K
+
+# Fill starting population
+pig.array[,1,] <- N0
+
+harvest <- matrix(0, nrow=length(Year), Sims)
+
+set.seed(1)
+for (i in 1:Sims) {
+  
+  ## Stochasticity on Survival
+  A_s <- A_adj
+  # Female survival
+  for (s in 1:2) {
+    # Survive & go
+    A_s[s+1,s] <-  + rnorm(1, A_adj[s+1,s], A_adj[s+1,s]*s_pct_f)
+  }
+  # Survive & stay
+  A_s[3,3] <- rnorm(1, A_adj[3,3], A_adj[3,3]*s_pct_f)
+  # Male survival
+  for (s in 4:5) {
+    # Survive & go
+    A_s[s+1,s] <- rnorm(1, A_adj[s+1,s], A_adj[s+1,s]*s_pct_m)
+  }
+  # Survive & stay
+  A_s[6,6] <- rnorm(1, A_adj[6,6], A_adj[6,6]*s_pct_m)
+  
+  ## Some stochasticity in fecundity
+  A_s[1,1:3] <- rnorm(3, A_adj[1,1:3], A_adj[1,1:3]*s_pct_m)
+  A_s[4,1:3] <- rnorm(3, A_adj[4,1:3], A_adj[4,1:3]*s_pct_m)
+  
+  # Calibrate a
+  a <- calibrate_a(A_s, N0, K)
+  
+  baseH <- rnorm(1, 100000, 10000)
+  
+  for (y in 2:length(Year)){
+    
+    # Density dependent adjustment in fecundity
+    # What was abundance at time step t-1
+    N_t <- sum(pig.array[,y-1,i])
+    
+    # Calcuate density factor
+    density_factor <- 1 / (1 + a * (N_t / K))
+    
+    # save new matrix
+    A_dd <- A_s
+    A_dd[1, ] <- A_dd[1, ] * density_factor # reduce fecundity
+    A_dd[4, ] <- A_dd[4, ] * density_factor # reduce fecundity
+    
+    # Calculate new pop size
+    N_next <- A_dd %*% pig.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
+    if (sum(N_next)>0) {
+      ## Harvest pigs
+      h <- baseH + (y-1)*rnorm(1,20000,5)
+      
+      harvest[y,i] <- h
+      
+      r <- (N_next[,1] / sum(N_next[,1]))*h
+      
+      N_next <- N_next - r
+      
+      # Save abundance
+      pig.array[,y,i] <- pmax(N_next, 0) 
+    }
+  }
+}
+N.median <- apply(apply(pig.array,c(2,3),sum),1,median)
+N.20pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.80)
+
+results <- data.frame(Year,N.median,N.20pct,N.80pct)
+
+harvest <- apply(harvest, 1, median)
+
+#Plot population projection
+ggplot(results) +
+  coord_cartesian(ylim=c(0, 2100000)) +
+  geom_hline(yintercept=K) +
+  geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="purple") +
+  geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1) +
+  scale_y_continuous(name="Abundance (total population)")+
+  theme_bw() +
+  theme(text = element_text(size=16),panel.border = element_blank(), axis.line = element_line(colour="black"),
+        panel.grid.major = element_blank(),panel.grid.minor = element_blank()) 
+
+# Save to add different harvest levels
+results$nHarvest <- "Gradual"
+allSims <- bind_rows(allSims, results)
+
+#### Plot all scenarios ####
+allSims$nHarvest <- factor(allSims$nHarvest, levels=c("200000","300000","400000","Variable","Gradual"),
+                           labels=c("200,000 year<sup>-1</sup>","300,000 year<sup>-1</sup>","400,000 year<sup>-1</sup>",
+                                    "Variable (~100,000-450,000)","Gradual Increase (~120,000-480,000 year<sup>-1</sup>)"))
+
+
+
+sim_plot <- ggplot(allSims) +
+  coord_cartesian(ylim=c(-100000, 2100000)) +
+  geom_hline(yintercept=K, linewidth=0.5, color="black", linetype=3) +
+  geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct, group=nHarvest, fill=nHarvest), alpha=.5) +
+  geom_line(aes(x=Year, y=N.median, group=nHarvest, color=nHarvest)) +
+  scale_color_manual(values=c("#fde725","#5ec962","#21918c","#3b528b","#440154")) +
+  scale_fill_manual(values=c("#fde725","#5ec962","#21918c","#3b528b","#440154")) +
+  guides(
+    colour = guide_legend(position = "inside", title="Harvest"),
+    fill = guide_legend(position = "inside", title="Harvest")
+  ) +
+  scale_y_continuous(labels=c(0, 0.5, 1, 1.5, 2)) +
+  labs(x="Simulation year", y="<i>N<sub>t</sub></i> (in millions)") +
+  theme_classic() +
+  theme(panel.border=element_rect(fill=NA),
+        legend.position.inside=c(0,0),
+        legend.justification=c(0,0),
+        legend.background=element_rect(fill=NA),
+        legend.text=element_markdown(),
+        axis.title=element_markdown()) 
+
+
+## Plot line with greatest MSY
+
+df$increase <- "Original Matrix"
+
+
+
+msy_plot <- ggplot(both.net) +
+  geom_hline(yintercept=308887, linetype=2, color="black") +
+  geom_smooth(aes(x=Nt, y=net, group=increase), color="gray", alpha=0.1, linewidth=0.1) +
+  geom_line(data=df, aes(x=Nt, y=net), linewidth=1, color="#440154") +
+  geom_smooth(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c") +
+  labs(x="<i>N<sub>t</sub></i> (in millions)", 
+       y="<i>N<sub>t-1</sub> - N<sub>t</sub></i> (in thousands)") +
+  scale_y_continuous(labels=c(0,100,200,300)) +
+  scale_x_continuous(labels=c(0,0.5,1,1.5,2)) +
+  theme_classic() +
+  theme(legend.position="none",
+        axis.title=element_markdown(),
+        panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
+
+
+msy_plot + sim_plot

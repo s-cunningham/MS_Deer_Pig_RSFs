@@ -10,7 +10,7 @@ set.seed(123)
 Year <- 1:100
 
 # Carrying capacity
-K <- 3168716
+K <- 2347197
 
 # Set up deer matrix
 deer.array <- matrix(0,nrow=12, ncol=length(Year))
@@ -109,9 +109,9 @@ ggplot(df) +
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 
 #### Adjust Survival and Fecundity ####
-adj.f <- seq(1, 2.5, by=0.04)
-adj.sm <- seq(0.9, 1.8, by=0.04)
-adj.sf <- seq(0.8, 1.2, by=0.04)
+adj.f <- seq(1, 2, by=0.1)
+adj.sm <- seq(1, 1.9, by=0.1)
+adj.sf <- seq(1, 1.1, by=0.02)
 
 # Create all combinations of adjustments
 adj <- expand.grid(f=adj.f, sm=adj.sm, sf=adj.sf)
@@ -138,13 +138,17 @@ for (i in 1:nrow(adj)) {
     # Survive & go
     A_adj[s+1,s] <- min(deer.matrix[s+1,s], 1)
   }
+  # adjust yearling males
+  A_adj[9,8] <- ifelse(A_adj[9,8] > 1, A_adj[3,2], A_adj[9,8])
   # Survive & stay
-  A_adj[12,12] <- min(deer.matrix[12,12] * adj[i,2], 1)
+  A_adj[12,12] <- deer.matrix[12,12] * adj[i,2]
+  # adjust oldes males
+  # A_adj[12,12] <- ifelse(A_adj[12,12] > 1, A_adj[9,8], A_adj[12,12])
 
   # Check lambda
   print(Re(eigen(A_adj)$values[1]))
   
-  a <- calibrate_a(A_adj, N0*100, K)
+  a <- calibrate_a(A_adj, N0*1000, K)
   cat("Calibrated a =", a, "\n")
   
   for (y in 2:length(Year)){
@@ -180,9 +184,6 @@ for (i in 1:nrow(adj)) {
 
 }
 
-# Remove rows with NAs
-
-
 both.incr <- apply(deer.array,c(2,3),sum)
 both.incr <- as.data.frame(both.incr)
 # names(both.incr) <- adj.f
@@ -217,7 +218,7 @@ both.net |>
 
 # Which combination had MSY closest to observed harvest
 max_pop <- both.net |>
-  filter(increase=="V306")
+  filter(increase=="V110")
 
 ## Plot line with greatest MSY
 ggplot(both.net) +
@@ -230,10 +231,26 @@ ggplot(both.net) +
 
 
 # Population based on matrix with greatest MSY
-i <- 306
+i <- 110
 
 A_adj <- deer.matrix
-A_adj[1, ] <- A_adj[1, ] * adj[i,1] 
-A_adj[7, ] <- A_adj[7, ] * adj[i,1] 
-# A_adj[2:6,1:6] <- deer.matrix[2:6,1:6] * adj[i,2] 
-A_adj[8:12,7:12] <- deer.matrix[8:12,7:12] * adj[i,2] 
+A_adj[1, ] <- deer.matrix[1, ] * adj[i,1] 
+A_adj[7, ] <- deer.matrix[7, ] * adj[i,1] 
+# Female survival
+for (s in 1:5) {
+  A_adj[s+1,s] <- min(deer.matrix[s+1,s]*adj[i,3], 1)
+}
+A_adj[6,6] <- min(deer.matrix[s+1,s]*adj[i,3], 1) 
+# Male survival
+for (s in 1:5+6) {
+  # Survive & go
+  A_adj[s+1,s] <- min(deer.matrix[s+1,s], 1)
+}
+# adjust yearling males
+A_adj[9,8] <- ifelse(A_adj[9,8] > 1, A_adj[3,2], A_adj[9,8])
+
+# Survive & stay
+A_adj[12,12] <- min(deer.matrix[12,12] * adj[i,2], 1)
+A_adj[12,12] <- ifelse(A_adj[12,12] > 1, A_adj[9,8], A_adj[12,12])
+print(Re(eigen(A_adj)$values[1]))
+
