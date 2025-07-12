@@ -13,7 +13,6 @@ Year <- 1:100
 K <- 2347197
 
 # Set up deer matrix
-deer.array <- matrix(0,nrow=12, ncol=length(Year))
 deer.matrix <- matrix(0,12,12)
 
 # Fecundity
@@ -42,15 +41,16 @@ w <- Re(eigen(deer.matrix)$vectors[, 1])
 w <- w / sum(w) # normalize to equal 1
 
 # Set up initial popualtion size
-N0 <- w * 0.01 * K  # e.g., start at 50% of K
+N0 <- w * 0.1 * K  # e.g., start at 50% of K
 
 # Calibrate density dependence parameter
 a <- calibrate_a(deer.matrix, N0, K)
 cat("Calibrated a =", a, "\n")
 
-# a <- 1.63
+# print(Re(eigen(deer.matrix)$values[1]))
 
 # Empty array to hold pop count
+deer.array <- matrix(0,nrow=12, ncol=length(Year))
 deer.array[,1] <- N0
 
 lambda <- Re(eigen(deer.matrix)$values[1])  
@@ -62,14 +62,14 @@ for (y in 2:length(Year)){
   N_t <- sum(deer.array[,y-1])
   
   # Calcuate density factor
-  density_factor <- 1 / (1 + a * (N_t / K))
-  # density_factor <- max(1 - (N_t / K)^theta, 0)
-  # density_factor <- max(1 - (N_t / K), 0)
+  # density_factor <- 1 / (1 + a * (N_t / K))
+  density_factor <- max(1 / (1 + a * (N_t / K)), 0)
+  # density_factor <- max(1 - a * (N_t / K), 0)
   
   # save new matrix
   A_dd <- deer.matrix
-  A_dd[1, ] <- A_dd[1, ] * density_factor # reduce fecundity
-  A_dd[7, ] <- A_dd[7, ] * density_factor # reduce fecundity
+  A_dd[1,2:6] <- A_dd[1,2:6] * density_factor # reduce fecundity
+  A_dd[7,2:6] <- A_dd[7,2:6] * density_factor # reduce fecundity
   
   # Calculate new pop size
   deer.array[,y] <- A_dd %*% deer.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)
@@ -109,67 +109,79 @@ ggplot(df) +
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 
 #### Adjust Survival and Fecundity ####
-adj.f <- seq(1, 2, by=0.1)
-adj.sm <- seq(1, 1.9, by=0.1)
-adj.sf <- seq(1, 1.1, by=0.02)
+adj.f <- seq(1, 1.5, by=0.1)
+adj.sF <- seq(0.5, 1.5, by=0.05)
+adj.sAm <- seq(0.8, 1.55, by=0.05)
+adj.sAf <- seq(0.9, 1.18, by=0.02)
 
 # Create all combinations of adjustments
-adj <- expand.grid(f=adj.f, sm=adj.sm, sf=adj.sf)
+adj <- expand.grid(f=adj.f, sF=adj.sF, sf=adj.sAf, sm=adj.sAm)
 
 adj <- adj |>
   distinct()
 
 # Empty array to hold pop count
 deer.array <- array(0, dim=c(12,length(Year),nrow(adj)))
-deer.array[,1,] <- N0
 
 for (i in 1:nrow(adj)) {
   
   A_adj <- deer.matrix
+  # Fecundity
   A_adj[1, ] <- deer.matrix[1, ] * adj[i,1] 
   A_adj[7, ] <- deer.matrix[7, ] * adj[i,1] 
-  # Female survival
-  for (s in 1:5) {
-    A_adj[s+1,s] <- min(deer.matrix[s+1,s]*adj[i,3], 1)
+  
+  # Fawn survival
+  A_adj[2,1] <- deer.matrix[2,1] * adj[i,2]
+  A_adj[8,7] <- deer.matrix[2,1] * adj[i,2]
+  
+  # Adult female survival
+  for (s in 3:5) {
+    A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,3]
   }
-  A_adj[6,6] <- min(deer.matrix[s+1,s]*adj[i,3], 1) 
-  # Male survival
-  for (s in 1:5+6) {
-    # Survive & go
-    A_adj[s+1,s] <- min(deer.matrix[s+1,s], 1)
+  # Survive & stay (oldest females)
+  A_adj[6,6] <- deer.matrix[s+1,s]*adj[i,3] 
+  # Adult male survival
+  for (s in 9:11) {
+    A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,4]
   }
-  # adjust yearling males
-  A_adj[9,8] <- ifelse(A_adj[9,8] > 1, A_adj[3,2], A_adj[9,8])
-  # Survive & stay
-  A_adj[12,12] <- deer.matrix[12,12] * adj[i,2]
-  # adjust oldes males
-  # A_adj[12,12] <- ifelse(A_adj[12,12] > 1, A_adj[9,8], A_adj[12,12])
+  # Survive & stay (oldest males)
+  A_adj[12,12] <- deer.matrix[12,12] * adj[i,4]
 
   # Check lambda
   print(Re(eigen(A_adj)$values[1]))
   
-  a <- calibrate_a(A_adj, N0*1000, K)
-  cat("Calibrated a =", a, "\n")
+  a <- calibrate_a_opt(A_adj, N0, K)
+  # cat("Calibrated a =", a, "\n")
+  
+  # Calculate stable stage distribution
+  w <- Re(eigen(adj)$vectors[, 1])
+  w <- w / sum(w) # normalize to equal 1
+  
+  # Set up initial popualtion size
+  N0 <- w * 0.1 * K
+  
+  deer.array[,1,i] <- N0
   
   for (y in 2:length(Year)){
     
     # check buck to doe ratio (see Nagy-Reis et al. 2021 - 1.20)
     # stable stage of the matrix
-    w <- Re(eigen(A_adj)$vectors[, 1])
-    w <- w / sum(w) # normalize to equal 1
-    # sum males
-    wf <- sum(w[1:6]*deer.array[1:6,y-1,i])
-    wm <- sum(w[7:12]*deer.array[7:12,y-1,i])
-    # buck to doe ratio
-    bdr <- wf/wm
-    
-    
+    # w <- Re(eigen(A_adj)$vectors[, 1])
+    # w <- w / sum(w) # normalize to equal 1
+    # # sum males
+    # wf <- sum(w[1:6]*deer.array[1:6,y-1,i])
+    # wm <- sum(w[7:12]*deer.array[7:12,y-1,i])
+    # # buck to doe ratio
+    # bdr <- wf/wm
+    # 
+    # 
     # Density dependent adjustment in fecundity
     # What was abundance at time step t-1
     N_t <- sum(deer.array[,y-1,i])
     
     # Calcuate density factor
-    density_factor <- 1 / (1 + a * (N_t / K))
+    # density_factor <- max(1 - a * (N_t / K), 0)
+    density_factor <- max(1 / (1 + a * (N_t / K)), 0)
     
     # save new matrix
     A_dd <- A_adj
@@ -179,9 +191,6 @@ for (i in 1:nrow(adj)) {
     # Calculate new pop size
     deer.array[,y,i] <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
   }
-
-    
-
 }
 
 both.incr <- apply(deer.array,c(2,3),sum)

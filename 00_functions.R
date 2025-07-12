@@ -172,11 +172,19 @@ calibrate_a <- function(A, N0, K_obs) {
   error_fn <- function(a) simulate_pop(a, A, N0, K_obs) - K_obs
   
   # Use uniroot to find a where error ≈ 0
-  result <- uniroot(error_fn, lower = 1e-6, upper = 100)
+  result <- uniroot(error_fn, lower = 1e-6, upper = 500,extendInt = "yes")
+  # result <- optimize(error_fn, interval = c(1e-6, 100))
   return(result$root)
 }
 
-
+calibrate_a_opt <- function(A, N0, K_obs) {
+  error_fn <- function(a) {
+    final_N <- simulate_pop(a, A, N0, K_obs)
+    abs(final_N - K_obs)
+  }
+  result <- optimize(error_fn, interval = c(1e-6, 50))
+  return(result$minimum)
+}
 
 simulate_pop_th <- function(theta, A, N0, K_obs, years = 100) {
   N <- matrix(NA, nrow = length(N0), ncol = years)
@@ -195,20 +203,12 @@ simulate_pop_th <- function(theta, A, N0, K_obs, years = 100) {
 }
 
 
-calibrate_theta <- function(A, N0, K_obs, years = 100) {
-  error_fn <- function(theta) simulate_pop_th(theta, A, N0, K_obs, years) - K_obs
-  
-  # Diagnostic plot (optional)
-  theta_vals <- seq(0.01, 50, length.out = 200)
-  errs <- sapply(theta_vals, error_fn)
-  plot(theta_vals, errs, type = "l", main = "Calibration curve for θ")
-  abline(h = 0, col = "red")
-  
-  # Only proceed if the curve crosses 0
-  if (min(errs) > 0 || max(errs) < 0) {
-    stop("Cannot calibrate θ: function does not cross zero in the given range.")
+
+calibrate_theta <- function(A, N0, K_obs) {
+  error_fn <- function(theta) {
+    N <- simulate_pop_th(theta, A, N0, K_obs)
+    abs(sum(N0) - K_obs)
   }
-  
-  result <- uniroot(error_fn, lower = 0.01, upper = 50)
-  return(result$root)
+  result <- optimize(error_fn, interval = c(0.01, 2))
+  return(result$minimum)
 }
