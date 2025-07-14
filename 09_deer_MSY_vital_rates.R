@@ -10,7 +10,9 @@ set.seed(123)
 Year <- 1:100
 
 # Carrying capacity
-K <- 2034396
+K <- 2347197
+# K <- 3168716
+# K <- 2347197 + 500000 + 500000
 
 # Set up deer matrix
 deer.matrix <- matrix(0,12,12)
@@ -109,14 +111,15 @@ ggplot(df) +
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 
 #### Adjust Survival and Fecundity ####
-adj.f <- seq(1, 1.5, by=0.1)
-adj.sF <- seq(0.5, 1.5, by=0.05)
-adj.sAm3 <- seq(0.9, 1.5, by=0.05)
-adj.sAm <- seq(0.9, 1.6, by=0.05)
-adj.sAf <- seq(0.9, 1.18, by=0.02)
+adj.f <- seq(1, 1.8, by=0.1)  # Fecundity
+adj.sF <- seq(0.5, 1.5, by=0.05)  # Fawn survival (male + female)  
+adj.sYm <- seq(0.8, 1.2, by=0.05) # Yearling male survival 
+adj.sAm3 <- seq(0.8, 1.5, by=0.05)  # 3-yr-old male survival  
+adj.sAm <- seq(0.8, 1.6, by=0.05) # adult male survival  
+adj.sAf <- seq(0.9, 1.16, by=0.04) # Adult female survival  
 
 # Create all combinations of adjustments
-adj <- expand.grid(f=adj.f, sF=adj.sF, sf=adj.sAf, sm3=adj.sAm3, sm=adj.sAm)
+adj <- expand.grid(f=adj.f, sF=adj.sF, sf=adj.sAf, sYm=adj.sYm, sm3=adj.sAm3, sm=adj.sAm)
 
 adj <- adj |>
   distinct()
@@ -145,19 +148,21 @@ for (i in 1:nrow(adj)) {
   }
   # Survive & stay (oldest females)
   A_adj[6,6] <- deer.matrix[s+1,s]*adj[i,3] 
+  # Yearling male survival 
+  A_adj[9,8] <- deer.matrix[9,8]*adj[i,4] 
   # 3 yr old males
-  A_adj[10,9] <- deer.matrix[10,9]*adj[i,4] 
+  A_adj[10,9] <- deer.matrix[10,9]*adj[i,5] 
   # Adult male survival
   for (s in 10:11) {
-    A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,5]
+    A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,6]
   }
   # Survive & stay (oldest males)
-  A_adj[12,12] <- deer.matrix[12,12] * adj[i,5]
+  A_adj[12,12] <- deer.matrix[12,12] * adj[i,6]
 
   # Check lambda
   lambda <- Re(eigen(A_adj)$values[1])
   
-  if (lambda >1.43 ) {
+  if (lambda >1.4 ) {
     print(i)
     
     i_vec <- c(i_vec, i)
@@ -213,8 +218,6 @@ both.incr <- both.incr |>
 
 both.incr$matrix <- rep(i_vec, each=100)
 
-
-
 # Calculate net change
 both.net <- both.incr |>
   group_by(increase) |>
@@ -233,7 +236,7 @@ ggplot(both.net) +
 
 # Which combination had MSY closest to observed harvest
 
-both.net |>
+both.diff <- both.net |>
   mutate(msy_diff=220989-net,
          msy_diff=abs(msy_diff)) |>
   group_by(increase) |>
@@ -242,7 +245,7 @@ both.net |>
 
 
 max_pop <- both.net |>
-  filter(increase=="V28476")
+  filter(increase=="V658387")
 
 ## Plot line with greatest MSY
 ggplot() +
@@ -255,7 +258,7 @@ ggplot() +
 
 
 # Population based on matrix with greatest MSY
-i <- 28476
+i <- 658387
 
 A_adj <- deer.matrix
 # Fecundity

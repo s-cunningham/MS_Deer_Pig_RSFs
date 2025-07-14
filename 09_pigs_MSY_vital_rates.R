@@ -42,7 +42,7 @@ w <- w / sum(w) # normals to equal 1
 N0 <- w * 0.01 * K  # e.g., start at 50% of K
 
 # Calibrate density dependence parameter
-a <- calibrate_a(pig.matrix, N0, K)
+a <- calibrate_a_opt(pig.matrix, N0, K)
 cat("Calibrated a =", a, "\n")
 
 # Empty array to hold pop count
@@ -119,7 +119,7 @@ for (i in 1:nrow(adj)) {
   A_adj[2:3,1:3] <- pig.matrix[2:3,1:3] * adj[i,2] 
   A_adj[5:6,4:6] <- pig.matrix[5:6,4:6] * adj[i,2] 
   
-  a <- calibrate_a(A_adj, N0, K)
+  a <- calibrate_a_opt(A_adj, N0, K)
   cat("Calibrated a =", a, "\n")
 
   print(Re(eigen(A_adj)$values[1]))
@@ -182,9 +182,9 @@ max_pop <- both.net |>
 ## Plot line with greatest MSY
 ggplot(both.net) +
   geom_hline(yintercept=308887, linetype=1, color="red") +
-  geom_smooth(aes(x=Nt, y=net, group=increase), color="gray", alpha=0.1, linewidth=0.1) +
+  geom_smooth(aes(x=Nt, y=net, group=increase), color="gray", alpha=0.1, linewidth=0.1, se=FALSE) +
   geom_line(data=df, aes(x=Nt, y=net), linewidth=1) +
-  geom_smooth(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c") +
+  geom_smooth(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c", se=FALSE) +
   labs(x="N<sub>t</sub>", y="N<sub>t-1</sub> - N<sub>t</sub>") +
   theme_classic() +
   theme(legend.position="none",
@@ -201,7 +201,7 @@ A_adj[4, ] <- A_adj[4, ] * adj[i,1]
 A_adj[2:3,1:3] <- pig.matrix[2:3,1:3] * adj[i,2] 
 A_adj[5:6,4:6] <- pig.matrix[5:6,4:6] * adj[i,2] 
 
-a <- calibrate_a(A_adj, N0, K)
+a <- calibrate_a_opt(A_adj, N0, K)
 cat("Calibrated a =", a, "\n")
 
 print(Re(eigen(A_adj)$values[1]))
@@ -313,7 +313,7 @@ for (i in 1:Sims) {
   A_s[4,1:3] <- rnorm(3, A_adj[4,1:3], A_adj[4,1:3]*s_pct_m)
   
   # Calibrate a
-  a <- calibrate_a(A_s, N0, K)
+  a <- calibrate_a_opt(A_s, N0, K)
   cat("Calibrated a =", a, "\n")
   
   for (y in 2:length(Year)){
@@ -417,7 +417,7 @@ for (i in 1:Sims) {
   A_s[4,1:3] <- rnorm(3, A_adj[4,1:3], A_adj[4,1:3]*s_pct_m)
   
   # Calibrate a
-  a <- calibrate_a(A_s, N0, K)
+  a <- calibrate_a_opt(A_s, N0, K)
 
   for (y in 2:length(Year)){
     
@@ -524,7 +524,7 @@ for (i in 1:Sims) {
   A_s[4,1:3] <- rnorm(3, A_adj[4,1:3], A_adj[4,1:3]*s_pct_m)
   
   # Calibrate a
-  a <- calibrate_a(A_s, N0, K)
+  a <- calibrate_a_opt(A_s, N0, K)
 
   for (y in 2:length(Year)){
 
@@ -633,7 +633,7 @@ for (i in 1:Sims) {
   A_s[4,1:3] <- rnorm(3, A_adj[4,1:3], A_adj[4,1:3]*s_pct_m)
   
   # Calibrate a
-  a <- calibrate_a(A_s, N0, K)
+  a <- calibrate_a_opt(A_s, N0, K)
 
   for (y in 2:length(Year)){
     
@@ -743,7 +743,7 @@ for (i in 1:Sims) {
   A_s[4,1:3] <- rnorm(3, A_adj[4,1:3], A_adj[4,1:3]*s_pct_m)
   
   # Calibrate a
-  a <- calibrate_a(A_s, N0, K)
+  a <- calibrate_a_opt(A_s, N0, K)
   
   baseH <- rnorm(1, 100000, 10000)
   
@@ -839,14 +839,19 @@ df <- bind_rows(df, max_pop)
 msy_plot <- ggplot(both.net) +
   geom_hline(yintercept=308887, linetype=2, color="black") +
   geom_smooth(aes(x=Nt, y=net, group=increase), color="gray", alpha=0.1, linewidth=0.1, se=FALSE) +
-  geom_line(data=df, aes(x=Nt, y=net), linewidth=1, color="#440154") +
-  geom_smooth(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c", se=FALSE) +
+  geom_smooth(data=df, aes(x=Nt, y=net, group=increase, color=increase), linewidth=1, se=FALSE) +
+  scale_color_manual(values=c("#21918c","#440154")) +
   labs(x="<i>N<sub>t</sub></i> (in millions)", 
        y="<i>N<sub>t-1</sub> - N<sub>t</sub></i> (in thousands)") +
   scale_y_continuous(labels=c(0,100,200,300)) +
   scale_x_continuous(labels=c(0,0.5,1,1.5,2)) +
+  guides(
+    colour = guide_legend(position = "inside", title="Matrix")
+  ) +
   theme_classic() +
-  theme(legend.position="none",
+  theme(legend.position.inside=c(0,0.95),
+        legend.justification=c(0,1),
+        legend.background=element_rect(fill=NA),
         axis.title=element_markdown(),
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 
