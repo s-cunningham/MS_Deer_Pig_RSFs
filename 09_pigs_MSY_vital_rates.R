@@ -838,9 +838,9 @@ df$increase <- "Original Matrix"
 
 msy_plot <- ggplot(both.net) +
   geom_hline(yintercept=308887, linetype=2, color="black") +
-  geom_smooth(aes(x=Nt, y=net, group=increase), color="gray", alpha=0.1, linewidth=0.1) +
+  geom_smooth(aes(x=Nt, y=net, group=increase), color="gray", alpha=0.1, linewidth=0.1, se=FALSE) +
   geom_line(data=df, aes(x=Nt, y=net), linewidth=1, color="#440154") +
-  geom_smooth(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c") +
+  geom_smooth(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c", se=FALSE) +
   labs(x="<i>N<sub>t</sub></i> (in millions)", 
        y="<i>N<sub>t-1</sub> - N<sub>t</sub></i> (in thousands)") +
   scale_y_continuous(labels=c(0,100,200,300)) +

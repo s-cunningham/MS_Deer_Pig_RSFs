@@ -10,7 +10,7 @@ set.seed(123)
 Year <- 1:100
 
 # Carrying capacity
-K <- 2347197
+K <- 2034396
 
 # Set up deer matrix
 deer.matrix <- matrix(0,12,12)
@@ -111,17 +111,22 @@ ggplot(df) +
 #### Adjust Survival and Fecundity ####
 adj.f <- seq(1, 1.5, by=0.1)
 adj.sF <- seq(0.5, 1.5, by=0.05)
-adj.sAm <- seq(0.8, 1.55, by=0.05)
+adj.sAm3 <- seq(0.9, 1.5, by=0.05)
+adj.sAm <- seq(0.9, 1.6, by=0.05)
 adj.sAf <- seq(0.9, 1.18, by=0.02)
 
 # Create all combinations of adjustments
-adj <- expand.grid(f=adj.f, sF=adj.sF, sf=adj.sAf, sm=adj.sAm)
+adj <- expand.grid(f=adj.f, sF=adj.sF, sf=adj.sAf, sm3=adj.sAm3, sm=adj.sAm)
 
 adj <- adj |>
   distinct()
 
 # Empty array to hold pop count
 deer.array <- array(0, dim=c(12,length(Year),nrow(adj)))
+
+# empty vector for matrices that might work
+i_vec <- c()
+lam_vec <- c()
 
 for (i in 1:nrow(adj)) {
   
@@ -140,67 +145,75 @@ for (i in 1:nrow(adj)) {
   }
   # Survive & stay (oldest females)
   A_adj[6,6] <- deer.matrix[s+1,s]*adj[i,3] 
+  # 3 yr old males
+  A_adj[10,9] <- deer.matrix[10,9]*adj[i,4] 
   # Adult male survival
-  for (s in 9:11) {
-    A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,4]
+  for (s in 10:11) {
+    A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,5]
   }
   # Survive & stay (oldest males)
-  A_adj[12,12] <- deer.matrix[12,12] * adj[i,4]
+  A_adj[12,12] <- deer.matrix[12,12] * adj[i,5]
 
   # Check lambda
-  print(Re(eigen(A_adj)$values[1]))
+  lambda <- Re(eigen(A_adj)$values[1])
   
-  a <- calibrate_a_opt(A_adj, N0, K)
-  # cat("Calibrated a =", a, "\n")
-  
-  # Calculate stable stage distribution
-  w <- Re(eigen(adj)$vectors[, 1])
-  w <- w / sum(w) # normalize to equal 1
-  
-  # Set up initial popualtion size
-  N0 <- w * 0.1 * K
-  
-  deer.array[,1,i] <- N0
-  
-  for (y in 2:length(Year)){
+  if (lambda >1.43 ) {
+    print(i)
     
-    # check buck to doe ratio (see Nagy-Reis et al. 2021 - 1.20)
-    # stable stage of the matrix
-    # w <- Re(eigen(A_adj)$vectors[, 1])
-    # w <- w / sum(w) # normalize to equal 1
-    # # sum males
-    # wf <- sum(w[1:6]*deer.array[1:6,y-1,i])
-    # wm <- sum(w[7:12]*deer.array[7:12,y-1,i])
-    # # buck to doe ratio
-    # bdr <- wf/wm
-    # 
-    # 
-    # Density dependent adjustment in fecundity
-    # What was abundance at time step t-1
-    N_t <- sum(deer.array[,y-1,i])
+    i_vec <- c(i_vec, i)
     
-    # Calcuate density factor
-    # density_factor <- max(1 - a * (N_t / K), 0)
-    density_factor <- max(1 / (1 + a * (N_t / K)), 0)
+    lam_vec <- c(lam_vec, lambda)
     
-    # save new matrix
-    A_dd <- A_adj
-    A_dd[1, ] <- A_dd[1, ] * density_factor # reduce fecundity
-    A_dd[7, ] <- A_dd[7, ] * density_factor  # reduce fecundity
+    a <- calibrate_a_opt(A_adj, N0, K)
+    # cat("Calibrated a =", a, "\n")
     
-    # Calculate new pop size
-    deer.array[,y,i] <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
+    # Calculate stable stage distribution
+    w <- Re(eigen(A_adj)$vectors[, 1])
+    w <- w / sum(w) # normalize to equal 1
+    
+    # Set up initial popualtion size
+    N0 <- w * 0.1 * K
+    
+    deer.array[,1,i] <- N0
+    
+    for (y in 2:length(Year)){
+      
+      # Density dependent adjustment in fecundity
+      # What was abundance at time step t-1
+      N_t <- sum(deer.array[,y-1,i])
+      
+      # Calcuate density factor
+      # density_factor <- max(1 - a * (N_t / K), 0)
+      density_factor <- max(1 / (1 + a * (N_t / K)), 0)
+      
+      # save new matrix
+      A_dd <- A_adj
+      A_dd[1, ] <- A_dd[1, ] * density_factor # reduce fecundity
+      A_dd[7, ] <- A_dd[7, ] * density_factor  # reduce fecundity
+      
+      # Calculate new pop size
+      deer.array[,y,i] <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
+    }
+    
   }
+ 
 }
 
-both.incr <- apply(deer.array,c(2,3),sum)
+# drop slices that don't have i index in i_vec
+deer.array <- deer.array[,,i_vec]
+
+both.incr <- apply(deer.array,c(2,3),sum,na.rm=TRUE)
 both.incr <- as.data.frame(both.incr)
 # names(both.incr) <- adj.f
 
 both.incr <- both.incr |>
   as_tibble() |>
-  pivot_longer(1:nrow(adj),names_to="increase", values_to="Nt") |>
+  pivot_longer(1:dim(deer.array)[3],names_to="increase", values_to="Nt") |>
   arrange(increase)
+
+both.incr$matrix <- rep(i_vec, each=100)
+
+
 
 # Calculate net change
 both.net <- both.incr |>
@@ -218,48 +231,53 @@ ggplot(both.net) +
   theme(legend.position="none")
 
 
-
+# Which combination had MSY closest to observed harvest
 
 both.net |>
+  mutate(msy_diff=220989-net,
+         msy_diff=abs(msy_diff)) |>
   group_by(increase) |>
-  reframe(max_change=max(net)) |>
-  slice_max(max_change)
+  reframe(min_change=min(msy_diff)) |>
+  slice_min(min_change)
 
-# Which combination had MSY closest to observed harvest
+
 max_pop <- both.net |>
-  filter(increase=="V110")
+  filter(increase=="V28476")
 
 ## Plot line with greatest MSY
-ggplot(both.net) +
+ggplot() +
   geom_hline(yintercept=220989, linetype=2, color="red") +
-  geom_smooth(aes(x=Nt, y=net, group=increase), color="gray", alpha=0.1, linewidth=0.1) +
+  # geom_smooth(aes(x=Nt, y=net, group=increase), color="gray", alpha=0.1, linewidth=0.1) +
   geom_line(data=df, aes(x=Nt, y=net), linewidth=1) +
-  geom_smooth(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c") +
+  geom_smooth(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c", se=FALSE) +
   theme_classic() +
   theme(legend.position="none")
 
 
 # Population based on matrix with greatest MSY
-i <- 110
+i <- 28476
 
 A_adj <- deer.matrix
+# Fecundity
 A_adj[1, ] <- deer.matrix[1, ] * adj[i,1] 
 A_adj[7, ] <- deer.matrix[7, ] * adj[i,1] 
-# Female survival
-for (s in 1:5) {
-  A_adj[s+1,s] <- min(deer.matrix[s+1,s]*adj[i,3], 1)
-}
-A_adj[6,6] <- min(deer.matrix[s+1,s]*adj[i,3], 1) 
-# Male survival
-for (s in 1:5+6) {
-  # Survive & go
-  A_adj[s+1,s] <- min(deer.matrix[s+1,s], 1)
-}
-# adjust yearling males
-A_adj[9,8] <- ifelse(A_adj[9,8] > 1, A_adj[3,2], A_adj[9,8])
 
-# Survive & stay
-A_adj[12,12] <- min(deer.matrix[12,12] * adj[i,2], 1)
-A_adj[12,12] <- ifelse(A_adj[12,12] > 1, A_adj[9,8], A_adj[12,12])
+# Fawn survival
+A_adj[2,1] <- deer.matrix[2,1] * adj[i,2]
+A_adj[8,7] <- deer.matrix[2,1] * adj[i,2]
+
+# Adult female survival
+for (s in 3:5) {
+  A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,3]
+}
+# Survive & stay (oldest females)
+A_adj[6,6] <- deer.matrix[s+1,s]*adj[i,3] 
+# Adult male survival
+for (s in 9:11) {
+  A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,4]
+}
+# Survive & stay (oldest males)
+A_adj[12,12] <- deer.matrix[12,12] * adj[i,4]
+
 print(Re(eigen(A_adj)$values[1]))
 
