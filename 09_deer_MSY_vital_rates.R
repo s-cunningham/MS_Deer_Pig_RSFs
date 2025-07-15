@@ -113,13 +113,13 @@ ggplot(df) +
 #### Adjust Survival and Fecundity ####
 adj.f <- seq(1, 1.8, by=0.1)  # Fecundity
 adj.sF <- seq(0.5, 1.5, by=0.05)  # Fawn survival (male + female)  
-adj.sYm <- seq(0.8, 1.2, by=0.05) # Yearling male survival 
-adj.sAm3 <- seq(0.8, 1.5, by=0.05)  # 3-yr-old male survival  
-adj.sAm <- seq(0.8, 1.6, by=0.05) # adult male survival  
-adj.sAf <- seq(0.9, 1.16, by=0.04) # Adult female survival  
+# adj.sYm <- seq(0.8, 1.2, by=0.05) # Yearling male survival  sYm=adj.sYm, 
+adj.sAm3 <- seq(0.5, 1.5, by=0.05)  # 3-yr-old male survival  
+adj.sAm <- seq(0.5, 1.6, by=0.05) # adult male survival  
+adj.sAf <- seq(0.5, 1.15, by=0.05) # Adult female survival  
 
 # Create all combinations of adjustments
-adj <- expand.grid(f=adj.f, sF=adj.sF, sf=adj.sAf, sYm=adj.sYm, sm3=adj.sAm3, sm=adj.sAm)
+adj <- expand.grid(f=adj.f, sF=adj.sF, sf=adj.sAf,sm3=adj.sAm3, sm=adj.sAm)
 
 adj <- adj |>
   distinct()
@@ -149,20 +149,20 @@ for (i in 1:nrow(adj)) {
   # Survive & stay (oldest females)
   A_adj[6,6] <- deer.matrix[s+1,s]*adj[i,3] 
   # Yearling male survival 
-  A_adj[9,8] <- deer.matrix[9,8]*adj[i,4] 
+  # A_adj[9,8] <- deer.matrix[9,8]*adj[i,4] 
   # 3 yr old males
-  A_adj[10,9] <- deer.matrix[10,9]*adj[i,5] 
+  A_adj[10,9] <- deer.matrix[10,9]*adj[i,4] 
   # Adult male survival
-  for (s in 10:11) {
-    A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,6]
+  for (s in 9:11) {
+    A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,5]
   }
   # Survive & stay (oldest males)
-  A_adj[12,12] <- deer.matrix[12,12] * adj[i,6]
+  A_adj[12,12] <- deer.matrix[12,12] * adj[i,5]
 
   # Check lambda
   lambda <- Re(eigen(A_adj)$values[1])
   
-  if (lambda >1.4 ) {
+  if (lambda >1.1 ) {
     print(i)
     
     i_vec <- c(i_vec, i)
@@ -245,7 +245,7 @@ both.diff <- both.net |>
 
 
 max_pop <- both.net |>
-  filter(increase=="V658387")
+  filter(increase=="V112267")
 
 ## Plot line with greatest MSY
 ggplot() +
