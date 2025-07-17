@@ -10,9 +10,9 @@ set.seed(123)
 Year <- 1:100
 
 # Carrying capacity
-K <- 2347197
+# K <- 2347197
 # K <- 3168716
-# K <- 2347197 + 500000 + 500000
+K <- 2640597
 
 # Set up deer matrix
 deer.matrix <- matrix(0,12,12)
@@ -101,8 +101,8 @@ pop_at_msy <- results$N.median[peak_idx+1]
 df <- data.frame(Nt=results$N.median[2:nrow(results)], net=net)
 
 ggplot(df) +
-  coord_cartesian(ylim=c(0,221000)) +
-  geom_hline(yintercept=220989, linetype=2, color="red") +
+  coord_cartesian(ylim=c(0,240000)) +
+  geom_hline(yintercept=238437, linetype=2, color="red") +
   geom_hline(yintercept=msy, col="#21918c") +
   geom_line(aes(x=Nt, y=net), linewidth=1) +
   labs(x="N<sub>t</sub>", y="N<sub>t-1</sub> - N<sub>t</sub>") +
@@ -111,15 +111,15 @@ ggplot(df) +
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 
 #### Adjust Survival and Fecundity ####
-adj.f <- seq(1, 1.8, by=0.1)  # Fecundity
-adj.sF <- seq(0.5, 1.5, by=0.05)  # Fawn survival (male + female)  
-# adj.sYm <- seq(0.8, 1.2, by=0.05) # Yearling male survival  sYm=adj.sYm, 
-adj.sAm3 <- seq(0.5, 1.5, by=0.05)  # 3-yr-old male survival  
-adj.sAm <- seq(0.5, 1.6, by=0.05) # adult male survival  
-adj.sAf <- seq(0.5, 1.15, by=0.05) # Adult female survival  
+adj.f <- seq(1, 2, by=0.1)  # Fecundity
+adj.sF <- seq(0.3, 1.5, by=0.1)  # Fawn survival (male + female)  
+adj.sYm <- seq(0.3, 1.2, by=0.1) # Yearling male survival  sYm=adj.sYm,
+adj.sAm3 <- seq(0.3, 1.5, by=0.1)  # 3-yr-old male survival  
+adj.sAm <- seq(0.3, 1.6, by=0.1) # adult male survival  
+adj.sAf <- seq(0.3, 1.2, by=0.1) # Adult female survival  
 
 # Create all combinations of adjustments
-adj <- expand.grid(f=adj.f, sF=adj.sF, sf=adj.sAf,sm3=adj.sAm3, sm=adj.sAm)
+adj <- expand.grid(f=adj.f, sF=adj.sF, saf=adj.sAf, sYm=adj.sYm, sm3=adj.sAm3, sm=adj.sAm)
 
 adj <- adj |>
   distinct()
@@ -149,20 +149,24 @@ for (i in 1:nrow(adj)) {
   # Survive & stay (oldest females)
   A_adj[6,6] <- deer.matrix[s+1,s]*adj[i,3] 
   # Yearling male survival 
-  # A_adj[9,8] <- deer.matrix[9,8]*adj[i,4] 
+  A_adj[9,8] <- deer.matrix[9,8]*adj[i,4]
   # 3 yr old males
-  A_adj[10,9] <- deer.matrix[10,9]*adj[i,4] 
+  A_adj[10,9] <- deer.matrix[10,9]*adj[i,5] 
   # Adult male survival
-  for (s in 9:11) {
-    A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,5]
+  for (s in 10:11) {
+    A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,6]
   }
   # Survive & stay (oldest males)
-  A_adj[12,12] <- deer.matrix[12,12] * adj[i,5]
+  A_adj[12,12] <- deer.matrix[12,12] * adj[i,6]
 
   # Check lambda
   lambda <- Re(eigen(A_adj)$values[1])
   
-  if (lambda >1.1 ) {
+  # Put survival rates into a vector
+  surv <- sum(c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6],
+                A_adj[8,7], A_adj[9,8], A_adj[10,9], A_adj[11,10], A_adj[12,11], A_adj[12,12]) < 1)
+  
+  if (lambda > 1.3 & (surv == 12)) {
     print(i)
     
     i_vec <- c(i_vec, i)
@@ -194,8 +198,8 @@ for (i in 1:nrow(adj)) {
       # save new matrix
       A_dd <- A_adj
       A_dd[1, ] <- A_dd[1, ] * density_factor # reduce fecundity
-      A_dd[7, ] <- A_dd[7, ] * density_factor  # reduce fecundity
-      
+      A_dd[7, ] <- A_dd[7, ] * density_factor # reduce fecundity
+
       # Calculate new pop size
       deer.array[,y,i] <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
     }
