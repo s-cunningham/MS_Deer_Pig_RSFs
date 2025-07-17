@@ -530,8 +530,8 @@ for (i in 1:nrow(ud)) {
   # Add to data frame
   used <- bind_rows(used, temp)
 }
-write_csv(used, "output/deer_used_locs.csv")
-used <- read_csv("output/deer_used_locs.csv")
+# write_csv(used, "output/deer_used_locs.csv")
+# used <- read_csv("output/deer_used_locs.csv")
 
 # Organize so used data matches available data
 used <- used |>
