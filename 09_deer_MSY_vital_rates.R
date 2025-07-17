@@ -11,8 +11,8 @@ Year <- 1:100
 
 # Carrying capacity
 # K <- 2347197
-# K <- 3168716
-K <- 2640597
+K <- 1345648
+# K <- 2640597
 
 # Set up deer matrix
 deer.matrix <- matrix(0,12,12)
@@ -161,6 +161,18 @@ for (i in 1:nrow(adj)) {
 
   # Check lambda
   lambda <- Re(eigen(A_adj)$values[1])
+  
+  # check buck to doe ratio (see Nagy-Reis et al. 2021 - 1.20)
+  # stable stage of the matrix
+  w <- Re(eigen(A_adj)$vectors[, 1])
+  w <- w / sum(w) # normalize to equal 1
+  # # sum males
+  wf <- sum(w[1:6]*deer.array[1:6,y-1,i])
+  wm <- sum(w[7:12]*deer.array[7:12,y-1,i])
+  # # buck to doe ratio
+  # bdr <- wf/wm
+  
+  
   
   # Put survival rates into a vector
   surv <- sum(c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6],
