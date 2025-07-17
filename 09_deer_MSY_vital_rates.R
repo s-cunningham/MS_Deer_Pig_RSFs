@@ -113,10 +113,10 @@ ggplot(df) +
 #### Adjust Survival and Fecundity ####
 adj.f <- seq(1, 2, by=0.1)  # Fecundity
 adj.sF <- seq(0.3, 1.5, by=0.1)  # Fawn survival (male + female)  
-adj.sYm <- seq(0.3, 1.2, by=0.1) # Yearling male survival  sYm=adj.sYm,
-adj.sAm3 <- seq(0.3, 1.5, by=0.1)  # 3-yr-old male survival  
-adj.sAm <- seq(0.3, 1.6, by=0.1) # adult male survival  
-adj.sAf <- seq(0.3, 1.2, by=0.1) # Adult female survival  
+adj.sYm <- seq(0.5, 1.2, by=0.1) # Yearling male survival  sYm=adj.sYm,
+adj.sAm3 <- seq(0.5, 1.4, by=0.1)  # 3-yr-old male survival  
+adj.sAm <- seq(0.5, 1.6, by=0.1) # adult male survival  
+adj.sAf <- seq(0.6, 1.2, by=0.1) # Adult female survival  
 
 # Create all combinations of adjustments
 adj <- expand.grid(f=adj.f, sF=adj.sF, saf=adj.sAf, sYm=adj.sYm, sm3=adj.sAm3, sm=adj.sAm)
@@ -192,7 +192,6 @@ for (i in 1:nrow(adj)) {
       N_t <- sum(deer.array[,y-1,i])
       
       # Calcuate density factor
-      # density_factor <- max(1 - a * (N_t / K), 0)
       density_factor <- max(1 / (1 + a * (N_t / K)), 0)
       
       # save new matrix
@@ -249,20 +248,20 @@ both.diff <- both.net |>
 
 
 max_pop <- both.net |>
-  filter(increase=="V112267")
+  filter(increase=="V522074")
 
 ## Plot line with greatest MSY
 ggplot() +
   geom_hline(yintercept=220989, linetype=2, color="red") +
   # geom_smooth(aes(x=Nt, y=net, group=increase), color="gray", alpha=0.1, linewidth=0.1) +
   geom_line(data=df, aes(x=Nt, y=net), linewidth=1) +
-  geom_smooth(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c", se=FALSE) +
+  geom_line(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c", se=FALSE) +
   theme_classic() +
   theme(legend.position="none")
 
 
 # Population based on matrix with greatest MSY
-i <- 658387
+i <- 2601456
 
 A_adj <- deer.matrix
 # Fecundity
@@ -279,12 +278,19 @@ for (s in 3:5) {
 }
 # Survive & stay (oldest females)
 A_adj[6,6] <- deer.matrix[s+1,s]*adj[i,3] 
+# Yearling male survival 
+A_adj[9,8] <- deer.matrix[9,8]*adj[i,4]
+# 3 yr old males
+A_adj[10,9] <- deer.matrix[10,9]*adj[i,5] 
 # Adult male survival
-for (s in 9:11) {
-  A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,4]
+for (s in 10:11) {
+  A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,6]
 }
 # Survive & stay (oldest males)
-A_adj[12,12] <- deer.matrix[12,12] * adj[i,4]
+A_adj[12,12] <- deer.matrix[12,12] * adj[i,6]
 
 print(Re(eigen(A_adj)$values[1]))
 
+
+
+#### Increase overall harvest 

@@ -481,8 +481,8 @@ for (i in 1:nrow(ud)) {
   avail <- bind_rows(avail, pts)
 }
 # Save available points
-write_csv(avail, "output/deer_avail_pts.csv")
-avail <- read_csv("output/deer_avail_pts.csv")
+# write_csv(avail, "output/deer_avail_pts.csv")
+# avail <- read_csv("output/deer_avail_pts.csv")
 avail <- avail |> unite("key", c("id", "burst"), sep="_") 
 
 ## Now on to the used locations
@@ -623,6 +623,8 @@ for (i in 1:length(un.id)) {
   
   avail <- bind_rows(avail, pts)
   # if (nrow(grid_i) >= r$used*1.5) {}
+  
+  print(i)
 }
 
 # I think I duplicated some rows
