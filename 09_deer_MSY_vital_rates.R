@@ -11,7 +11,7 @@ Year <- 1:100
 
 # Carrying capacity
 # K <- 2347197
-K <- 1345648
+K <- 1512638
 # K <- 2640597
 
 # Set up deer matrix
@@ -111,12 +111,12 @@ ggplot(df) +
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 
 #### Adjust Survival and Fecundity ####
-adj.f <- seq(1, 2, by=0.1)  # Fecundity
+adj.f <- seq(1, 2.5, by=0.1)  # Fecundity
 adj.sF <- seq(0.3, 1.5, by=0.1)  # Fawn survival (male + female)  
-adj.sYm <- seq(0.5, 1.2, by=0.1) # Yearling male survival  sYm=adj.sYm,
-adj.sAm3 <- seq(0.5, 1.4, by=0.1)  # 3-yr-old male survival  
+adj.sYm <- seq(0.7, 1.5, by=0.1) # Yearling male survival  sYm=adj.sYm,
+adj.sAm3 <- seq(0.7, 1.6, by=0.1)  # 3-yr-old male survival  
 adj.sAm <- seq(0.5, 1.6, by=0.1) # adult male survival  
-adj.sAf <- seq(0.6, 1.2, by=0.1) # Adult female survival  
+adj.sAf <- seq(0.6, 1.6, by=0.1) # Adult female survival  
 
 # Create all combinations of adjustments
 adj <- expand.grid(f=adj.f, sF=adj.sF, saf=adj.sAf, sYm=adj.sYm, sm3=adj.sAm3, sm=adj.sAm)
@@ -164,21 +164,19 @@ for (i in 1:nrow(adj)) {
   
   # check buck to doe ratio (see Nagy-Reis et al. 2021 - 1.20)
   # stable stage of the matrix
-  w <- Re(eigen(A_adj)$vectors[, 1])
+  # w <- Re(eigen(A_adj)$vectors[, 1])
   w <- w / sum(w) # normalize to equal 1
   # # sum males
-  wf <- sum(w[1:6]*deer.array[1:6,y-1,i])
-  wm <- sum(w[7:12]*deer.array[7:12,y-1,i])
+  # wf <- sum(w[1:6]*deer.array[1:6,y-1,i])
+  # wm <- sum(w[7:12]*deer.array[7:12,y-1,i])
   # # buck to doe ratio
   # bdr <- wf/wm
-  
-  
   
   # Put survival rates into a vector
   surv <- sum(c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6],
                 A_adj[8,7], A_adj[9,8], A_adj[10,9], A_adj[11,10], A_adj[12,11], A_adj[12,12]) < 1)
   
-  if (lambda > 1.3 & (surv == 12)) {
+  if (lambda > 1.5 & (surv == 12)) {
     print(i)
     
     i_vec <- c(i_vec, i)
@@ -260,20 +258,20 @@ both.diff <- both.net |>
 
 
 max_pop <- both.net |>
-  filter(increase=="V522074")
+  filter(increase=="V82824")
 
 ## Plot line with greatest MSY
 ggplot() +
   geom_hline(yintercept=220989, linetype=2, color="red") +
   # geom_smooth(aes(x=Nt, y=net, group=increase), color="gray", alpha=0.1, linewidth=0.1) +
   geom_line(data=df, aes(x=Nt, y=net), linewidth=1) +
-  geom_line(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c", se=FALSE) +
+  geom_line(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c") + #, se=FALSE
   theme_classic() +
   theme(legend.position="none")
 
 
 # Population based on matrix with greatest MSY
-i <- 2601456
+i <- i_vec[82824]
 
 A_adj <- deer.matrix
 # Fecundity
