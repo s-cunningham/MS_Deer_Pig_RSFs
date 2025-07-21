@@ -240,7 +240,7 @@ ggplot(both.net) +
   # coord_cartesian(ylim=c(0,309000)) +
   # geom_vline(xintercept=K) +
   geom_hline(yintercept=221000, linetype=2, color="red") +
-  geom_smooth(aes(x=Nt, y=net, group=increase, color=increase), alpha=0.5, linewidth=0.5) +
+  geom_line(aes(x=Nt, y=net, group=increase, color=increase), alpha=0.5, linewidth=0.5) +
   geom_line(data=df, aes(x=Nt, y=net), linewidth=1) +
   labs(x="N<sub>t</sub>", y="N<sub>t-1</sub> - N<sub>t</sub>") +
   theme(legend.position="none")
