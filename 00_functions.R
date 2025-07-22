@@ -186,29 +186,27 @@ calibrate_a_opt <- function(A, N0, K_obs) {
   return(result$minimum)
 }
 
-simulate_pop_th <- function(theta, A, N0, K_obs, years = 100) {
-  N <- matrix(NA, nrow = length(N0), ncol = years)
-  N[, 1] <- N0
-  
-  for (t in 1:(years - 1)) {
-    N_total <- sum(N[, t])
-    dd_factor <- max(1 - (N_total / K_obs)^theta, 0)
-    
-    A_dd <- A
-    A_dd[1, ] <- A[1, ] * dd_factor  # apply DD to fecundity only
-    N[, t + 1] <- A_dd %*% N[, t]
+
+## theta-logistic function
+# Example theta-logistic projection function
+theta_logistic_proj <- function(N0, lambda, K, theta, t_max = 100) {
+  N <- numeric(t_max)
+  N[1] <- N0
+  for (t in 2:t_max) {
+    density_factor <- 1 / (1 + (N[t - 1] / K)^theta)
+    N[t] <- N[t - 1] * lambda * density_factor
   }
-  
-  return(sum(N[, years]))  # total pop at final time step
+  return(N)
 }
 
-
-
-calibrate_theta <- function(A, N0, K_obs) {
-  error_fn <- function(theta) {
-    N <- simulate_pop_th(theta, A, N0, K_obs)
-    abs(sum(N0) - K_obs)
+# Use optimize instead of uniroot
+estimate_theta_opt <- function(N0, lambda, K, t_max = 100) {
+  objective_fn <- function(theta) {
+    N <- theta_logistic_proj(N0, lambda, K, theta, t_max)
+    (tail(N, 1) - K)^2
   }
-  result <- optimize(error_fn, interval = c(0.01, 2))
+  result <- optimize(objective_fn, lower = 0.01, upper = 3)
   return(result$minimum)
 }
+
+

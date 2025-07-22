@@ -10,8 +10,8 @@ set.seed(123)
 Year <- 1:100
 
 # Carrying capacity
-# K <- 2347197
-K <- 1512638*2
+K <- 2347197
+# K <- 1512638*2
 # K <- 2640597
 
 # Set up deer matrix
@@ -45,9 +45,11 @@ w <- w / sum(w) # normalize to equal 1
 # Set up initial popualtion size
 N0 <- w * 0.1 * K  # e.g., start at 50% of K
 
+lambda <- Re(eigen(deer.matrix)$values[1])
+
 # Calibrate density dependence parameter
-a <- calibrate_a(deer.matrix, N0, K)
-cat("Calibrated a =", a, "\n")
+theta <- estimate_theta_opt(N0, lambda, K)
+cat("Estimated theta:", theta, "\n")
 
 # print(Re(eigen(deer.matrix)$values[1]))
 
@@ -65,7 +67,7 @@ for (y in 2:length(Year)){
   
   # Calcuate density factor
   # density_factor <- 1 / (1 + a * (N_t / K))
-  density_factor <- max(1 / (1 + a * (N_t / K)), 0)
+  density_factor <- 1 / (1 + (N_t / K)^theta)
   # density_factor <- max(1 - a * (N_t / K), 0)
   
   # save new matrix
@@ -101,8 +103,8 @@ pop_at_msy <- results$N.median[peak_idx+1]
 df <- data.frame(Nt=results$N.median[2:nrow(results)], net=net)
 
 ggplot(df) +
-  coord_cartesian(ylim=c(0,240000)) +
-  geom_hline(yintercept=238437, linetype=2, color="red") +
+  coord_cartesian(ylim=c(0,300000)) +
+  geom_hline(yintercept=250000, linetype=2, color="red") +
   geom_hline(yintercept=msy, col="#21918c") +
   geom_line(aes(x=Nt, y=net), linewidth=1) +
   labs(x="N<sub>t</sub>", y="N<sub>t-1</sub> - N<sub>t</sub>") +
@@ -111,12 +113,12 @@ ggplot(df) +
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 
 #### Adjust Survival and Fecundity ####
-adj.f <- seq(1, 2.75, by=0.1)  # Fecundity
-adj.sF <- seq(0.3, 1.5, by=0.1)  # Fawn survival (male + female)  
-adj.sYm <- seq(0.9, 1.5, by=0.1) # Yearling male survival  sYm=adj.sYm,
+adj.f <- seq(1, 2.5, by=0.1)  # Fecundity
+adj.sF <- seq(0.6, 1.6, by=0.1)  # Fawn survival (male + female)  
+adj.sYm <- seq(0.9, 1.6, by=0.1) # Yearling male survival  sYm=adj.sYm,
 adj.sAm3 <- seq(0.9, 1.6, by=0.1)  # 3-yr-old male survival  
 adj.sAm <- seq(0.9, 2.2, by=0.1) # adult male survival  
-adj.sAf <- seq(0.8, 1.2, by=0.1) # Adult female survival
+adj.sAf <- seq(1, 1.2, by=0.1) # Adult female survival
 
 # Create all combinations of adjustments
 adj <- expand.grid(f=adj.f, sF=adj.sF, saf=adj.sAf, sYm=adj.sYm, sm3=adj.sAm3, sm=adj.sAm) #
@@ -158,14 +160,14 @@ for (i in 1:nrow(adj)) {
   }
   # Survive & stay (oldest males)
   A_adj[12,12] <- deer.matrix[12,12] * adj[i,6]
-
+  
   # Check lambda
   lambda <- Re(eigen(A_adj)$values[1])
   
   # check buck to doe ratio (see Nagy-Reis et al. 2021 - 1.20)
   # stable stage of the matrix
   # w <- Re(eigen(A_adj)$vectors[, 1])
-  w <- w / sum(w) # normalize to equal 1
+  # w <- w / sum(w) # normalize to equal 1
   # # sum males
   # wf <- sum(w[1:6]*deer.array[1:6,y-1,i])
   # wm <- sum(w[7:12]*deer.array[7:12,y-1,i])
@@ -176,7 +178,7 @@ for (i in 1:nrow(adj)) {
   surv <- sum(c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6],
                 A_adj[8,7], A_adj[9,8], A_adj[10,9], A_adj[11,10], A_adj[12,11], A_adj[12,12]) < 1)
   
-  if (lambda > 1.5 & (surv == 12)) {
+  if (lambda > 1.18 & (surv == 12)) {
     print(i)
     
     i_vec <- c(i_vec, i)
@@ -202,19 +204,19 @@ for (i in 1:nrow(adj)) {
       N_t <- sum(deer.array[,y-1,i])
       
       # Calcuate density factor
-      density_factor <- 1 / (1 + a * (N_t / K))
+      density_factor <- 1 / (1 + (N_t / K)^theta)
       
       # save new matrix
       A_dd <- A_adj
       A_dd[1, ] <- A_dd[1, ] * density_factor # reduce fecundity
       A_dd[7, ] <- A_dd[7, ] * density_factor # reduce fecundity
-
+      
       # Calculate new pop size
       deer.array[,y,i] <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
     }
     
   }
- 
+  
 }
 
 # drop slices that don't have i index in i_vec
@@ -238,22 +240,23 @@ both.net <- both.incr |>
 
 ggplot(both.net) +
   # coord_cartesian(ylim=c(0,309000)) +
-  # geom_vline(xintercept=K) +
-  geom_hline(yintercept=221000, linetype=2, color="red") +
+  geom_vline(xintercept=K) +
+  geom_hline(yintercept=238000, linetype=2, color="red") +
   geom_line(aes(x=Nt, y=net, group=increase, color=increase), alpha=0.5, linewidth=0.5) +
   geom_line(data=df, aes(x=Nt, y=net), linewidth=1) +
   labs(x="N<sub>t</sub>", y="N<sub>t-1</sub> - N<sub>t</sub>") +
-  theme(legend.position="none")
+  theme(legend.position="none",
+        axis.title=element_markdown(face="italic"))
 
 
 # Which combination had MSY closest to observed harvest
 
-# both.diff <- both.net |>
-#   mutate(msy_diff=220989-net,
-#          msy_diff=abs(msy_diff)) |>
-#   group_by(increase) |>
-#   reframe(min_change=min(msy_diff)) |>
-#   slice_min(min_change)
+both.diff <- both.net |>
+  mutate(msy_diff=238000-net,
+         msy_diff=abs(msy_diff)) |>
+  group_by(increase) |>
+  reframe(min_change=min(msy_diff)) |>
+  slice_min(min_change)
 
 
 both.net |>
@@ -262,11 +265,12 @@ both.net |>
   slice_max(max_change)
 
 max_pop <- both.net |>
-  filter(increase=="V25969")
+  filter(increase=="V71285")
 
 ## Plot line with greatest MSY
 ggplot() +
-  geom_hline(yintercept=220989, linetype=2, color="red") +
+  geom_vline(xintercept=K) +
+  geom_hline(yintercept=238000, linetype=2, color="red") +
   # geom_smooth(aes(x=Nt, y=net, group=increase), color="gray", alpha=0.1, linewidth=0.1) +
   geom_line(data=df, aes(x=Nt, y=net), linewidth=1) +
   geom_line(data=max_pop, aes(x=Nt, y=net), linewidth=1, color="#21918c") + #, se=FALSE
@@ -274,11 +278,11 @@ ggplot() +
   theme(legend.position="none")
 
 
-both.incr[both.incr$increase=="V25969",]
+both.incr[both.incr$increase=="V71285",]
 
 # Population based on matrix with greatest MSY
-# i <- i_vec[33409]
-i <- 310936
+i <- i_vec[71285]
+# i <- 310936
 
 A_adj <- deer.matrix
 # Fecundity
@@ -313,15 +317,16 @@ print(Re(eigen(A_adj)$values[1]))
 Year <- 1:100
 deer.array <- matrix(0,nrow=12, ncol=length(Year))
 
-a <- calibrate_a_opt(A_adj, N0, K)
-# cat("Calibrated a =", a, "\n")
+# Calibrate density dependence parameter
+theta <- estimate_theta_opt(N0, lambda, K)
+cat("Estimated theta:", theta, "\n")
 
 # Calculate stable stage distribution
 w <- Re(eigen(A_adj)$vectors[, 1])
 w <- w / sum(w) # normalize to equal 1
 
 # Set up initial popualtion size
-N0 <- w * 0.1 * K
+N0 <- w * 0.5 * K
 
 deer.array[,1] <- N0
 
@@ -332,7 +337,7 @@ for (y in 2:length(Year)){
   N_t <- sum(deer.array[,y-1])
   
   # Calcuate density factor
-  density_factor <- max(1 / (1 + a * (N_t / K)), 0)
+  density_factor <- 1 / (1 + (N_t / K)^theta)
   
   # save new matrix
   A_dd <- A_adj
@@ -350,7 +355,7 @@ results <- data.frame(Year,N.median)
 
 #Plot population with
 ggplot(results) +
-  # coord_cartesian(ylim=c(0, 2100000)) +
+  # coord_cartesian(ylim=c(0, 3200000)) +
   geom_hline(yintercept=K) +
   geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1.25) +
   scale_y_continuous(name="Abundance (males + females)")+
@@ -359,18 +364,16 @@ ggplot(results) +
         panel.grid.major = element_blank(),panel.grid.minor = element_blank()) 
 
 
-
-
 #### Add in stochasticity in vital rates ####
 set.seed(1)
 ##Stochastistic model
-Year <- 1:20
+Year <- 1:100
 Sims <- 1000
 
 # Variation in Survival
-s_pct_f <- 0.1
-s_pct_m <- 0.1
-f_pct <- 0.1
+s_pct_f <- 0.02
+s_pct_m <- 0.02
+f_pct <- 0.02
 
 # Empty array to hold pop count
 deer.array <- array(0,dim=c(12,length(Year),Sims))
@@ -384,6 +387,8 @@ N0 <- w * 0.5 * K  # e.g., start at 50% of K
 
 # Fill starting population
 deer.array[,1,] <- N0
+
+theta <- 5.2
 
 set.seed(1)
 for (i in 1:Sims) {
@@ -409,10 +414,6 @@ for (i in 1:Sims) {
   A_s[1,1:3] <- rnorm(3, A_adj[1,1:3], A_adj[1,1:3]*s_pct_m)
   A_s[4,1:3] <- rnorm(3, A_adj[4,1:3], A_adj[4,1:3]*s_pct_m)
   
-  # Calibrate a
-  a <- calibrate_a_opt(A_s, N0, K)
-  cat("Calibrated a =", a, "\n")
-  
   for (y in 2:length(Year)){
     
     # Density dependent adjustment in fecundity
@@ -420,7 +421,7 @@ for (i in 1:Sims) {
     N_t <- sum(deer.array[,y-1,i])
     
     # Calcuate density factor
-    density_factor <- 1 / (1 + a * (N_t / K))
+    density_factor <- 1 / (1 + (N_t / K)^theta)
     
     # save new matrix
     A_dd <- A_s
@@ -431,7 +432,7 @@ for (i in 1:Sims) {
     N_next <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
     
     ## Harvest deer
-
+    
     # Randomly select a random number to harvest
     h <- round(rnorm(1, 150000, 15000), digits=0)
     
@@ -448,7 +449,7 @@ for (i in 1:Sims) {
     r <- c(doe_r, buck_r)
     
     N_next <- N_next - r
-
+    
     # Save abundance
     deer.array[,y,i] <- pmax(N_next, 0) 
   }
@@ -461,6 +462,7 @@ results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
 #Plot population projection
 ggplot(results) +
+  coord_cartesian(ylim=c(0,2400000)) +
   geom_hline(yintercept=K) +
   geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="purple") +
   geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1) +
@@ -468,6 +470,7 @@ ggplot(results) +
   theme_bw() +
   theme(text = element_text(size=16),panel.border = element_blank(), axis.line = element_line(colour="black"),
         panel.grid.major = element_blank(),panel.grid.minor = element_blank()) 
+
 
 
 
