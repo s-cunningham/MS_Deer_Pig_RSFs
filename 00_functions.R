@@ -205,7 +205,7 @@ estimate_theta_opt <- function(N0, lambda, K, t_max = 100) {
     N <- theta_logistic_proj(N0, lambda, K, theta, t_max)
     (tail(N, 1) - K)^2
   }
-  result <- optimize(objective_fn, lower = 0.01, upper = 3)
+  result <- optimize(objective_fn, lower = 0.01, upper = 5)
   return(result$minimum)
 }
 
