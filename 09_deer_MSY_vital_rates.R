@@ -18,12 +18,13 @@ K <- 1512638*2
 deer.matrix <- matrix(0,12,12)
 
 # Fecundity
-Fecundity <- c(0, 0.65, 0.76, 0.76, 0.76, 0.76)
+FecundityF <- c(0, 0.566, 0.658, 0.658, 0.658, 0.658)
+FecundityM <- c(0, 0.736, 0.854, 0.854, 0.854, 0.854)
 
 # Survival
 # Females
-deer.matrix[1,1:6] <- Fecundity
-deer.matrix[7,1:6] <- Fecundity
+deer.matrix[1,1:6] <- FecundityF
+deer.matrix[7,1:6] <- FecundityM
 deer.matrix[2,1] <- 0.52
 deer.matrix[3,2] <- 0.93
 deer.matrix[4,3] <- 0.84
@@ -113,11 +114,11 @@ ggplot(df) +
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 
 #### Adjust Survival and Fecundity ####
-adj.f <- seq(1, 2.5, by=0.1)  # Fecundity
-adj.sF <- seq(0.6, 1.6, by=0.1)  # Fawn survival (male + female)  
-adj.sYm <- seq(0.9, 1.6, by=0.1) # Yearling male survival  sYm=adj.sYm,
-adj.sAm3 <- seq(0.9, 1.6, by=0.1)  # 3-yr-old male survival  
-adj.sAm <- seq(0.9, 2.2, by=0.1) # adult male survival  
+adj.f <- seq(1, 2, by=0.1)  # Fecundity
+adj.sF <- seq(0.8, 1.4, by=0.1)  # Fawn survival (male + female)  
+adj.sYm <- seq(1, 1.6, by=0.1) # Yearling male survival  sYm=adj.sYm,
+adj.sAm3 <- seq(1, 1.6, by=0.1)  # 3-yr-old male survival  
+adj.sAm <- seq(1, 2.2, by=0.1) # adult male survival  
 adj.sAf <- seq(1, 1.2, by=0.1) # Adult female survival
 
 # Create all combinations of adjustments
@@ -169,25 +170,24 @@ for (i in 1:nrow(adj)) {
   # w <- Re(eigen(A_adj)$vectors[, 1])
   # w <- w / sum(w) # normalize to equal 1
   # # sum males
-  # wf <- sum(w[1:6]*deer.array[1:6,y-1,i])
-  # wm <- sum(w[7:12]*deer.array[7:12,y-1,i])
+  # wf <- sum(w[3:6]*deer.array[3:6,y-1,i])
+  # wm <- sum(w[9:12]*deer.array[9:12,y-1,i])
   # # buck to doe ratio
-  # bdr <- wf/wm
+  # bdr <- wm/wf
   
   # Put survival rates into a vector
   surv <- sum(c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6],
                 A_adj[8,7], A_adj[9,8], A_adj[10,9], A_adj[11,10], A_adj[12,11], A_adj[12,12]) < 1)
   
   if (lambda > 1.18 & (surv == 12)) {
-    print(i)
-    
+
     i_vec <- c(i_vec, i)
     
     lam_vec <- c(lam_vec, lambda)
     
-    a <- calibrate_a_opt(A_adj, N0, K)
-    # cat("Calibrated a =", a, "\n")
-    
+    # Calibrate theta
+    theta <- estimate_theta_opt(N0, lambda, K)
+
     # Calculate stable stage distribution
     w <- Re(eigen(A_adj)$vectors[, 1])
     w <- w / sum(w) # normalize to equal 1
@@ -214,6 +214,16 @@ for (i in 1:nrow(adj)) {
       # Calculate new pop size
       deer.array[,y,i] <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
     }
+    
+    # Check buck:doe ratio
+    af <- apply(deer.array[3:6,51:100,i], 1, median)
+    am <- apply(deer.array[9:12,51:100,i], 1, median)
+    bdr <- sum(am)/sum(af)
+    print(bdr)
+    
+    # if (bdr >= 0.7) {
+      print(i)
+    # }
     
   }
   
@@ -265,7 +275,7 @@ both.net |>
   slice_max(max_change)
 
 max_pop <- both.net |>
-  filter(increase=="V71285")
+  filter(increase=="V1792")
 
 ## Plot line with greatest MSY
 ggplot() +
@@ -278,13 +288,12 @@ ggplot() +
   theme(legend.position="none")
 
 
-both.incr[both.incr$increase=="V71285",]
+both.incr[both.incr$increase=="V1792",]
 
 # Population based on matrix with greatest MSY
-i <- i_vec[71285]
+i <- i_vec[1792]
 # i <- 310936
 
-A_adj <- deer.matrix
 # Fecundity
 A_adj[1, ] <- deer.matrix[1, ] * adj[i,1] 
 A_adj[7, ] <- deer.matrix[7, ] * adj[i,1] 
@@ -300,19 +309,24 @@ for (s in 3:5) {
 # Survive & stay (oldest females)
 A_adj[6,6] <- deer.matrix[s+1,s]*adj[i,3] 
 # Yearling male survival 
-A_adj[9,8] <- deer.matrix[9,8]*adj[i,4]
+# A_adj[9,8] <- deer.matrix[9,8]*adj[i,4]
+A_adj[9,8] <- 0.82
 # 3 yr old males
-A_adj[10,9] <- deer.matrix[10,9]*adj[i,5] 
+# A_adj[10,9] <- deer.matrix[10,9]*adj[i,5]
+A_adj[10,9] <- 0.82
 # Adult male survival
 for (s in 10:11) {
-  A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,6]
+  # A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,6]
+  A_adj[s+1,s] <- 0.82
 }
 # Survive & stay (oldest males)
-A_adj[12,12] <- deer.matrix[12,12] * adj[i,6]
+# A_adj[12,12] <- deer.matrix[12,12] * adj[i,6]
+A_adj[12,12] <- 0.82
+
 
 print(Re(eigen(A_adj)$values[1]))
 
-A_adj <- deer.matrix
+
 # Empty array to hold pop count
 Year <- 1:100
 deer.array <- matrix(0,nrow=12, ncol=length(Year))
@@ -364,6 +378,8 @@ ggplot(results) +
         panel.grid.major = element_blank(),panel.grid.minor = element_blank()) 
 
 
+ggmatplot::ggmatplot(t(deer.array), plot_type="line") 
+
 #### Add in stochasticity in vital rates ####
 set.seed(1)
 ##Stochastistic model
@@ -388,31 +404,31 @@ N0 <- w * 0.5 * K  # e.g., start at 50% of K
 # Fill starting population
 deer.array[,1,] <- N0
 
-theta <- 6#5.75
+theta <- 5.75
 
 
 for (i in 1:Sims) {
   
   ## Stochasticity on Survival (NEED TO FIX FOR DEER)
   A_s <- A_adj
-  # # Female survival
-  # for (s in 1:2) {
-  #   # Survive & go
-  #   A_s[s+1,s] <-  + rnorm(1, A_adj[s+1,s], A_adj[s+1,s]*s_pct_f)
-  # }
-  # # Survive & stay
-  # A_s[3,3] <- rnorm(1, A_adj[3,3], A_adj[3,3]*s_pct_f)
-  # # Male survival
-  # for (s in 4:5) {
-  #   # Survive & go
-  #   A_s[s+1,s] <- rnorm(1, A_adj[s+1,s], A_adj[s+1,s]*s_pct_m)
-  # }
-  # # Survive & stay
-  # A_s[6,6] <- rnorm(1, A_adj[6,6], A_adj[6,6]*s_pct_m)
-  # 
-  # ## Some stochasticity in fecundity
-  # A_s[1,1:3] <- rnorm(3, A_adj[1,1:3], A_adj[1,1:3]*s_pct_m)
-  # A_s[7,1:3] <- rnorm(3, A_adj[7,1:3], A_adj[7,1:3]*s_pct_m)
+  # Female survival
+  for (s in 1:2) {
+    # Survive & go
+    A_s[s+1,s] <-  + rnorm(1, A_adj[s+1,s], A_adj[s+1,s]*s_pct_f)
+  }
+  # Survive & stay
+  A_s[3,3] <- rnorm(1, A_adj[3,3], A_adj[3,3]*s_pct_f)
+  # Male survival
+  for (s in 4:5) {
+    # Survive & go
+    A_s[s+1,s] <- rnorm(1, A_adj[s+1,s], A_adj[s+1,s]*s_pct_m)
+  }
+  # Survive & stay
+  A_s[6,6] <- rnorm(1, A_adj[6,6], A_adj[6,6]*s_pct_m)
+
+  ## Some stochasticity in fecundity
+  A_s[1,1:3] <- rnorm(3, A_adj[1,1:3], A_adj[1,1:3]*s_pct_m)
+  A_s[7,1:3] <- rnorm(3, A_adj[7,1:3], A_adj[7,1:3]*s_pct_m)
   
   for (y in 2:length(Year)){
     
@@ -434,7 +450,7 @@ for (i in 1:Sims) {
     ## Harvest deer
     
     # Randomly select a random number to harvest
-    h <- round(rnorm(1, 220000, 20000), digits=0)
+    h <- round(rnorm(1, 240000, 20000), digits=0)
     
     # Split bucks and does
     doe_h <- h * 0.54
@@ -462,7 +478,9 @@ results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
 #Plot population projection
 ggplot(results) +
-  coord_cartesian(ylim=c(0,3200000)) +
+  coord_cartesian(ylim=c(0,2000000)) +
+  geom_hline(yintercept=1610000, color="red", linetype=3) +
+  geom_hline(yintercept=1750000, color="red", linetype=3) +
   geom_hline(yintercept=K) +
   geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="purple") +
   geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1) +
@@ -474,20 +492,17 @@ ggplot(results) +
 
 
 
-#### Decrease K over time ####
-A_adj
-# Adult male survival
-for (s in 10:11) {
-  A_adj[s+1,s] <- deer.matrix[s+1,s]*1.4
-}
-# Survive & stay (oldest males)
-A_adj[12,12] <- deer.matrix[12,12] * 1.4
-
+#### Decrease K over time - harvest ~240000 ####
 
 K_t <- K * exp(-0.001 * (0:(max(Year) - 1)))
-
+K_t <- K * exp(-0.002 * (0:(max(Year) - 1)))
 # K_t <- seq(K, 1500000, length.out=length(Year))
 
+A_adj[11,10] <- 0.82
+A_adj[12,11] <- 0.82
+A_adj[12,12] <- 0.82
+
+Re(eigen(A_adj)$values[1])
 
 set.seed(1)
 ##Stochastistic model
@@ -495,9 +510,9 @@ Year <- 1:100
 Sims <- 1000
 
 # Variation in Survival
-s_pct_f <- 0.01
-s_pct_m <- 0.01
-f_pct <- 0.01
+s_pct_f <- 0.05
+s_pct_m <- 0.05
+f_pct <- 0.05
 
 # Empty array to hold pop count
 deer.array <- array(0,dim=c(12,length(Year),Sims))
@@ -507,36 +522,36 @@ w <- Re(eigen(A_adj)$vectors[, 1])
 w <- w / sum(w) # normals to equal 1
 
 # Set up initial popualtion size
-N0 <- w * 0.5 * K  # e.g., start at 50% of K
+N0 <- w * 0.75 * K  # e.g., start at 50% of K
 
 # Fill starting population
 deer.array[,1,] <- N0
 
-theta <- 3#5.75
-
+# theta <- 3.5
+theta <- 3#4.3
 
 for (i in 1:Sims) {
   
   ## Stochasticity on Survival
   A_s <- A_adj
   # Female survival
-  # for (s in 1:2) {
-  #   # Survive & go
-  #   A_s[s+1,s] <-  + rnorm(1, A_adj[s+1,s], A_adj[s+1,s]*s_pct_f)
-  # }
-  # # Survive & stay
-  # A_s[3,3] <- rnorm(1, A_adj[3,3], A_adj[3,3]*s_pct_f)
-  # # Male survival
-  # for (s in 4:5) {
-  #   # Survive & go
-  #   A_s[s+1,s] <- rnorm(1, A_adj[s+1,s], A_adj[s+1,s]*s_pct_m)
-  # }
-  # # Survive & stay
-  # A_s[6,6] <- rnorm(1, A_adj[6,6], A_adj[6,6]*s_pct_m)
-  # 
-  # ## Some stochasticity in fecundity
-  # A_s[1,1:3] <- rnorm(3, A_adj[1,1:3], A_adj[1,1:3]*s_pct_m)
-  # A_s[7,1:3] <- rnorm(3, A_adj[7,1:3], A_adj[7,1:3]*s_pct_m)
+  for (s in 1:2) {
+    # Survive & go
+    A_s[s+1,s] <-  + rnorm(1, A_adj[s+1,s], A_adj[s+1,s]*s_pct_f)
+  }
+  # Survive & stay
+  A_s[3,3] <- rnorm(1, A_adj[3,3], A_adj[3,3]*s_pct_f)
+  # Male survival
+  for (s in 4:5) {
+    # Survive & go
+    A_s[s+1,s] <- rnorm(1, A_adj[s+1,s], A_adj[s+1,s]*s_pct_m)
+  }
+  # Survive & stay
+  A_s[6,6] <- rnorm(1, A_adj[6,6], A_adj[6,6]*s_pct_m)
+  
+  ## Some stochasticity in fecundity
+  A_s[1,1:3] <- rnorm(3, A_adj[1,1:3], A_adj[1,1:3]*s_pct_m)
+  A_s[7,1:3] <- rnorm(3, A_adj[7,1:3], A_adj[7,1:3]*s_pct_m)
   
   for (y in 2:length(Year)){
     
@@ -553,13 +568,15 @@ for (i in 1:Sims) {
     A_dd[1, ] <- A_dd[1, ] * density_factor # reduce fecundity
     A_dd[7, ] <- A_dd[7, ] * density_factor # reduce fecundity
     
+    # print(Re(eigen(A_dd)$values[1]))
+    
     # Calculate new pop size
     N_next <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
     
     ## Harvest deer
     
     # Randomly select a random number to harvest
-    h <- round(rnorm(1, 210000, 20000), digits=0)
+    h <- round(rnorm(1, 240000, 20000), digits=0)
     
     # Split bucks and does
     doe_h <- h * 0.54
@@ -587,7 +604,8 @@ results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
 #Plot population projection
 ggplot(results) +
-  coord_cartesian(ylim=c(0,3400000)) +
+  coord_cartesian(ylim=c(0,2000000)) +
+  geom_hline(yintercept=1610000, color="red", linetype=3) +
   geom_hline(yintercept=K) +
   geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="purple") +
   geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1) +

@@ -191,7 +191,7 @@ calibrate_a_opt <- function(A, N0, K_obs) {
 # Example theta-logistic projection function
 theta_logistic_proj <- function(N0, lambda, K, theta, t_max = 100) {
   N <- numeric(t_max)
-  N[1] <- N0
+  N[1] <- sum(N0)
   for (t in 2:t_max) {
     density_factor <- 1 / (1 + (N[t - 1] / K)^theta)
     N[t] <- N[t - 1] * lambda * density_factor
@@ -205,7 +205,7 @@ estimate_theta_opt <- function(N0, lambda, K, t_max = 100) {
     N <- theta_logistic_proj(N0, lambda, K, theta, t_max)
     (tail(N, 1) - K)^2
   }
-  result <- optimize(objective_fn, lower = 0.01, upper = 5)
+  result <- optimize(objective_fn, lower = 0.01, upper = 3)
   return(result$minimum)
 }
 
