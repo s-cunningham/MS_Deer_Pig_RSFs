@@ -275,7 +275,7 @@ both.net |>
   slice_max(max_change)
 
 max_pop <- both.net |>
-  filter(increase=="V1792")
+  filter(increase=="V8425")
 
 ## Plot line with greatest MSY
 ggplot() +
@@ -288,10 +288,10 @@ ggplot() +
   theme(legend.position="none")
 
 
-both.incr[both.incr$increase=="V1792",]
+both.incr[both.incr$increase=="V8425",]
 
 # Population based on matrix with greatest MSY
-i <- i_vec[1792]
+i <- i_vec[8425]
 # i <- 310936
 
 # Fecundity
@@ -309,19 +309,19 @@ for (s in 3:5) {
 # Survive & stay (oldest females)
 A_adj[6,6] <- deer.matrix[s+1,s]*adj[i,3] 
 # Yearling male survival 
-# A_adj[9,8] <- deer.matrix[9,8]*adj[i,4]
-A_adj[9,8] <- 0.82
+A_adj[9,8] <- deer.matrix[9,8]*adj[i,4]
+# A_adj[9,8] <- 0.82
 # 3 yr old males
-# A_adj[10,9] <- deer.matrix[10,9]*adj[i,5]
-A_adj[10,9] <- 0.82
+A_adj[10,9] <- deer.matrix[10,9]*adj[i,5]
+# A_adj[10,9] <- 0.82
 # Adult male survival
 for (s in 10:11) {
-  # A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,6]
-  A_adj[s+1,s] <- 0.82
+  A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,6]
+  # A_adj[s+1,s] <- 0.82
 }
 # Survive & stay (oldest males)
-# A_adj[12,12] <- deer.matrix[12,12] * adj[i,6]
-A_adj[12,12] <- 0.82
+A_adj[12,12] <- deer.matrix[12,12] * adj[i,6]
+# A_adj[12,12] <- 0.82
 
 
 print(Re(eigen(A_adj)$values[1]))
@@ -404,7 +404,11 @@ N0 <- w * 0.5 * K  # e.g., start at 50% of K
 # Fill starting population
 deer.array[,1,] <- N0
 
-theta <- 5.75
+
+# Calibrate density dependence parameter
+theta <- estimate_theta_opt(N0, lambda, K)
+cat("Estimated theta:", theta, "\n")
+# theta <- 5.75
 
 
 for (i in 1:Sims) {
@@ -450,7 +454,7 @@ for (i in 1:Sims) {
     ## Harvest deer
     
     # Randomly select a random number to harvest
-    h <- round(rnorm(1, 240000, 20000), digits=0)
+    h <- round(rnorm(1, 220000, 20000), digits=0)
     
     # Split bucks and does
     doe_h <- h * 0.54
@@ -467,7 +471,8 @@ for (i in 1:Sims) {
     N_next <- N_next - r
     
     # Save abundance
-    deer.array[,y,i] <- pmax(N_next, 0) 
+    deer.array[,y,i] <- pmax(N_next, 0)
+    pop.array[,y]  <- A %*% pop.array[,y-1] 
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
@@ -494,13 +499,14 @@ ggplot(results) +
 
 #### Decrease K over time - harvest ~240000 ####
 
-K_t <- K * exp(-0.001 * (0:(max(Year) - 1)))
-K_t <- K * exp(-0.002 * (0:(max(Year) - 1)))
-# K_t <- seq(K, 1500000, length.out=length(Year))
+K_t <- K * exp(-0.0001 * (0:(max(Year) - 1)))
+# K_t <- K * exp(-0.002 * (0:(max(Year) - 1)))
+K_t <- seq(K, K - K/4, length.out=length(Year))
 
-A_adj[11,10] <- 0.82
-A_adj[12,11] <- 0.82
-A_adj[12,12] <- 0.82
+A_adj[10,9] <- 0.86
+A_adj[11,10] <- 0.86
+A_adj[12,11] <- 0.86
+A_adj[12,12] <- 0.86
 
 Re(eigen(A_adj)$values[1])
 
@@ -510,9 +516,9 @@ Year <- 1:100
 Sims <- 1000
 
 # Variation in Survival
-s_pct_f <- 0.05
-s_pct_m <- 0.05
-f_pct <- 0.05
+s_pct_f <- 0.01
+s_pct_m <- 0.01
+f_pct <- 0.01
 
 # Empty array to hold pop count
 deer.array <- array(0,dim=c(12,length(Year),Sims))
@@ -528,7 +534,7 @@ N0 <- w * 0.75 * K  # e.g., start at 50% of K
 deer.array[,1,] <- N0
 
 # theta <- 3.5
-theta <- 3#4.3
+theta <- 10#4.3
 
 for (i in 1:Sims) {
   
@@ -604,7 +610,7 @@ results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
 #Plot population projection
 ggplot(results) +
-  coord_cartesian(ylim=c(0,2000000)) +
+  coord_cartesian(ylim=c(0,3500000)) +
   geom_hline(yintercept=1610000, color="red", linetype=3) +
   geom_hline(yintercept=K) +
   geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="purple") +
