@@ -42,8 +42,18 @@ w <- w / sum(w) # normals to equal 1
 N0 <- w * 0.01 * K  # e.g., start at 50% of K
 
 # Calibrate density dependence parameter
-a <- calibrate_a_opt(pig.matrix, N0, K)
-cat("Calibrated a =", a, "\n")
+# a <- calibrate_a_opt(pig.matrix, N0, K)
+# cat("Calibrated a =", a, "\n")
+
+lambda <- Re(eigen(pig.matrix)$values[1])
+
+# Calibrate density dependence
+theta <- estimate_theta_opt(N0[1:3], lambda, K)
+cat("Estimated theta:", theta, "\n")
+
+# Female K
+Kf <- K * 0.60
+
 
 # Empty array to hold pop count
 pig.array[,1] <- N0
@@ -52,11 +62,11 @@ for (y in 2:length(Year)){
     
   # Density dependent adjustment in fecundity
   # What was abundance at time step t-1
-  N_t <- sum(pig.array[,y-1])
+  Nf_t <- sum(pig.array[1:3,y-1])
   
   # Calcuate density factor
   # density_factor <- 1 / (1 + a * (N_t / K))
-  density_factor <- 1 / (1 + a * (N_t / K))
+  density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
   
   # save new matrix
   A_dd <- pig.matrix

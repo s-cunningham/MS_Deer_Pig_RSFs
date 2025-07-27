@@ -10,12 +10,15 @@ set.seed(123)
 Year <- 1:100
 
 # Carrying capacity
-# K <- 2347197*2
-K <- 1512638*2
-# K <- 2640597
+# K <- 2347197
+K <- 1512638
 
 # Set up deer matrix
 deer.matrix <- matrix(0,12,12)
+
+# Maximum fecundity
+R0a <- 1.8
+R0y <- 1.4
 
 # Fecundity
 FecundityF <- c(0, 0.566, 0.658, 0.658, 0.658, 0.658)
@@ -49,28 +52,24 @@ N0 <- w * 0.1 * K  # e.g., start at 50% of K
 lambda <- Re(eigen(deer.matrix)$values[1])
 
 # Calibrate density dependence parameter
-theta <- estimate_theta_opt(N0, lambda, K)
+theta <- estimate_theta_opt(N0[1:6], lambda, K)
 cat("Estimated theta:", theta, "\n")
 
-# print(Re(eigen(deer.matrix)$values[1]))
+Kf <- K * 0.60
 
 # Empty array to hold pop count
 deer.array <- matrix(0,nrow=12, ncol=length(Year))
 deer.array[,1] <- N0
 
-lambda <- Re(eigen(deer.matrix)$values[1])  
-
 for (y in 2:length(Year)){
   
   # Density dependent adjustment in fecundity
   # What was abundance at time step t-1
-  N_t <- sum(deer.array[,y-1])
+  Nf_t <- sum(deer.array[1:6,y-1])
   
   # Calcuate density factor
-  # density_factor <- 1 / (1 + a * (N_t / K))
-  density_factor <- 1 / (1 + (N_t / K)^theta)
-  # density_factor <- max(1 - a * (N_t / K), 0)
-  
+  density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
+
   # save new matrix
   A_dd <- deer.matrix
   A_dd[1,2:6] <- A_dd[1,2:6] * density_factor # reduce fecundity
@@ -114,15 +113,15 @@ ggplot(df) +
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 
 #### Adjust Survival and Fecundity ####
-adj.f <- seq(1, 2, by=0.1)  # Fecundity
-adj.sF <- seq(0.8, 1.4, by=0.1)  # Fawn survival (male + female)  
-adj.sYm <- seq(1, 1.6, by=0.1) # Yearling male survival  sYm=adj.sYm,
-adj.sAm3 <- seq(1, 1.6, by=0.1)  # 3-yr-old male survival  
-adj.sAm <- seq(1, 2.2, by=0.1) # adult male survival  
-adj.sAf <- seq(1, 1.2, by=0.1) # Adult female survival
+# adj.f <- seq(1, 2, by=0.1)  # Fecundity
+adj.sF <- seq(0.8, 1.2, by=0.1)  # Fawn survival (male + female)  
+adj.sYm <- seq(1, 1.4, by=0.1) # Yearling male survival  sYm=adj.sYm,
+adj.sAm3 <- seq(1, 1.2, by=0.1)  # 3-yr-old male survival  
+adj.sAm <- seq(1, 1.8, by=0.1) # adult male survival  
+# adj.sAf <- seq(1, 1.2, by=0.1) # Adult female survival
 
 # Create all combinations of adjustments
-adj <- expand.grid(f=adj.f, sF=adj.sF, saf=adj.sAf, sYm=adj.sYm, sm3=adj.sAm3, sm=adj.sAm) #
+adj <- expand.grid(sF=adj.sF, sYm=adj.sYm, sm3=adj.sAm3, sm=adj.sAm) #f=adj.f, saf=adj.sAf,
 
 adj <- adj |>
   distinct()
@@ -138,55 +137,38 @@ for (i in 1:nrow(adj)) {
   
   A_adj <- deer.matrix
   # Fecundity
-  A_adj[1, ] <- deer.matrix[1, ] * adj[i,1] 
-  A_adj[7, ] <- deer.matrix[7, ] * adj[i,1] 
+  A_adj[1, ] <- deer.matrix[1, ] #* adj[i,1]
+  A_adj[7, ] <- deer.matrix[7, ] #* adj[i,1]
   
   # Fawn survival
-  A_adj[2,1] <- deer.matrix[2,1] * adj[i,2]
-  A_adj[8,7] <- deer.matrix[2,1] * adj[i,2]
+  A_adj[2,1] <- deer.matrix[2,1] * adj[i,1]
+  A_adj[8,7] <- deer.matrix[2,1] * adj[i,1]
   
   # Adult female survival
   for (s in 3:5) {
-    A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,3]
+    A_adj[s+1,s] <- deer.matrix[s+1,s]#*adj[i,2]
   }
   # Survive & stay (oldest females)
-  A_adj[6,6] <- deer.matrix[s+1,s]*adj[i,3]
+  A_adj[6,6] <- deer.matrix[s+1,s]#*adj[i,2]
   # Yearling male survival 
-  A_adj[9,8] <- deer.matrix[9,8]*adj[i,4]
+  A_adj[9,8] <- deer.matrix[9,8]*adj[i,2]
   # 3 yr old males
-  A_adj[10,9] <- deer.matrix[10,9]*adj[i,5] 
+  A_adj[10,9] <- deer.matrix[10,9]*adj[i,3] 
   # Adult male survival
   for (s in 10:11) {
-    A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,6]
+    A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,4]
   }
   # Survive & stay (oldest males)
-  A_adj[12,12] <- deer.matrix[12,12] * adj[i,6]
+  A_adj[12,12] <- deer.matrix[12,12] * adj[i,4]
   
   # Check lambda
   lambda <- Re(eigen(A_adj)$values[1])
-  
-  # check buck to doe ratio (see Nagy-Reis et al. 2021 - 1.20)
-  # stable stage of the matrix
-  # w <- Re(eigen(A_adj)$vectors[, 1])
-  # w <- w / sum(w) # normalize to equal 1
-  # # sum males
-  # wf <- sum(w[3:6]*deer.array[3:6,y-1,i])
-  # wm <- sum(w[9:12]*deer.array[9:12,y-1,i])
-  # # buck to doe ratio
-  # bdr <- wm/wf
   
   # Put survival rates into a vector
   surv <- sum(c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6],
                 A_adj[8,7], A_adj[9,8], A_adj[10,9], A_adj[11,10], A_adj[12,11], A_adj[12,12]) < 1)
   
   if (lambda > 1.18 & (surv == 12)) {
-
-    i_vec <- c(i_vec, i)
-    
-    lam_vec <- c(lam_vec, lambda)
-    
-    # Calibrate theta
-    theta <- estimate_theta_opt(N0, lambda, K)
 
     # Calculate stable stage distribution
     w <- Re(eigen(A_adj)$vectors[, 1])
@@ -195,16 +177,20 @@ for (i in 1:nrow(adj)) {
     # Set up initial popualtion size
     N0 <- w * 0.1 * K
     
+    # Calibrate theta
+    theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
+    
+    # Fill in initial popualtion size
     deer.array[,1,i] <- N0
     
     for (y in 2:length(Year)){
       
       # Density dependent adjustment in fecundity
       # What was abundance at time step t-1
-      N_t <- sum(deer.array[,y-1,i])
+      Nf_t <- sum(deer.array[1:6,y-1,i])
       
       # Calcuate density factor
-      density_factor <- 1 / (1 + (N_t / K)^theta)
+      density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
       
       # save new matrix
       A_dd <- A_adj
@@ -218,15 +204,18 @@ for (i in 1:nrow(adj)) {
     # Check buck:doe ratio
     af <- apply(deer.array[3:6,51:100,i], 1, median)
     am <- apply(deer.array[9:12,51:100,i], 1, median)
-    bdr <- sum(am)/sum(af)
-    print(bdr)
     
-    # if (bdr >= 0.7) {
-      print(i)
-    # }
+    # buck to doe ratio
+    asr <- sum(am)/sum(af)
+    print(asr)
     
+    # Only save projections with approximately feasible sex ratios
+    if (asr>0.5 & asr<=1) {
+      i_vec <- c(i_vec, i)
+      
+      lam_vec <- c(lam_vec, lambda)
+    }
   }
-  
 }
 
 # drop slices that don't have i index in i_vec
@@ -275,7 +264,7 @@ both.net |>
   slice_max(max_change)
 
 max_pop <- both.net |>
-  filter(increase=="V8425")
+  filter(increase=="V276")
 
 ## Plot line with greatest MSY
 ggplot() +
@@ -288,39 +277,39 @@ ggplot() +
   theme(legend.position="none")
 
 
-both.incr[both.incr$increase=="V8425",]
+both.incr[both.incr$increase=="V423",]
 
 # Population based on matrix with greatest MSY
-i <- i_vec[8425]
+i <- i_vec[276]
 # i <- 310936
 
 # Fecundity
-A_adj[1, ] <- deer.matrix[1, ] * adj[i,1] 
-A_adj[7, ] <- deer.matrix[7, ] * adj[i,1] 
+A_adj[1, ] <- deer.matrix[1, ] 
+A_adj[7, ] <- deer.matrix[7, ] 
 
 # Fawn survival
-A_adj[2,1] <- deer.matrix[2,1] * adj[i,2]
-A_adj[8,7] <- deer.matrix[2,1] * adj[i,2]
+A_adj[2,1] <- deer.matrix[2,1] * adj[i,1]
+A_adj[8,7] <- deer.matrix[2,1] * adj[i,1]
 
 # Adult female survival
 for (s in 3:5) {
-  A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,3]
+  A_adj[s+1,s] <- deer.matrix[s+1,s]#*adj[i,2]
 }
 # Survive & stay (oldest females)
-A_adj[6,6] <- deer.matrix[s+1,s]*adj[i,3] 
+A_adj[6,6] <- deer.matrix[s+1,s]#*adj[i,2] 
 # Yearling male survival 
-A_adj[9,8] <- deer.matrix[9,8]*adj[i,4]
+A_adj[9,8] <- deer.matrix[9,8]*adj[i,2]
 # A_adj[9,8] <- 0.82
 # 3 yr old males
-A_adj[10,9] <- deer.matrix[10,9]*adj[i,5]
+A_adj[10,9] <- deer.matrix[10,9]*adj[i,3]
 # A_adj[10,9] <- 0.82
 # Adult male survival
 for (s in 10:11) {
-  A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,6]
+  A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,4]
   # A_adj[s+1,s] <- 0.82
 }
 # Survive & stay (oldest males)
-A_adj[12,12] <- deer.matrix[12,12] * adj[i,6]
+A_adj[12,12] <- deer.matrix[12,12] * adj[i,4]
 # A_adj[12,12] <- 0.82
 
 
@@ -331,10 +320,6 @@ print(Re(eigen(A_adj)$values[1]))
 Year <- 1:100
 deer.array <- matrix(0,nrow=12, ncol=length(Year))
 
-# Calibrate density dependence parameter
-theta <- estimate_theta_opt(N0, lambda, K)
-cat("Estimated theta:", theta, "\n")
-
 # Calculate stable stage distribution
 w <- Re(eigen(A_adj)$vectors[, 1])
 w <- w / sum(w) # normalize to equal 1
@@ -342,16 +327,20 @@ w <- w / sum(w) # normalize to equal 1
 # Set up initial popualtion size
 N0 <- w * 0.5 * K
 
+# Calibrate density dependence parameter
+theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
+cat("Estimated theta:", theta, "\n")
+
 deer.array[,1] <- N0
 
 for (y in 2:length(Year)){
   
   # Density dependent adjustment in fecundity
   # What was abundance at time step t-1
-  N_t <- sum(deer.array[,y-1])
+  Nf_t <- sum(deer.array[1:6,y-1])
   
   # Calcuate density factor
-  density_factor <- 1 / (1 + (N_t / K)^theta)
+  density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
   
   # save new matrix
   A_dd <- A_adj
@@ -406,9 +395,9 @@ deer.array[,1,] <- N0
 
 
 # Calibrate density dependence parameter
-theta <- estimate_theta_opt(N0, lambda, K)
+theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
-# theta <- 5.75
+# theta <- 5
 
 
 for (i in 1:Sims) {
@@ -438,10 +427,10 @@ for (i in 1:Sims) {
     
     # Density dependent adjustment in fecundity
     # What was abundance at time step t-1
-    N_t <- sum(deer.array[,y-1,i])
+    Nf_t <- sum(deer.array[1:6,y-1,i])
     
     # Calcuate density factor
-    density_factor <- 1 / (1 + (N_t / K)^theta)
+    density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
     
     # save new matrix
     A_dd <- A_s
@@ -450,6 +439,10 @@ for (i in 1:Sims) {
     
     # Calculate new pop size
     N_next <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
+    
+    # Check adult age ratio
+    asr <- sum(N_next[8:12,1])/sum(N_next[2:6,1])
+    
     
     ## Harvest deer
     
@@ -472,7 +465,7 @@ for (i in 1:Sims) {
     
     # Save abundance
     deer.array[,y,i] <- pmax(N_next, 0)
-    pop.array[,y]  <- A %*% pop.array[,y-1] 
+
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
@@ -483,9 +476,9 @@ results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
 #Plot population projection
 ggplot(results) +
-  coord_cartesian(ylim=c(0,2000000)) +
-  geom_hline(yintercept=1610000, color="red", linetype=3) +
-  geom_hline(yintercept=1750000, color="red", linetype=3) +
+  # coord_cartesian(ylim=c(0,2000000)) +
+  # geom_hline(yintercept=1610000, color="red", linetype=3) +
+  # geom_hline(yintercept=1750000, color="red", linetype=3) +
   geom_hline(yintercept=K) +
   geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="purple") +
   geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1) +
