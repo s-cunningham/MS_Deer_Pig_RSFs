@@ -16,18 +16,8 @@ K <- 1512638
 # Set up deer matrix
 deer.matrix <- matrix(0,12,12)
 
-# Maximum fecundity
-R0a <- 1.8
-R0y <- 1.4
-
-# Fecundity
-FecundityF <- c(0, 0.566, 0.658, 0.658, 0.658, 0.658)
-FecundityM <- c(0, 0.736, 0.854, 0.854, 0.854, 0.854)
-
-# Survival
+## Survival
 # Females
-deer.matrix[1,1:6] <- FecundityF
-deer.matrix[7,1:6] <- FecundityM
 deer.matrix[2,1] <- 0.52
 deer.matrix[3,2] <- 0.93
 deer.matrix[4,3] <- 0.84
@@ -41,6 +31,23 @@ deer.matrix[10,9] <- 0.63
 deer.matrix[11,10] <- 0.53
 deer.matrix[12,11] <- 0.44
 deer.matrix[12,12] <- 0.49
+
+## Fecundity
+# Maximum fecundity
+R0a <- 1.8
+R0y <- 1.4
+
+pct_m <- 0.565
+pct_f <- 0.435
+
+# Calculate for post-breeding census
+FecundityM <- c(0, R0y*deer.matrix[3,2], R0a*deer.matrix[4,3], R0a*deer.matrix[5,4], R0a*deer.matrix[6,5], R0a*deer.matrix[6,6])*pct_m 
+FecundityF <- c(0, R0y*deer.matrix[3,2], R0a*deer.matrix[4,3], R0a*deer.matrix[5,4], R0a*deer.matrix[6,5], R0a*deer.matrix[6,6])*pct_f 
+# Fecundity <- c(0, R0y*deer.matrix[3,2], R0a*deer.matrix[4,3], R0a*deer.matrix[5,4], R0a*deer.matrix[6,5], R0a*deer.matrix[6,6])*0.5
+
+# Add to matrix
+deer.matrix[1,1:6] <- FecundityF
+deer.matrix[7,1:6] <- FecundityM
 
 # Calculate stable stage distribution
 w <- Re(eigen(deer.matrix)$vectors[, 1])
@@ -113,18 +120,20 @@ ggplot(df) +
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 
 #### Adjust Survival and Fecundity ####
-# adj.f <- seq(1, 2, by=0.1)  # Fecundity
-adj.sF <- seq(0.8, 1.2, by=0.1)  # Fawn survival (male + female)  
-adj.sYm <- seq(1, 1.4, by=0.1) # Yearling male survival  sYm=adj.sYm,
-adj.sAm3 <- seq(1, 1.2, by=0.1)  # 3-yr-old male survival  
-adj.sAm <- seq(1, 1.8, by=0.1) # adult male survival  
-# adj.sAf <- seq(1, 1.2, by=0.1) # Adult female survival
+adj.f <- seq(1.2, 2, by=0.1)  # Fecundity
+adj.sF <- seq(0.4, 0.8, by=0.1)  # Fawn survival (male + female)  
+adj.sYm <- seq(0.4, 0.9, by=0.1) # Yearling male survival  sYm=adj.sYm,
+adj.sAm3 <- seq(0.4, 0.9, by=0.1)  # 3-yr-old male survival  
+adj.sAm <- seq(0.4, 0.9, by=0.1) # adult male survival  
+adj.sAf <- seq(0.8, 0.96, by=0.02) # Adult female survival
 
 # Create all combinations of adjustments
-adj <- expand.grid(sF=adj.sF, sYm=adj.sYm, sm3=adj.sAm3, sm=adj.sAm) #f=adj.f, saf=adj.sAf,
+adj <- expand.grid(sF=adj.sF, sYm=adj.sYm, sm3=adj.sAm3, sm=adj.sAm, f=adj.f, saf=adj.sAf) #
 
 adj <- adj |>
   distinct()
+
+theta <- 3
 
 # Empty array to hold pop count
 deer.array <- array(0, dim=c(12,length(Year),nrow(adj)))
@@ -135,31 +144,40 @@ lam_vec <- c()
 
 for (i in 1:nrow(adj)) {
   
-  A_adj <- deer.matrix
-  # Fecundity
-  A_adj[1, ] <- deer.matrix[1, ] #* adj[i,1]
-  A_adj[7, ] <- deer.matrix[7, ] #* adj[i,1]
+  # Set up deer matrix
+  A_adj <- matrix(0,12,12)
   
-  # Fawn survival
-  A_adj[2,1] <- deer.matrix[2,1] * adj[i,1]
-  A_adj[8,7] <- deer.matrix[2,1] * adj[i,1]
+  ## Survival
+  # Females
+  A_adj[2,1] <- adj[i,1]
+  A_adj[3,2] <- 0.93
+  A_adj[4,3] <- adj[i,6]
+  A_adj[5,4] <- adj[i,6]
+  A_adj[6,5] <- adj[i,6]
+  A_adj[6,6] <- adj[i,6]
+  # Males
+  A_adj[8,7] <- adj[i,1] # fawn
+  A_adj[9,8] <- adj[i,2] # yearling
+  A_adj[10,9] <- adj[i,3] # 2
+  A_adj[11,10] <- adj[i,3] # 3
+  A_adj[12,11] <- adj[i,4] # 4
+  A_adj[12,12] <- adj[i,4] # 5+
   
-  # Adult female survival
-  for (s in 3:5) {
-    A_adj[s+1,s] <- deer.matrix[s+1,s]#*adj[i,2]
-  }
-  # Survive & stay (oldest females)
-  A_adj[6,6] <- deer.matrix[s+1,s]#*adj[i,2]
-  # Yearling male survival 
-  A_adj[9,8] <- deer.matrix[9,8]*adj[i,2]
-  # 3 yr old males
-  A_adj[10,9] <- deer.matrix[10,9]*adj[i,3] 
-  # Adult male survival
-  for (s in 10:11) {
-    A_adj[s+1,s] <- deer.matrix[s+1,s]*adj[i,4]
-  }
-  # Survive & stay (oldest males)
-  A_adj[12,12] <- deer.matrix[12,12] * adj[i,4]
+  ## Fecundity
+  # Maximum fecundity
+  R0a <- adj[i,5]
+  R0y <- round(adj[i,5]*0.77777, digits=2)
+  
+  pct_m <- 0.565
+  pct_f <- 0.435
+  
+  # Calculate for post-breeding census
+  FecundityM <- c(0, R0y*A_adj[3,2], R0a*A_adj[4,3], R0a*A_adj[5,4], R0a*A_adj[6,5], R0a*A_adj[6,6])*pct_m 
+  FecundityF <- c(0, R0y*A_adj[3,2], R0a*A_adj[4,3], R0a*A_adj[5,4], R0a*A_adj[6,5], R0a*A_adj[6,6])*pct_f 
+
+  # Add to matrix
+  A_adj[1,1:6] <- FecundityF
+  A_adj[7,1:6] <- FecundityM
   
   # Check lambda
   lambda <- Re(eigen(A_adj)$values[1])
@@ -178,12 +196,12 @@ for (i in 1:nrow(adj)) {
     N0 <- w * 0.1 * K
     
     # Calibrate theta
-    theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
+    # theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
     
     # Fill in initial popualtion size
     deer.array[,1,i] <- N0
     
-    for (y in 2:length(Year)){
+    for (y in 2:length(Year)) {
       
       # Density dependent adjustment in fecundity
       # What was abundance at time step t-1
@@ -198,19 +216,39 @@ for (i in 1:nrow(adj)) {
       A_dd[7, ] <- A_dd[7, ] * density_factor # reduce fecundity
       
       # Calculate new pop size
-      deer.array[,y,i] <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
+      N_next <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
+      
+      ## Harvest deer
+      # Randomly select a random number to harvest
+      h <- round(rnorm(1, 220000, 20000), digits=0)
+      
+      # Split bucks and does
+      doe_h <- h * 0.54
+      buck_h <- h - doe_h
+      
+      # Proportional does
+      doe_r <- c(0.0735, 0.189, 0.1895, 0.183, 0.183, 0.182)*doe_h
+      
+      # Proportional bucks
+      buck_r <- c(0.04, 0.11, 0.12, 0.23, 0.25, 0.25)*buck_h
+      
+      r <- c(doe_r, buck_r)
+      
+      N_next <- N_next - r
+      
+      # Save abundance
+      deer.array[,y,i] <- pmax(N_next, 0)# Make sure to multiply matrix x vector (not vice versa)
     }
     
     # Check buck:doe ratio
     af <- apply(deer.array[3:6,51:100,i], 1, median)
     am <- apply(deer.array[9:12,51:100,i], 1, median)
     
-    # buck to doe ratio
     asr <- sum(am)/sum(af)
-    print(asr)
+    cat("Adult Sex Ratio:", asr, "\n")
     
     # Only save projections with approximately feasible sex ratios
-    if (asr>0.5 & asr<=1) {
+    if (!is.na(asr) & asr>0.5 & asr<=1) {
       i_vec <- c(i_vec, i)
       
       lam_vec <- c(lam_vec, lambda)
@@ -257,14 +295,8 @@ both.diff <- both.net |>
   reframe(min_change=min(msy_diff)) |>
   slice_min(min_change)
 
-
-both.net |>
-  group_by(increase) |>
-  reframe(max_change=max(net)) |>
-  slice_max(max_change)
-
 max_pop <- both.net |>
-  filter(increase=="V276")
+  filter(increase=="V162")
 
 ## Plot line with greatest MSY
 ggplot() +
@@ -277,11 +309,10 @@ ggplot() +
   theme(legend.position="none")
 
 
-both.incr[both.incr$increase=="V423",]
+# both.incr[both.incr$increase=="V423",]
 
 # Population based on matrix with greatest MSY
-i <- i_vec[276]
-# i <- 310936
+i <- i_vec[162]
 
 # Fecundity
 A_adj[1, ] <- deer.matrix[1, ] 
@@ -315,6 +346,7 @@ A_adj[12,12] <- deer.matrix[12,12] * adj[i,4]
 
 print(Re(eigen(A_adj)$values[1]))
 
+A_adj <- deer.matrix
 
 # Empty array to hold pop count
 Year <- 1:100
@@ -367,7 +399,7 @@ ggplot(results) +
         panel.grid.major = element_blank(),panel.grid.minor = element_blank()) 
 
 
-ggmatplot::ggmatplot(t(deer.array), plot_type="line") 
+ggmatplot::ggmatplot(t(deer.array), plot_type="line", linewidth=1) 
 
 #### Add in stochasticity in vital rates ####
 set.seed(1)
@@ -442,7 +474,7 @@ for (i in 1:Sims) {
     
     # Check adult age ratio
     asr <- sum(N_next[8:12,1])/sum(N_next[2:6,1])
-    
+    cat("Adult Sex Ratio:", asr, "\n")
     
     ## Harvest deer
     
@@ -462,10 +494,19 @@ for (i in 1:Sims) {
     r <- c(doe_r, buck_r)
     
     N_next <- N_next - r
-    
+
     # Save abundance
     deer.array[,y,i] <- pmax(N_next, 0)
 
+    # Check buck:doe ratio
+    af <- sum(deer.array[2:6,y,i])
+    am <- sum(deer.array[8:12,y,i])
+    
+    if (sum(af) < 1) {
+      warning("Female bottleneck: reproductive females lost!")
+      # Optionally, set ASR to NA or a capped value
+    }
+    
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
@@ -476,9 +517,9 @@ results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
 #Plot population projection
 ggplot(results) +
-  # coord_cartesian(ylim=c(0,2000000)) +
-  # geom_hline(yintercept=1610000, color="red", linetype=3) +
-  # geom_hline(yintercept=1750000, color="red", linetype=3) +
+  coord_cartesian(ylim=c(0,2000000)) +
+  geom_hline(yintercept=1610000, color="red", linetype=3) +
+  geom_hline(yintercept=1750000, color="red", linetype=3) +
   geom_hline(yintercept=K) +
   geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="purple") +
   geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1) +
