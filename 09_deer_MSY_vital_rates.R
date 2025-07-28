@@ -10,27 +10,27 @@ set.seed(123)
 Year <- 1:100
 
 # Carrying capacity
-K <- 2347197*2
-# K <- 1512638*2
+K <- 2347197
+# K <- 1512638
 
 # Set up deer matrix
 deer.matrix <- matrix(0,12,12)
 
 ## Survival
 # Females
-deer.matrix[2,1] <- 0.52
+deer.matrix[2,1] <- 0.57
 deer.matrix[3,2] <- 0.93
-deer.matrix[4,3] <- 0.84
-deer.matrix[5,4] <- 0.84
-deer.matrix[6,5] <- 0.84
-deer.matrix[6,6] <- 0.84
+deer.matrix[4,3] <- 0.93
+deer.matrix[5,4] <- 0.93
+deer.matrix[6,5] <- 0.93
+deer.matrix[6,6] <- 0.93
 # Males
-deer.matrix[8,7] <- 0.52
+deer.matrix[8,7] <- 0.57
 deer.matrix[9,8] <- 0.82
 deer.matrix[10,9] <- 0.63
-deer.matrix[11,10] <- 0.53
-deer.matrix[12,11] <- 0.44
-deer.matrix[12,12] <- 0.49
+deer.matrix[11,10] <- 0.60
+deer.matrix[12,11] <- 0.58
+deer.matrix[12,12] <- 0.53
 
 ## Fecundity
 # Maximum fecundity
@@ -218,24 +218,29 @@ for (i in 1:nrow(adj)) {
       # Calculate new pop size
       N_next <- A_dd %*% deer.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
       
-      ## Harvest deer
-      # Randomly select a random number to harvest
-      h <- round(rnorm(1, 150000, 20000), digits=0)
-      
-      # Split bucks and does
-      doe_h <- h * 0.54
-      buck_h <- h - doe_h
-      
-      # Proportional does
-      doe_r <- c(0.0735, 0.189, 0.1895, 0.183, 0.183, 0.182)*doe_h
-      
-      # Proportional bucks
-      buck_r <- c(0.04, 0.11, 0.12, 0.23, 0.25, 0.25)*buck_h
-      
-      r <- c(doe_r, buck_r)
-      
-      N_next <- N_next - r
-      
+      # Only harvest after year 10 to let pop get to suitable level
+      if (y > 10) {
+        
+        ## Harvest deer
+        # Randomly select a random number to harvest
+        h <- round(rnorm(1, 100000, 20000), digits=0)
+        
+        # Split bucks and does
+        doe_h <- h * 0.54
+        buck_h <- h - doe_h
+        
+        # Proportional does
+        doe_r <- c(0.0735, 0.189, 0.1895, 0.183, 0.183, 0.182)*doe_h
+        
+        # Proportional bucks
+        buck_r <- c(0.04, 0.11, 0.12, 0.23, 0.25, 0.25)*buck_h
+        
+        r <- c(doe_r, buck_r)
+        
+        N_next <- N_next - r
+        
+      }
+
       # Save abundance
       deer.array[,y,i] <- pmax(N_next, 0)# Make sure to multiply matrix x vector (not vice versa)
     }
@@ -476,25 +481,26 @@ for (i in 1:Sims) {
     asr <- sum(N_next[8:12,1])/sum(N_next[2:6,1])
     cat("Adult Sex Ratio:", asr, "\n")
     
-    ## Harvest deer
+    ## Harvest deer (after letting population increase for 10ish years)
+    if (y > 30) {
+      # Randomly select a random number to harvest
+      h <- round(rnorm(1, 220000, 20000), digits=0)
+      
+      # Split bucks and does
+      doe_h <- h * 0.54
+      buck_h <- h - doe_h
+      
+      # Proportional does
+      doe_r <- c(0.0735, 0.189, 0.1895, 0.183, 0.183, 0.182)*doe_h
+      
+      # Proportional bucks
+      buck_r <- c(0.04, 0.11, 0.12, 0.23, 0.25, 0.25)*buck_h
+      
+      r <- c(doe_r, buck_r)
+      
+      N_next <- N_next - r
+    }
     
-    # Randomly select a random number to harvest
-    h <- round(rnorm(1, 220000, 20000), digits=0)
-    
-    # Split bucks and does
-    doe_h <- h * 0.54
-    buck_h <- h - doe_h
-    
-    # Proportional does
-    doe_r <- c(0.0735, 0.189, 0.1895, 0.183, 0.183, 0.182)*doe_h
-    
-    # Proportional bucks
-    buck_r <- c(0.04, 0.11, 0.12, 0.23, 0.25, 0.25)*buck_h
-    
-    r <- c(doe_r, buck_r)
-    
-    N_next <- N_next - r
-
     # Save abundance
     deer.array[,y,i] <- pmax(N_next, 0)
 
@@ -517,7 +523,7 @@ results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
 #Plot population projection
 ggplot(results) +
-  coord_cartesian(ylim=c(0,2000000)) +
+  # coord_cartesian(ylim=c(0,2000000)) +
   geom_hline(yintercept=1610000, color="red", linetype=3) +
   geom_hline(yintercept=1750000, color="red", linetype=3) +
   geom_hline(yintercept=K) +
@@ -533,7 +539,7 @@ ggplot(results) +
 
 #### Decrease K over time - harvest ~240000 ####
 
-K_t <- K * exp(-0.0001 * (0:(max(Year) - 1)))
+K_t <- K * exp(-0.001 * (0:(max(Year) - 1)))
 # K_t <- K * exp(-0.002 * (0:(max(Year) - 1)))
 K_t <- seq(K, K - K/4, length.out=length(Year))
 
