@@ -10,8 +10,8 @@ set.seed(123)
 Year <- 1:100
 
 # Carrying capacity
-# K <- 2347197
-K <- 1512638*2
+K <- 2347197*2
+# K <- 1512638*2
 
 # Set up deer matrix
 deer.matrix <- matrix(0,12,12)
@@ -120,8 +120,8 @@ ggplot(df) +
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 
 #### Adjust Survival and Fecundity ####
-adj.f <- seq(1.2, 2, by=0.1)  # Fecundity
-adj.sF <- seq(0.4, 0.8, by=0.1)  # Fawn survival (male + female)  
+adj.f <- seq(1.2, 2.1, by=0.1)  # Fecundity
+adj.sF <- seq(0.4, 0.75, by=0.1)  # Fawn survival (male + female)  
 adj.sYm <- seq(0.4, 0.9, by=0.1) # Yearling male survival  sYm=adj.sYm,
 adj.sAm3 <- seq(0.4, 0.9, by=0.1)  # 3-yr-old male survival  
 adj.sAm <- seq(0.4, 0.9, by=0.1) # adult male survival  
@@ -157,8 +157,8 @@ for (i in 1:nrow(adj)) {
   A_adj[6,6] <- adj[i,6]
   # Males
   A_adj[8,7] <- adj[i,1] # fawn
-  A_adj[9,8] <- adj[i,2] # yearling
-  A_adj[10,9] <- adj[i,3] # 2
+  A_adj[9,8] <- 0.82 # yearling
+  A_adj[10,9] <- adj[i,2] # 2
   A_adj[11,10] <- adj[i,3] # 3
   A_adj[12,11] <- adj[i,4] # 4
   A_adj[12,12] <- adj[i,4] # 5+
@@ -168,8 +168,8 @@ for (i in 1:nrow(adj)) {
   R0a <- adj[i,5]
   R0y <- round(adj[i,5]*0.77777, digits=2)
   
-  pct_m <- 0.565
-  pct_f <- 0.435
+  pct_m <- 0.5#0.565
+  pct_f <- 0.5#0.435
   
   # Calculate for post-breeding census
   FecundityM <- c(0, R0y*A_adj[3,2], R0a*A_adj[4,3], R0a*A_adj[5,4], R0a*A_adj[6,5], R0a*A_adj[6,6])*pct_m 
@@ -220,7 +220,7 @@ for (i in 1:nrow(adj)) {
       
       ## Harvest deer
       # Randomly select a random number to harvest
-      h <- round(rnorm(1, 220000, 20000), digits=0)
+      h <- round(rnorm(1, 150000, 20000), digits=0)
       
       # Split bucks and does
       doe_h <- h * 0.54
