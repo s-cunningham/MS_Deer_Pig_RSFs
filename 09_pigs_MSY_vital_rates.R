@@ -15,6 +15,8 @@ Year <- 1:50
 # Carrying capacity
 K <- 2034396
 
+Kf <- K * 0.5
+
 # Set up pig matrix
 pig.array <- matrix(0,nrow=6, ncol=length(Year))
 pig.matrix <- matrix(0,6,6)
@@ -42,37 +44,27 @@ w <- w / sum(w) # normals to equal 1
 N0 <- w * 0.01 * K  # e.g., start at 50% of K
 
 # Calibrate density dependence parameter
-# a <- calibrate_a_opt(pig.matrix, N0, K)
-# cat("Calibrated a =", a, "\n")
-
-lambda <- Re(eigen(pig.matrix)$values[1])
-
-# Calibrate density dependence
-theta <- estimate_theta_opt(N0[1:3], lambda, K)
-cat("Estimated theta:", theta, "\n")
-
-# Female K
-Kf <- K * 0.60
-
+a <- calibrate_a_opt(pig.matrix, N0[1:3], K)
+cat("Calibrated a =", a, "\n")
 
 # Empty array to hold pop count
 pig.array[,1] <- N0
 
 for (y in 2:length(Year)){
-    
+  
   # Density dependent adjustment in fecundity
   # What was abundance at time step t-1
   Nf_t <- sum(pig.array[1:3,y-1])
   
   # Calcuate density factor
   # density_factor <- 1 / (1 + a * (N_t / K))
-  density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
+  density_factor <- 1 / (1 + a * (Nf_t / Kf))
   
   # save new matrix
   A_dd <- pig.matrix
   A_dd[1, ] <- A_dd[1, ] * density_factor # reduce fecundity
   A_dd[4, ] <- A_dd[4, ] * density_factor # reduce fecundity
-
+  
   # Calculate new pop size
   pig.array[,y]<- A_dd %*% pig.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)
 }
@@ -109,7 +101,7 @@ ggplot(df) +
   theme_classic() +
   theme(axis.title=element_markdown(face="italic"),
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
-  
+
 #### Adjust Survival and Fecundity 5-90% ####
 adj.f <- seq(0.95, 3.0, by=0.1)
 adj.s <- seq(0.75, 2.0, by=0.1)
@@ -121,8 +113,6 @@ adj <- expand.grid(f=adj.f, s=adj.s)
 pig.array <- array(0, dim=c(6,length(Year),nrow(adj)))
 pig.array[,1,] <- N0
 
-theta <- 1
-
 for (i in 1:nrow(adj)) {
   
   A_adj <- pig.matrix
@@ -131,6 +121,9 @@ for (i in 1:nrow(adj)) {
   A_adj[2:3,1:3] <- pig.matrix[2:3,1:3] * adj[i,2] 
   A_adj[5:6,4:6] <- pig.matrix[5:6,4:6] * adj[i,2] 
   
+  a <- calibrate_a_opt(A_adj, N0, K)
+  cat("Calibrated a =", a, "\n")
+  
   print(Re(eigen(A_adj)$values[1]))
   
   for (y in 2:length(Year)){
@@ -138,15 +131,15 @@ for (i in 1:nrow(adj)) {
     # Density dependent adjustment in fecundity
     # What was abundance at time step t-1
     Nf_t <- sum(pig.array[1:3,y-1,i])
-
+    
     # Calcuate density factor
-    density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
+    density_factor <- 1 / (1 + a * (Nf_t / Kf))
     
     # save new matrix
     A_dd <- A_adj
     A_dd[1, ] <- A_dd[1, ] * density_factor # reduce fecundity
     A_dd[4, ] <- A_dd[4, ] * density_factor # reduce fecundity
-
+    
     # Calculate new pop size
     pig.array[,y,i] <- A_dd %*% pig.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
   }
@@ -173,29 +166,20 @@ ggplot(both.net) +
   # coord_cartesian(ylim=c(0,309000)) +
   # geom_vline(xintercept=K) +
   geom_hline(yintercept=308887, linetype=2, color="red") +
-  geom_smooth(aes(x=Nt, y=net, group=increase, color=increase), alpha=0.5, linewidth=0.5, se=FALSE) +
+  geom_smooth(aes(x=Nt, y=net, group=increase, color=increase), alpha=0.5, linewidth=0.5) +
   geom_line(data=df, aes(x=Nt, y=net), linewidth=1) +
   labs(x="N<sub>t</sub>", y="N<sub>t-1</sub> - N<sub>t</sub>") +
   theme(legend.position="none")
 
+
 both.net |>
   group_by(increase) |>
-  slice_max(net) |>
-  mutate(msy_diff=308887-net,
-         msy_diff=abs(msy_diff)) |>
-  group_by(increase) |>
-  reframe(min_change=min(msy_diff)) |>
-  slice_min(min_change)
-
-
-# both.net |>
-#   group_by(increase) |>
-#   reframe(max_change=max(net)) |>
-#   slice_max(max_change)
+  reframe(max_change=max(net)) |>
+  slice_max(max_change)
 
 # Which combination had MSY closest to observed harvest
 max_pop <- both.net |>
-  filter(increase=="V10")
+  filter(increase=="V21")
 
 ## Plot line with greatest MSY
 ggplot(both.net) +
@@ -211,7 +195,7 @@ ggplot(both.net) +
 
 
 # Population based on matrix with greatest MSY
-i <- 10
+i <- 21
 
 A_adj <- pig.matrix
 A_adj[1, ] <- A_adj[1, ] * adj[i,1] 
@@ -225,7 +209,7 @@ cat("Calibrated a =", a, "\n")
 print(Re(eigen(A_adj)$values[1]))
 
 # Empty array to hold pop count
-Year <- 1:50
+Year <- 1:30
 pig.array <- matrix(0,nrow=6, ncol=length(Year))
 
 # Calculate stable stage distribution
@@ -244,7 +228,7 @@ for (y in 2:length(Year)){
   Nf_t <- sum(pig.array[1:3,y-1])
   
   # Calcuate density factor
-  density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
+  density_factor <- 1 / (1 + a * (Nf_t / Kf))
   
   # save new matrix
   A_dd <- A_adj
@@ -255,16 +239,14 @@ for (y in 2:length(Year)){
   N_next <- A_dd %*% pig.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)
   
   ## Harvest pigs
-  if (y > 2) {
-    # Randomly select a random number to harvest
-    # h <- rnorm(1, 280000, 15000)
-    h <- rnorm(1, 300000, 10000)
-    print(h)
-    r <- (N_next[,1] / sum(N_next[,1]))*h
-    
-    N_next <- N_next - r
-  }
-
+  # Randomly select a random number to harvest
+  # h <- rnorm(1, 280000, 15000)
+  h <- rnorm(1, 300000, 10000)
+  print(h)
+  r <- (N_next[,1] / sum(N_next[,1]))*h
+  
+  N_next <- N_next - r
+  
   # Save abundance
   pig.array[,y] <- pmax(N_next, 0) 
 }
@@ -287,13 +269,13 @@ ggplot(results) +
 #### Add in stochasticity in vital rates ####
 
 ##Stochastistic model
-Year <- 1:50
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
 s_pct_f <- 0.1
 s_pct_m <- 0.1
-f_pct <- 0.05
+f_pct <- 0.1
 
 # Empty array to hold pop count
 pig.array <- array(0,dim=c(6,length(Year),Sims))
@@ -303,7 +285,7 @@ w <- Re(eigen(A_adj)$vectors[, 1])
 w <- w / sum(w) # normals to equal 1
 
 # Set up initial popualtion size
-N0 <- w * 0.75 * K  # e.g., start at 50% of K
+N0 <- w * 0.5 * K  # e.g., start at 50% of K
 
 # Fill starting population
 pig.array[,1,] <- N0
@@ -332,6 +314,10 @@ for (i in 1:Sims) {
   A_s[1,1:3] <- rnorm(3, A_adj[1,1:3], A_adj[1,1:3]*s_pct_m)
   A_s[4,1:3] <- rnorm(3, A_adj[4,1:3], A_adj[4,1:3]*s_pct_m)
   
+  # Calibrate a
+  a <- calibrate_a_opt(A_s, N0, K)
+  cat("Calibrated a =", a, "\n")
+  
   for (y in 2:length(Year)){
     
     # Density dependent adjustment in fecundity
@@ -339,7 +325,7 @@ for (i in 1:Sims) {
     Nf_t <- sum(pig.array[1:3,y-1,i])
     
     # Calcuate density factor
-    density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
+    density_factor <- 1 / (1 + a * (Nf_t / Kf))
     
     # save new matrix
     A_dd <- A_s
@@ -350,14 +336,13 @@ for (i in 1:Sims) {
     N_next <- A_dd %*% pig.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
     
     ## Harvest pigs
-    if (y > 5) {
-      # Randomly select a random number to harvest
-      h <- rnorm(1, 300000, 15000)
-      r <- (N_next[,1] / sum(N_next[,1]))*h
-      
-      N_next <- N_next - r
-    }
-
+    # Randomly select a random number to harvest
+    h <- rnorm(1, 300000, 15000)
+    print(h)
+    r <- (N_next[,1] / sum(N_next[,1]))*h
+    
+    N_next <- N_next - r
+    
     # Save abundance
     pig.array[,y,i] <- pmax(N_next, 0) 
   }
@@ -435,15 +420,15 @@ for (i in 1:Sims) {
   
   # Calibrate a
   a <- calibrate_a_opt(A_s, N0, K)
-
+  
   for (y in 2:length(Year)){
     
     # Density dependent adjustment in fecundity
     # What was abundance at time step t-1
-    N_t <- sum(pig.array[,y-1,i])
+    Nf_t <- sum(pig.array[1:3,y-1,i])
     
     # Calcuate density factor
-    density_factor <- 1 / (1 + a * (N_t / K))
+    density_factor <- 1 / (1 + a * (Nf_t / Kf))
     
     # save new matrix
     A_dd <- A_s
@@ -542,15 +527,15 @@ for (i in 1:Sims) {
   
   # Calibrate a
   a <- calibrate_a_opt(A_s, N0, K)
-
+  
   for (y in 2:length(Year)){
-
+    
     # Density dependent adjustment in fecundity
     # What was abundance at time step t-1
-    N_t <- sum(pig.array[,y-1,i])
+    Nf_t <- sum(pig.array[1:3,y-1,i])
     
     # Calcuate density factor
-    density_factor <- 1 / (1 + a * (N_t / K))
+    density_factor <- 1 / (1 + a * (Nf_t / Kf))
     
     # save new matrix
     A_dd <- A_s
@@ -651,15 +636,15 @@ for (i in 1:Sims) {
   
   # Calibrate a
   a <- calibrate_a_opt(A_s, N0, K)
-
+  
   for (y in 2:length(Year)){
     
     # Density dependent adjustment in fecundity
     # What was abundance at time step t-1
-    N_t <- sum(pig.array[,y-1,i])
+    Nf_t <- sum(pig.array[1:3,y-1,i])
     
     # Calcuate density factor
-    density_factor <- 1 / (1 + a * (N_t / K))
+    density_factor <- 1 / (1 + a * (Nf_t / Kf))
     
     # save new matrix
     A_dd <- A_s
@@ -669,18 +654,18 @@ for (i in 1:Sims) {
     # Calculate new pop size
     N_next <- A_dd %*% pig.array[,y-1,i] # Make sure to multiply matrix x vector (not vice versa)
     if (sum(N_next)>0) {
-    ## Harvest pigs
-    # Randomly select a random number to harvest
-    h <- runif(1, 100000, 450000)
-    
-    harvest[y,i] <- h
-    
-    r <- (N_next[,1] / sum(N_next[,1]))*h
-    
-    N_next <- N_next - r
-    
-    # Save abundance
-    pig.array[,y,i] <- pmax(N_next, 0) 
+      ## Harvest pigs
+      # Randomly select a random number to harvest
+      h <- runif(1, 100000, 450000)
+      
+      harvest[y,i] <- h
+      
+      r <- (N_next[,1] / sum(N_next[,1]))*h
+      
+      N_next <- N_next - r
+      
+      # Save abundance
+      pig.array[,y,i] <- pmax(N_next, 0) 
     }
   }
 }
@@ -768,10 +753,10 @@ for (i in 1:Sims) {
     
     # Density dependent adjustment in fecundity
     # What was abundance at time step t-1
-    N_t <- sum(pig.array[,y-1,i])
+    Nf_t <- sum(pig.array[1:3,y-1,i])
     
     # Calcuate density factor
-    density_factor <- 1 / (1 + a * (N_t / K))
+    density_factor <- 1 / (1 + a * (Nf_t / Kf))
     
     # save new matrix
     A_dd <- A_s

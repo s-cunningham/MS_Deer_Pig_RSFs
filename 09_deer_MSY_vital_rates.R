@@ -58,11 +58,12 @@ N0 <- w * 0.1 * K  # e.g., start at 50% of K
 
 lambda <- Re(eigen(deer.matrix)$values[1])
 
-# Calibrate density dependence parameter
-theta <- estimate_theta_opt(N0[1:6], lambda, K)
-cat("Estimated theta:", theta, "\n")
-
+# Female carrying capacity
 Kf <- K * 0.60
+
+# Calibrate density dependence parameter
+a <- calibrate_a_opt(deer.matrix, N0[1:6], Kf)
+cat("Calibrated a =", a, "\n")
 
 # Empty array to hold pop count
 deer.array <- matrix(0,nrow=12, ncol=length(Year))
@@ -75,7 +76,7 @@ for (y in 2:length(Year)){
   Nf_t <- sum(deer.array[1:6,y-1])
   
   # Calcuate density factor
-  density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
+  density_factor <- 1 / (1 + a * (Nf_t / Kf))
 
   # save new matrix
   A_dd <- deer.matrix
@@ -186,6 +187,8 @@ for (i in 1:nrow(adj)) {
   surv <- sum(c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6],
                 A_adj[8,7], A_adj[9,8], A_adj[10,9], A_adj[11,10], A_adj[12,11], A_adj[12,12]) < 1)
   
+  a <- calibrate_a_opt(A_adj, N0[1:6], Kf)
+  
   if (lambda > 1.18 & (surv == 12)) {
 
     # Calculate stable stage distribution
@@ -208,7 +211,8 @@ for (i in 1:nrow(adj)) {
       Nf_t <- sum(deer.array[1:6,y-1,i])
       
       # Calcuate density factor
-      density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
+      # density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
+      density_factor <- 1 / (1 + a * (Nf_t / Kf))
       
       # save new matrix
       A_dd <- A_adj

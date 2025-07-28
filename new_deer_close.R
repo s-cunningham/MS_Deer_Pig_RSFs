@@ -21,17 +21,17 @@ deer.matrix <- matrix(0,12,12)
 # Females
 deer.matrix[2,1] <- 0.65
 deer.matrix[3,2] <- 0.93
-deer.matrix[4,3] <- 0.94
-deer.matrix[5,4] <- 0.94
-deer.matrix[6,5] <- 0.94
-deer.matrix[6,6] <- 0.91
+deer.matrix[4,3] <- 0.93
+deer.matrix[5,4] <- 0.93
+deer.matrix[6,5] <- 0.93
+deer.matrix[6,6] <- 0.90
 # Males
 deer.matrix[8,7] <- 0.65
 deer.matrix[9,8] <- 0.83
 deer.matrix[10,9] <- 0.84
 deer.matrix[11,10] <- 0.84
 deer.matrix[12,11] <- 0.84
-deer.matrix[12,12] <- 0.72
+deer.matrix[12,12] <- 0.70
 
 ## Fecundity
 # Maximum fecundity
@@ -184,8 +184,9 @@ Year <- 1:100
 Sims <- 1000
 
 # Variation in Survival
-s_pct_f <- 0.05
-s_pct_m <- 0.05
+s_pct_f <- 0.1
+s_pct_m <- 0.1
+f_pct <- 0.05
 
 # Empty array to hold pop count
 deer.array <- array(0,dim=c(12,length(Year),Sims))
@@ -203,6 +204,9 @@ deer.array[,1,] <- N0
 # Calibrate density dependence parameter
 theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
+
+Ka <- K - (K*0.25)
+Kf <- Ka * 0.6
 
 for (i in 1:Sims) {
   
@@ -237,11 +241,11 @@ for (i in 1:Sims) {
     density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
     
     # reduce fecundity
-    R0y_dd <- R0y * density_factor 
-    R0a_dd <- R0a * density_factor 
+    R0y_dd <- rnorm(1, R0y, R0y*f_pct) * density_factor 
+    R0a_dd <- rnorm(1, R0a, R0a*f_pct) * density_factor 
     
     # Check adult age ratio
-    asr <- sum(N_next[8:12,1])/sum(N_next[2:6,1], 1e-6)
+    asr <- sum(deer.array[8:12,y-1,i])/sum(deer.array[2:6,y-1,i], 1e-6)
     cat("Adult Sex Ratio:", asr, "\n")
     
     # Calculate % males & females
@@ -290,8 +294,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -313,10 +317,16 @@ ggplot(results) +
 
 #### Decrease K over time - harvest ~240000 ####
 
-# Kf_t <- (K/2) * exp(-0.005 * (0:(max(Year) - 1)))
+# Kf_t <- (Ka/2) * exp(-0.002 * (0:(max(Year) - 1)))
 
-Kf_t <- (K/2) * exp(-0.03 * (0:(max(Year)/10 - 1)))
-Kf_t <- rep(Kf_t, each=10)
+# Kf_t <- (K/2) * exp(-0.03 * (0:(max(Year)/10 - 1)))
+# Kf_t <- rep(Kf_t, each=10)
+
+Kf_t <- (K/2) * exp(-0.1 * (0:(max(Year)/50 - 1)))
+Kf_t <- rep(Kf_t, each=50)
+Kf_t <- 684345.7 * exp(-0.0001 * (0:(max(Year) - 1)))
+
+
 
 Re(eigen(A_adj)$values[1])
 
@@ -328,7 +338,7 @@ Sims <- 1000
 # Variation in Survival
 s_pct_f <- 0.15
 s_pct_m <- 0.15
-f_pct <- 0.05
+f_pct <- 0.1
 
 # Empty array to hold pop count
 deer.array <- array(0,dim=c(12,length(Year),Sims))
@@ -383,7 +393,7 @@ for (i in 1:Sims) {
     R0a_dd <- rnorm(1, R0a, R0a*f_pct) * density_factor 
     
     # Check adult age ratio
-    asr <- sum(pmax(N_next[8:12,1],0))/sum(pmax(N_next[2:6,1],0), 1e-6)
+    asr <- sum(deer.array[8:12,y-1,i])/sum(deer.array[2:6,y-1,i], 1e-6)
     cat("Adult Sex Ratio:", asr, "\n")
     
     # Calculate % males & females
