@@ -11,7 +11,7 @@ Year <- 1:100
 
 # Carrying capacity
 # K <- 2347197
-K <- 1512638
+K <- 1512638*2
 
 # Set up deer matrix
 deer.matrix <- matrix(0,12,12)
