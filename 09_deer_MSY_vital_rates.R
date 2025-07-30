@@ -181,7 +181,7 @@ ggmatplot::ggmatplot(t(deer.array), plot_type="line", linewidth=1)
 #### Base Model - stochasticity in vital rates ####
 set.seed(1)
 ##Stochastistic model
-Year <- 1:30
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
@@ -213,7 +213,7 @@ asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
 # Calibrate density dependence parameter
 theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
-
+# theta <- 5
 
 for (i in 1:Sims) {
   
@@ -304,8 +304,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -345,7 +345,7 @@ allSims <- results
 #### Take more does - stochasticity in vital rates ####
 set.seed(1)
 ##Stochastistic model
-Year <- 1:30
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
@@ -466,8 +466,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -505,7 +505,7 @@ allSims <- bind_rows(allSims, results)
 #### Take more bucks - stochasticity in vital rates ####
 set.seed(1)
 ##Stochastistic model
-Year <- 1:30
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
@@ -626,8 +626,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -664,7 +664,7 @@ allSims <- bind_rows(allSims, results)
 #### Original ratio, increase harvest - stochasticity in vital rates ####
 set.seed(1)
 ##Stochastistic model
-Year <- 1:30
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
@@ -785,8 +785,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -825,7 +825,7 @@ allSims <- bind_rows(allSims, results)
 #### Random harvest - stochasticity in vital rates ####
 set.seed(1)
 ##Stochastistic model
-Year <- 1:30
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
@@ -946,8 +946,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -986,7 +986,7 @@ ggplot(ASR) +
 #### Take more bucks - redistribute harvest (CWD) ####
 set.seed(1)
 ##Stochastistic model
-Year <- 1:30
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
@@ -1107,8 +1107,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -1146,7 +1146,7 @@ allSims <- bind_rows(allSims, results)
 #### Take more bucks - increase over time ####
 set.seed(1)
 ##Stochastistic model
-Year <- 1:30
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
@@ -1294,8 +1294,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -1336,7 +1336,7 @@ constSims <- allSims
 #### Base Model - Decrease K ####
 set.seed(1)
 ##Stochastistic model
-Year <- 1:30
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
@@ -1363,6 +1363,7 @@ asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
 # Calibrate density dependence parameter
 theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
+# theta <- 5
 
 Ka <- 1345648
 Ka <- Ka - (Ka*0.15)
@@ -1459,8 +1460,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -1500,7 +1501,7 @@ allSims <- results
 #### Take more does - Decrease K ####
 set.seed(1)
 ##Stochastistic model
-Year <- 1:30
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
@@ -1623,8 +1624,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -1663,7 +1664,7 @@ allSims <- bind_rows(allSims, results)
 #### Take more bucks - Decrease K ####
 set.seed(1)
 ##Stochastistic model
-Year <- 1:30
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
@@ -1786,8 +1787,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -1826,7 +1827,7 @@ allSims <- bind_rows(allSims, results)
 #### Take more bucks - increase over time ####
 set.seed(1)
 ##Stochastistic model
-Year <- 1:30
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
@@ -1974,8 +1975,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -2016,7 +2017,7 @@ allSims <- bind_rows(allSims, results)
 #### Original ratio, increase harvest - decrease K ####
 set.seed(1)
 ##Stochastistic model
-Year <- 1:30
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
@@ -2140,8 +2141,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -2180,7 +2181,7 @@ allSims <- bind_rows(allSims, results)
 #### Take more younger bucks - Decrease K ####
 set.seed(1)
 ##Stochastistic model
-Year <- 1:30
+Year <- 1:20
 Sims <- 1000
 
 # Variation in Survival
@@ -2303,8 +2304,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.20)
+N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.80)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -2416,4 +2417,4 @@ decrK <- ggplot(allSims) +
 constK + decrK + plot_layout(axes="collect") & theme(axis.text=element_text(size=11))
 
 # save plot 11.2 x 5.4
-ggsave("figs/deer_simulations.svg")
+# ggsave("figs/deer_simulations.svg")

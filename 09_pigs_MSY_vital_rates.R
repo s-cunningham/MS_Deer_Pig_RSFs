@@ -217,7 +217,7 @@ w <- Re(eigen(A_adj)$vectors[, 1])
 w <- w / sum(w) # normals to equal 1
 
 # Set up initial popualtion size
-N0 <- w * 0.5 * K  # e.g., start at 50% of K
+N0 <- w * 0.75 * K  # e.g., start at 50% of K
 
 pig.array[,1] <- N0
 
@@ -285,7 +285,7 @@ w <- Re(eigen(A_adj)$vectors[, 1])
 w <- w / sum(w) # normals to equal 1
 
 # Set up initial popualtion size
-N0 <- w * 0.5 * K  # e.g., start at 50% of K
+N0 <- w * 0.75 * K  # e.g., start at 50% of K
 
 # Fill starting population
 pig.array[,1,] <- N0
@@ -387,7 +387,7 @@ w <- Re(eigen(A_adj)$vectors[, 1])
 w <- w / sum(w) # normals to equal 1
 
 # Set up initial popualtion size
-N0 <- w * 0.5 * K  # e.g., start at 50% of K
+N0 <- w * 0.75 * K  # e.g., start at 50% of K
 
 # Fill starting population
 pig.array[,1,] <- N0
@@ -494,7 +494,7 @@ w <- Re(eigen(A_adj)$vectors[, 1])
 w <- w / sum(w) # normals to equal 1
 
 # Set up initial popualtion size
-N0 <- w * 0.5 * K  # e.g., start at 50% of K
+N0 <- w * 0.75 * K  # e.g., start at 50% of K
 
 # Fill starting population
 pig.array[,1,] <- N0
@@ -603,7 +603,7 @@ w <- Re(eigen(A_adj)$vectors[, 1])
 w <- w / sum(w) # normals to equal 1
 
 # Set up initial popualtion size
-N0 <- w * 0.5 * K  # e.g., start at 50% of K
+N0 <- w * 0.75 * K  # e.g., start at 50% of K
 
 # Fill starting population
 pig.array[,1,] <- N0
@@ -713,7 +713,7 @@ w <- Re(eigen(A_adj)$vectors[, 1])
 w <- w / sum(w) # normals to equal 1
 
 # Set up initial popualtion size
-N0 <- w * 0.5 * K  # e.g., start at 50% of K
+N0 <- w * 0.75 * K  # e.g., start at 50% of K
 
 # Fill starting population
 pig.array[,1,] <- N0
@@ -811,7 +811,7 @@ allSims$nHarvest <- factor(allSims$nHarvest, levels=c("200000","300000","400000"
 
 
 sim_plot <- ggplot(allSims) +
-  coord_cartesian(ylim=c(-100000, 2100000)) +
+  coord_cartesian(ylim=c(-150000, 2100000)) +
   geom_hline(yintercept=K, linewidth=0.5, color="black", linetype=3) +
   geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct, group=nHarvest, fill=nHarvest), alpha=.5) +
   geom_line(aes(x=Year, y=N.median, group=nHarvest, color=nHarvest)) +
@@ -828,8 +828,8 @@ sim_plot <- ggplot(allSims) +
         legend.position.inside=c(0,0),
         legend.justification=c(0,0),
         legend.background=element_rect(fill=NA),
-        legend.text=element_markdown(),
-        axis.title=element_markdown()) 
+        legend.text=element_markdown(size=10),
+        axis.title=element_markdown(size=12)) 
 
 
 ## Plot line with greatest MSY
@@ -854,8 +854,14 @@ msy_plot <- ggplot(both.net) +
   theme(legend.position.inside=c(0,0.95),
         legend.justification=c(0,1),
         legend.background=element_rect(fill=NA),
-        axis.title=element_markdown(),
+        legend.text=element_text(size=11),
+        legend.title=element_blank(),
+        axis.title=element_markdown(size=12),
+        axis.text=element_text(size=11),
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 
 
-msy_plot + sim_plot
+msy_plot + sim_plot + theme(axis.text=element_text(size=11))
+
+ggsave("figs/pig_msy_sims.svg", width=9.83, height=5.44, units="in")
+
