@@ -2369,7 +2369,7 @@ constK <- ggplot(constSims) +
   coord_cartesian(ylim=c(0, 2000000)) +
   geom_hline(yintercept=Ka, linewidth=0.5, color="black", linetype=3) +
   geom_hline(yintercept=1610000, color="red", linetype=2) +
-  geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct, group=Scenario, fill=Scenario), alpha=0.2) +
+  geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct, group=Scenario, fill=Scenario), alpha=0.5) +
   geom_line(aes(x=Year, y=N.median, group=Scenario, color=Scenario)) +
   scale_colour_viridis_d() +
   scale_fill_viridis_d() +
@@ -2395,7 +2395,7 @@ decrK <- ggplot(allSims) +
   coord_cartesian(ylim=c(0, 2000000)) +
   geom_hline(yintercept=Ka, linewidth=0.5, color="black", linetype=3) +
   geom_hline(yintercept=1610000, color="red", linetype=2) +
-  geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct, group=Scenario, fill=Scenario), alpha=0.2) +
+  geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct, group=Scenario, fill=Scenario), alpha=0.5) +
   geom_line(aes(x=Year, y=N.median, group=Scenario, color=Scenario)) +
   scale_colour_viridis_d() +
   scale_fill_viridis_d() +
