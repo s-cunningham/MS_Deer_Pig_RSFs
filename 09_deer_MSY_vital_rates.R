@@ -117,7 +117,7 @@ A_adj[7,3:6] <- A_base[7,3:6]*deer_opt$par[10]
 
 
 
-
+#### Run population model ####
 
 
 set.seed(1)
