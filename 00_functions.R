@@ -222,37 +222,6 @@ get_msy <- function(results) {
   return(msy)
 }
 
-# Scale matrices
-scale_pigs <- function(A_base, surv_scale_fp, surv_scale_fa, surv_scale_mp, surv_scale_ma, fec_scale_p, fec_scale_a) {
-  
-  pig.matrix <- matrix(0,6,6)
- 
-  ## Survival
-  # Females
-  pig.matrix[2,1] <- A_base[2,1]*surv_scale_fp
-  pig.matrix[3,2] <- A_base[3,2]*surv_scale_fa
-  pig.matrix[4,3] <- A_base[4,3]*surv_scale_fa
-  # Males
-  pig.matrix[5,4] <- A_base[5,4]*surv_scale_mp
-  pig.matrix[6,5] <- A_base[6,5]*surv_scale_ma
-  pig.matrix[6,6] <- A_base[6,6]*surv_scale_ma
-
-  ## Fecundity
-  # Maximum fecundity
-  R0p <- A_base[1,1]*fec_scale_p
-  R0y <- A_base[1,2]*fec_scale_a
-  R0a <- A_base[1,3]*fec_scale_a
-
-  FecundityF <- c(R0p, R0y, R0a)*0.5
-  FecundityM <- c(R0p, R0y, R0a)*0.5
-  
-  # Add to matrix
-  pig.matrix[1,1:3] <- FecundityF
-  pig.matrix[4,1:3] <- FecundityM
-  
-  return(pig.matrix)
-}
-
 
 scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_scale_y, fec_scale_a) {
   
@@ -286,10 +255,10 @@ scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_
   # Calculate for post-breeding census
   # FecundityM <- c(0, R0y*deer.matrix[3,2], R0a*deer.matrix[4,3], R0a*deer.matrix[5,4], R0a*deer.matrix[6,5], R0a*deer.matrix[6,6])*pct_m 
   # FecundityF <- c(0, R0y*deer.matrix[3,2], R0a*deer.matrix[4,3], R0a*deer.matrix[5,4], R0a*deer.matrix[6,5], R0a*deer.matrix[6,6])*pct_f 
-
+  
   FecundityF <- c(0, R0y, R0a, R0a, R0a, R0a)*0.5
   FecundityM <- c(0, R0y, R0a, R0a, R0a, R0a)*0.5
-
+  
   # Add to matrix
   deer.matrix[1,1:6] <- FecundityF
   deer.matrix[7,1:6] <- FecundityM
@@ -298,57 +267,12 @@ scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_
 }
 
 
-## project population
-pig_pop_proj <- function(A, N0, Kf, a, Year) {
-
-  # Empty array to hold pop count
-  pig.array <- matrix(0,nrow=6, ncol=length(Year))
-  pig.array[,1] <- N0
-
-  for (y in 2:length(Year)){
-    
-    # Density dependent adjustment in fecundity
-    # What was abundance at time step t-1
-    Nf_t <- sum(pig.array[1:3,y-1])
-    
-    # Calcuate density factor
-    # density_factor <- 1 / (1 + a * (Nf_t / Kf))
-    density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
-    
-    # save new matrix
-    A_dd <- A
-
-    # reduce fecundity
-    R0p_dd <- A[1,1] * density_factor
-    R0y_dd <- A[1,2] * density_factor 
-    R0a_dd <- A[1,3] * density_factor 
-    
-    # Adjust sex ratio at birth
-    A_dd[1,1:3] <- c(R0p_dd*A[2,3], R0y_dd*A[3,2], R0a_dd*A[3,3]) 
-    A_dd[4,1:3] <- c(R0p_dd*A[2,3], R0y_dd*A[3,2], R0a_dd*A[3,3])
-
-    # Calculate new pop size
-    pig.array[,y] <- A_dd %*% pig.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)
-  }
-  
-  # Add up stage-specific abundance
-  N.median <- apply(pig.array,2,sum)
-  
-  # Put into data frame
-  results <- data.frame(Year,N.median)
-  
-  # Calculate MSY
-  msy <- get_msy(results)
-  
-  return(msy)
-}
-
 deer_pop_proj <- function(A, N0, Kf, theta, Year) {
   
   # Empty array to hold pop count
   deer.array <- matrix(0,nrow=12, ncol=length(Year))
   deer.array[,1] <- N0
-
+  
   for (y in 2:length(Year)){
     
     # Density dependent adjustment in fecundity
@@ -371,14 +295,14 @@ deer_pop_proj <- function(A, N0, Kf, theta, Year) {
     # Adjust sex ratio at birth
     A_dd[1,1:6] <- c(0, R0y_dd*A[3,2], R0a_dd*A[4,3], R0a_dd*A[5,4], R0a_dd*A[6,5], R0a_dd*A[6,6]) 
     A_dd[7,1:6] <- c(0, R0y_dd*A[3,2], R0a_dd*A[4,3], R0a_dd*A[5,4], R0a_dd*A[6,5], R0a_dd*A[6,6])
-
+    
     # Calculate new pop size
     deer.array[,y] <- A_dd %*% deer.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)
   }
   
   # Add up stage-specific abundance
   N.median <- apply(deer.array,2,sum)
-
+  
   # Put into data frame
   results <- data.frame(Year,N.median)
   
@@ -412,45 +336,119 @@ objective_fn_deer <- function(params) {
   
   # Calibrate a for density dependence
   theta <- 3
-
+  
   # Run model and get MSY
   sim_msy <- deer_pop_proj(A_scaled, N0, Kf, theta, Year) 
   
   return((sim_msy - observed_harvest)^2) # Squared error
 }
 
+
+
+
+# Scale matrices
+scale_pigs <- function(A_base,surv_scale_f,surv_scale_m,fec_scale) {
+  
+  pig.matrix <- matrix(0,6,6)
+ 
+  ## Survival
+  # Females
+  pig.matrix[2,1] <- A_base[2,1]*surv_scale_f
+  pig.matrix[3,2] <- A_base[3,2]*surv_scale_f
+  pig.matrix[4,3] <- A_base[4,3]*surv_scale_f
+  # Males
+  pig.matrix[5,4] <- A_base[5,4]*surv_scale_m
+  pig.matrix[6,5] <- A_base[6,5]*surv_scale_m
+  pig.matrix[6,6] <- A_base[6,6]*surv_scale_m
+
+  ## Fecundity
+  # Maximum fecundity
+  R0y <- A_base[1,2]*fec_scale
+  R0a <- A_base[1,3]*fec_scale
+
+  FecundityF <- c(R0y, R0a)*0.5
+  FecundityM <- c(R0y, R0a)*0.5
+  
+  # Add to matrix
+  pig.matrix[1,2:3] <- FecundityF
+  pig.matrix[4,2:3] <- FecundityM
+  
+  return(pig.matrix)
+}
+
+
+## project population
+pig_pop_proj <- function(A, N0, Kf, theta, step) {
+
+  # Empty array to hold pop count
+  pig.array <- matrix(0,nrow=6, ncol=length(step))
+  pig.array[,1] <- N0
+
+  for (y in 2:length(step)){
+    
+    # Density dependent adjustment in fecundity
+    # What was abundance at time step t-1
+    Nf_t <- sum(pig.array[1:3,y-1])
+    
+    # Calcuate density factor
+    density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
+    
+    # save new matrix
+    A_dd <- A
+
+    # reduce fecundity
+    R0j_dd <- A[1,2] * density_factor 
+    R0a_dd <- A[1,3] * density_factor 
+    
+    # Adjust sex ratio at birth
+    A_dd[1,2:3] <- c(R0j_dd*A[3,2], R0a_dd*A[3,3]) 
+    A_dd[4,2:3] <- c(R0j_dd*A[3,2], R0a_dd*A[3,3])
+
+    # Calculate new pop size
+    pig.array[,y] <- A_dd %*% pig.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)
+  }
+  
+  # Add up stage-specific abundance
+  N.median <- apply(pig.array,2,sum)
+  
+  # Put into data frame
+  results <- data.frame(step,N.median)
+  
+  # Calculate MSY
+  msy <- get_msy(results)
+  
+  return(msy)
+}
+
+
 objective_fn_pigs <- function(params) {
   
-  surv_scale_fp <- params[1]
-  surv_scale_fa <- params[2]
-  
-  surv_scale_mp <- params[3]
-  surv_scale_ma <- params[4]
-  
-  fec_scale_p <- params[5]
-  fec_scale_a <- params[6]
-  
+  surv_scale_f <- params[1]
+  surv_scale_m <- params[2]
+  fec_scale <- params[3]
+
   # Scale demographic rates
-  A_scaled <- scale_pigs(A_base, surv_scale_fp,surv_scale_fa,surv_scale_mp, surv_scale_ma, fec_scale_p, fec_scale_a)
+  A_scaled <- scale_pigs(A_base,surv_scale_f,surv_scale_m,fec_scale)
   
   # Calculate stable stage distribution
-  # w <- Re(eigen(A_scaled)$vectors[, 1])
-  # w <- w / sum(w) # normalize to equal 1
+  w <- Re(eigen(A_scaled)$vectors[, 1])
+  w <- w / sum(w) # normalize to equal 1
   
   # Set up initial popualtion size
-  # N0 <- w * 0.1 * K  # e.g., start at 50% of K
+  N0 <- w * 0.1 * K  # e.g., start at 50% of K
   
-  # lambda <- Re(eigen(A_scaled)$values[1])
+  lambda <- Re(eigen(A_scaled)$values[1])
   
   # Calibrate a for density dependence
-  a <- calibrate_a_opt(A_scaled, N0, K)
-  # theta <- estimate_theta_opt(N0, lambda, K)
+  # a <- calibrate_a_opt(A_scaled, N0, K)
+  theta <- estimate_theta_opt(N0, lambda, K)
   
   # Run model and get MSY
-  sim_msy <- pig_pop_proj(A_scaled, N0, Kf, a, Year) 
+  sim_msy <- pig_pop_proj(A_scaled, N0, Kf, theta, step) 
   
   return((sim_msy - observed_harvest)^2) # Squared error
 }
+
 
 
 
