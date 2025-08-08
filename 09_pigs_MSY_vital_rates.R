@@ -289,8 +289,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(pig.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.20)
-N.80pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.80)
+N.20pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.10)
+N.80pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.90)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -361,6 +361,33 @@ ggplot(r.surv) +
 
 
 r.surv27_all <- r.surv
+
+
+# Calculate median survival per stage (over all years and sims)
+median_fec <- apply(realized_fecundity, 1, function(x) median(x, na.rm = TRUE))
+fec.10pct <- apply(realized_fecundity, 1, quantile, probs = 0.10, na.rm=TRUE)
+fec.90pct <- apply(realized_fecundity, 1, quantile, probs = 0.90, na.rm=TRUE)
+
+fec27 <- data.frame(stage=rep(c("Piglet", "Yearling + Adult"), 2),
+                    offspring_sex=rep(c("Female", "Male"), each=2), 
+                    realized=median_fec,
+                    f10pct=fec.10pct,
+                    f90pct=fec.90pct,
+                    literature=c(0.54, 2.24, 0.54, 2.24),  # annual 
+                    optimized=c(5.3499457*0.5*0.6951892*0.2730979, 11.6726089*0.5*0.6951892*0.2730979,   ## maternity * mom survival * density factor (annual)
+                                5.3499457*0.5*0.6951892*0.2730979, 11.6726089*0.5*0.6951892*0.2730979),
+                    x=c(0.9, 1.6, 1.1, 1.8)) |>
+  mutate(realized=realized^2, f10pct=f10pct^2, f90pct=f90pct^2)
+
+fec27 <- fec27 |>
+  pivot_longer(cols=c("realized", "literature", "optimized"), names_to="source", values_to="fec")
+fec27$source <- factor(fec27$source, levels=c("literature", "optimized", "realized"), labels=c("Literature", "Optimized", "Realized"))
+
+# drop males
+fec27 <- fec27 |> 
+  select(-offspring_sex, -x) |>
+  distinct()
+
 
 
 ### K at 27 pigs/ km2 - Marginal ####
@@ -517,15 +544,15 @@ for (i in 1:Sims) {
   ## Stochasticity on Survival 
   # Female survival
   # Survive & go
-  A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.01)
-  A_s[3,2] <- rtruncnorm(1, b=1, mean=A_adj[3,2], sd=0.01)
+  A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.02)
+  A_s[3,2] <- rtruncnorm(1, b=1, mean=A_adj[3,2], sd=0.02)
   # Survive & stay
-  A_s[3,3] <- rtruncnorm(1, a=0, b=1, mean=A_adj[3,3], sd=0.01)
+  A_s[3,3] <- rtruncnorm(1, a=0, b=1, mean=A_adj[3,3], sd=0.02)
   # Male survival
-  A_s[5,4] <- rtruncnorm(1, b=1, mean=A_adj[5,4], sd=0.01)
-  A_s[6,5] <- rtruncnorm(1, b=1, mean=A_adj[6,5], sd=0.01)
+  A_s[5,4] <- rtruncnorm(1, b=1, mean=A_adj[5,4], sd=0.02)
+  A_s[6,5] <- rtruncnorm(1, b=1, mean=A_adj[6,5], sd=0.02)
   # Survive & stay
-  A_s[6,6] <- rtruncnorm(1, b=1, mean=A_adj[6,6], sd=0.01)
+  A_s[6,6] <- rtruncnorm(1, b=1, mean=A_adj[6,6], sd=0.02)
   
   # save new matrix
   A_dd <- A_s
@@ -644,8 +671,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(pig.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.20)
-N.80pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.80)
+N.20pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.10)
+N.80pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.90)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -869,15 +896,15 @@ for (i in 1:Sims) {
   ## Stochasticity on Survival 
   # Female survival
   # Survive & go
-  A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.01)
-  A_s[3,2] <- rtruncnorm(1, b=1, mean=A_adj[3,2], sd=0.01)
+  A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.02)
+  A_s[3,2] <- rtruncnorm(1, b=1, mean=A_adj[3,2], sd=0.02)
   # Survive & stay
-  A_s[3,3] <- rtruncnorm(1, a=0, b=1, mean=A_adj[3,3], sd=0.01)
+  A_s[3,3] <- rtruncnorm(1, a=0, b=1, mean=A_adj[3,3], sd=0.02)
   # Male survival
-  A_s[5,4] <- rtruncnorm(1, b=1, mean=A_adj[5,4], sd=0.01)
-  A_s[6,5] <- rtruncnorm(1, b=1, mean=A_adj[6,5], sd=0.01)
+  A_s[5,4] <- rtruncnorm(1, b=1, mean=A_adj[5,4], sd=0.02)
+  A_s[6,5] <- rtruncnorm(1, b=1, mean=A_adj[6,5], sd=0.02)
   # Survive & stay
-  A_s[6,6] <- rtruncnorm(1, b=1, mean=A_adj[6,6], sd=0.01)
+  A_s[6,6] <- rtruncnorm(1, b=1, mean=A_adj[6,6], sd=0.02)
   
   # save new matrix
   A_dd <- A_s
@@ -996,8 +1023,8 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(pig.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.20)
-N.80pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.80)
+N.20pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.10)
+N.80pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.90)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -1202,15 +1229,15 @@ for (i in 1:Sims) {
   ## Stochasticity on Survival 
   # Female survival
   # Survive & go
-  A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.005)
-  A_s[3,2] <- rtruncnorm(1, b=1, mean=A_adj[3,2], sd=0.005)
+  A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.02)
+  A_s[3,2] <- rtruncnorm(1, b=1, mean=A_adj[3,2], sd=0.02)
   # Survive & stay
-  A_s[3,3] <- rtruncnorm(1, a=0, b=1, mean=A_adj[3,3], sd=0.005)
+  A_s[3,3] <- rtruncnorm(1, a=0, b=1, mean=A_adj[3,3], sd=0.02)
   # Male survival
-  A_s[5,4] <- rtruncnorm(1, b=1, mean=A_adj[5,4], sd=0.005)
-  A_s[6,5] <- rtruncnorm(1, b=1, mean=A_adj[6,5], sd=0.005)
+  A_s[5,4] <- rtruncnorm(1, b=1, mean=A_adj[5,4], sd=0.02)
+  A_s[6,5] <- rtruncnorm(1, b=1, mean=A_adj[6,5], sd=0.02)
   # Survive & stay
-  A_s[6,6] <- rtruncnorm(1, b=1, mean=A_adj[6,6], sd=0.005)
+  A_s[6,6] <- rtruncnorm(1, b=1, mean=A_adj[6,6], sd=0.02)
   
   # save new matrix
   A_dd <- A_s
@@ -1399,11 +1426,88 @@ ggplot(r.surv) +
 
 r.surv8 <- r.surv
 
+#### Combine and plot for manuscript ####
 
 
+results27_all$density <- "27 pigs km<sup>-2</sup>"
+results8$density <- "8 pigs km<sup>-2</sup>"
+results27_lvl2$density <- "27 pigs km<sup>-2</sup> | Core + Marginal"
+
+results <- bind_rows(results27_all,results27_lvl2,results8)
 
 
+results <- results |>
+  as_tibble() |>
+  rename(N.10pct=N.20pct, N.90pct=N.80pct)
 
 
+res_plot <- ggplot(results) +
+  coord_cartesian(ylim=c(0,2500000)) +
+  geom_hline(yintercept=1000000, color="black", linetype=3) +
+  geom_hline(yintercept=2034396, linetype=2, color="#7ad151") +
+  geom_hline(yintercept=1847127, linetype=2, color="#22a884") +
+  geom_hline(yintercept=603816, linetype=2, color="#440154") +
+  geom_ribbon(aes(x=Year, ymin=N.10pct, ymax=N.90pct, fill=density, group=density), alpha=.2) +
+  geom_line(aes(x=Year, y=N.median, color=density, group=density), alpha=1,linewidth=1) +
+  scale_y_continuous(name="Abundance (in millions)", 
+                     breaks=c(0,500000, 1000000, 1500000, 2000000, 2500000),
+                     labels=c(0, 0.5, 1, 1.5, 2, 2.5)) +
+  scale_x_continuous(breaks=c(0,10,20,30,40), labels=c(0,5,10,15,20)) +
+  scale_color_manual(values=c("#7ad151","#22a884","#440154")) +
+  scale_fill_manual(values=c("#7ad151","#22a884","#440154")) +
+  guides(
+    fill=guide_legend(position="inside", title="Density"),
+    color=guide_legend(position="inside", title="Density")
+  ) +
+  xlab("Simulation Year") +
+  theme_classic() +
+  theme(panel.border=element_rect(fill=NA, color="black", linewidth=0.5),
+        legend.position.inside=c(0.96,0.02),
+        legend.justification=c(1,0),
+        # legend.background=element_rect(fill=NA),
+        legend.text=element_markdown()) 
+
+## Survival plot
+r.surv27_all <- r.surv27_all |>
+  mutate(x=case_when(stage=="Piglet" ~ 0.5,
+                     stage=="Yearling" ~ 0.6,
+                     stage=="Adult" ~ 0.7)) |>
+  mutate(x = if_else(sex=="Female", x - 0.01, x + 0.01))
 
 
+s_plot <- ggplot(r.surv27_all) +
+  coord_cartesian(ylim=c(0,1)) +
+  geom_segment(aes(x=x, y=surv.10pct, yend=surv.90pct), color="#440154", linewidth=1) +
+  geom_point(aes(x=x, y=survival, color=source, shape=sex), size=3) +
+  scale_color_manual(values=c("#7ad151","#22a884","#440154")) +
+  scale_shape_manual(values=c(17, 16)) +
+  guides(
+    color="none", #guide_legend(position="inside", title="Source"),
+    shape=guide_legend(position="inside", title="Sex")
+  ) +
+  scale_x_continuous(breaks=c(0.5,0.6,0.7), labels=c("Piglet", "Yearling", "Adult")) +
+  ylab("Survival probability") + xlab("Stage") +
+  theme_classic() +
+  theme(panel.border=element_rect(color="black", fill=NA, linewidth=0.5),
+        legend.position.inside = c(0,1),
+        legend.justification=c(0,1),
+        legend.background = element_rect(fill=NA))
+
+## Fecundity
+f_plot <- ggplot(fec27) +
+  coord_cartesian(ylim=c(0,2.5)) +
+  geom_segment(aes(x=stage, y=f10pct, yend=f90pct), color="#21918c", linewidth=1) +
+  geom_point(aes(x=stage, y=fec, group=source, color=source), size=3) +
+  scale_color_manual(values=c("#5ec962", "#440154", "#21918c")) +
+  guides(
+    color=guide_legend(position="inside", title="Source")
+  ) +
+  ylab("Fecundity") + xlab("Stage") +
+  theme_classic() +
+  theme(panel.border=element_rect(color="black", fill=NA, linewidth=0.5),
+        legend.position.inside = c(0,1),
+        legend.justification=c(0,1),
+        legend.background = element_rect(fill=NA),
+        axis.text.x=element_text())
+
+(res_plot / (f_plot | s_plot)) + plot_annotation(tag_levels = 'A')
