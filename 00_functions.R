@@ -199,7 +199,7 @@ theta_logistic_proj <- function(N0, lambda, K, theta, t_max = 100) {
   return(N)
 }
 
-# Use optimize instead of uniroot
+# Estimate with optimize
 estimate_theta_opt <- function(N0, lambda, K, t_max = 100) {
   objective_fn <- function(theta) {
     N <- theta_logistic_proj(N0, lambda, K, theta, t_max)
@@ -209,4 +209,210 @@ estimate_theta_opt <- function(N0, lambda, K, t_max = 100) {
   return(result$minimum)
 }
 
+
+#### Calculate MSY and Objective function for optimizing
+
+get_msy <- function(results) {
+  
+  net <- results$N.median[2:nrow(results)] - results$N.median[1:(nrow(results)-1)]
+  
+  peak_idx <- which.max(net)
+  msy <- net[peak_idx]
+  
+  return(msy)
+}
+
+# Scale matrices
+scale_pigs <- function(A_base, surv_adj, fec_adj) {
+  
+  A_adj <- A_base
+  A_adj[1, ] <- A_adj[1, ] * fec_adj 
+  A_adj[4, ] <- A_adj[4, ] * fec_adj
+  A_adj[2:3,1:3] <- pig.matrix[2:3,1:3] * surv_adj 
+  A_adj[5:6,4:6] <- pig.matrix[5:6,4:6] * surv_adj
+  
+  return(A_adj)
+}
+
+
+scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_scale_y, fec_scale_a) {
+  
+  # Set up deer matrix
+  deer.matrix <- matrix(0,12,12)
+  
+  ## Survival
+  # Females
+  deer.matrix[2,1] <- A_base[2,1]*surv_scale_fawn
+  deer.matrix[3,2] <- A_base[3,2]*surv_scale_f[1]
+  deer.matrix[4,3] <- A_base[4,3]*surv_scale_f[2]
+  deer.matrix[5,4] <- A_base[5,4]*surv_scale_f[2]
+  deer.matrix[6,5] <- A_base[6,5]*surv_scale_f[2]
+  deer.matrix[6,6] <- A_base[6,6]*surv_scale_f[2]
+  # Males
+  deer.matrix[8,7] <- A_base[8,7]*surv_scale_fawn
+  deer.matrix[9,8] <- A_base[9,8]*surv_scale_m[1]
+  deer.matrix[10,9] <- A_base[10,9]*surv_scale_m[2]
+  deer.matrix[11,10] <- A_base[11,10]*surv_scale_m[3]
+  deer.matrix[12,11] <- A_base[12,11]*surv_scale_m[4]
+  deer.matrix[12,12] <- A_base[12,12]*surv_scale_m[5]
+  
+  ## Fecundity
+  # Maximum fecundity
+  R0a <- A_base[1,3]*fec_scale_a
+  R0y <- A_base[1,2]*fec_scale_y
+  
+  # pct_m <- 0.565
+  # pct_f <- 0.435
+  
+  # Calculate for post-breeding census
+  # FecundityM <- c(0, R0y*deer.matrix[3,2], R0a*deer.matrix[4,3], R0a*deer.matrix[5,4], R0a*deer.matrix[6,5], R0a*deer.matrix[6,6])*pct_m 
+  # FecundityF <- c(0, R0y*deer.matrix[3,2], R0a*deer.matrix[4,3], R0a*deer.matrix[5,4], R0a*deer.matrix[6,5], R0a*deer.matrix[6,6])*pct_f 
+
+  FecundityF <- c(0, R0y, R0a, R0a, R0a, R0a)*0.5
+  FecundityM <- c(0, R0y, R0a, R0a, R0a, R0a)*0.5
+
+  # Add to matrix
+  deer.matrix[1,1:6] <- FecundityF
+  deer.matrix[7,1:6] <- FecundityM
+  
+  return(deer.matrix)
+}
+
+
+## project population
+pig_pop_proj <- function(A, N0, Kf, a, Year) {
+
+  # Empty array to hold pop count
+  pig.array <- array(0, dim=c(6,length(Year),nrow(adj)))
+  pig.array[,1] <- N0
+  
+  for (y in 2:length(Year)){
+    
+    # Density dependent adjustment in fecundity
+    # What was abundance at time step t-1
+    Nf_t <- sum(pig.array[1:3,y-1])
+    
+    # Calcuate density factor
+    density_factor <- 1 / (1 + a * (Nf_t / Kf))
+    
+    # save new matrix
+    A_dd <- A
+    A_dd[1, ] <- A_dd[1, ] * density_factor # reduce fecundity
+    A_dd[4, ] <- A_dd[4, ] * density_factor # reduce fecundity
+    
+    # Calculate new pop size
+    pig.array[,y]<- A_dd %*% pig.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)
+  }
+  
+  # Add up stage-specific abundance
+  N.median <- apply(pig.array,2,sum)
+  
+  # Put into data frame
+  results <- data.frame(Year,N.median)
+  
+  # Calculate MSY
+  msy <- get_msy(results)
+  
+  return(msy)
+}
+
+deer_pop_proj <- function(A, N0, Kf, theta, Year) {
+  
+  # Empty array to hold pop count
+  deer.array <- matrix(0,nrow=12, ncol=length(Year))
+  deer.array[,1] <- N0
+  
+  saveR0 <- c()
+  
+  for (y in 2:length(Year)){
+    
+    # Density dependent adjustment in fecundity
+    # What was abundance at time step t-1
+    Nf_t <- sum(deer.array[1:6,y-1])
+    
+    # Calcuate density factor
+    density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
+    
+    # save new matrix
+    A_dd <- A
+    
+    # Calcuate density factor
+    density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
+    
+    # reduce fecundity
+    R0y_dd <- A[1,2] * density_factor 
+    R0a_dd <- A[1,3] * density_factor 
+    
+    # Adjust sex ratio at birth
+    A_dd[1,1:6] <- c(0, R0y_dd*A[3,2], R0a_dd*A[4,3], R0a_dd*A[5,4], R0a_dd*A[6,5], R0a_dd*A[6,6]) 
+    A_dd[7,1:6] <- c(0, R0y_dd*A[3,2], R0a_dd*A[4,3], R0a_dd*A[5,4], R0a_dd*A[6,5], R0a_dd*A[6,6])
+
+    saveR0 <- c(saveR0, A_dd[1,3])
+    
+    # Calculate new pop size
+    deer.array[,y] <- A_dd %*% deer.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)
+  }
+  
+  # Add up stage-specific abundance
+  N.median <- apply(deer.array,2,sum)
+
+  # Put into data frame
+  results <- data.frame(Year,N.median)
+  
+  # Calculate MSY
+  msy <- get_msy(results)
+  
+  return(msy)
+}
+
+
+## Define objective function
+objective_fn_deer <- function(params) {
+  
+  surv_scale_fawn <- params[1]
+  surv_scale_f <- params[2:3]
+  surv_scale_m <- params[4:8]
+  fec_scale_y <- params[9]
+  fec_scale_a <- params[10]
+  
+  # Scale demographic rates
+  A_scaled <- scale_deer(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_scale_y, fec_scale_a)
+  
+  # Calibrate a for density dependence
+  theta <- 3
+
+  # Run model and get MSY
+  sim_msy <- deer_pop_proj(A_scaled, N0, Kf, theta, Year) 
+  
+  return((sim_msy - observed_harvest)^2) # Squared error
+}
+
+objective_fn_pigs <- function(params) {
+  
+  surv_scale_f <- params
+  surv_scale_m <- params
+  fec_scale <- params
+  
+  # Scale demographic rates
+  A_scaled <- scale_pigs(A_base, surv_scale_f, surv_scale_m, fec_scale)
+  
+  # Calibrate a for density dependence
+  a <- calibrate_a_opt(A_scaled, N0, K)
+  
+  # Run model and get MSY
+  sim_msy <- pig_pop_proj(A_scaled, N0, Kf, a) 
+  
+  return((sim_msy - observed_harvest)^2) # Squared error
+}
+
+
+
+# Helper function to avoid division by zero
+safe_divide <- function(numerator, denominator) {
+  if (is.na(denominator) || is.nan(denominator) || denominator <= 0) {
+    return(NA)
+  } else {
+    return(numerator / denominator)
+  }
+}
 
