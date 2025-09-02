@@ -164,5 +164,5 @@ deer_patches + pig_patches +
         legend.title=element_text(size=12))
 
 # Save maps
-ggsave(file="figs/Fig4_patches.svg")
+ggsave(file="figs/Fig3_patches.svg")
 # Saving 9.95 x 9 in image
