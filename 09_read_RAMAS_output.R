@@ -74,26 +74,27 @@ K <- K |>
 K <- K |>
   mutate(species=if_else(species=="deer", "White-tailed Deer", "Wild Pigs"))
 
-K <- K |>
-  filter(value=="mean") |>
-  # Filter to keep only rows with 0 or no digits
-  filter(str_detect(bin, "0") | !str_detect(bin, "\\d")) |>
-  # Drop initial abundance and average suitability value
-  select(-N0, -avgHS) |>
-  # drop marginal
-  filter(bin!="marginal") |>
-  # make 'above0' layer 'marginal'
-  mutate(bin=if_else(bin=="0", "marginal", bin)) |>
-  # pivot to wide format
-  pivot_wider(names_from="value", values_from="K")|>
-  filter(density=="high")
+# K <- K |>
+#   filter(value=="mean") |>
+#   # Filter to keep only rows with 0 or no digits
+#   filter(str_detect(bin, "0") | !str_detect(bin, "\\d")) |>
+#   # Drop initial abundance and average suitability value
+#   select(-N0, -avgHS) |>
+#   # drop marginal
+#   filter(bin!="marginal") |>
+#   # make 'above0' layer 'marginal'
+#   mutate(bin=if_else(bin=="0", "marginal", bin)) |>
+#   # pivot to wide format
+#   pivot_wider(names_from="value", values_from="K")|>
+#   filter(density=="high")
+#   pivot_wider()
 
 ## Look at patch types
-Kpatch <- K |> 
+Kpatch <- K |>
   # Filter to keep only rows with 0 or no digits
   filter(str_detect(bin, "0") | !str_detect(bin, "\\d")) |>
   # Drop initial abundance and average suitability value
-  select(-N0, -avgHS) |>
+  select(-N0, -avgHS, -totHS) |>
   # drop marginal
   filter(bin!="marginal") |>
   # make 'above0' layer 'marginal'
@@ -104,16 +105,16 @@ Kpatch <- K |>
   select(species, density, bin, UCI, mean, LCI)
 
 # Reorder patch types so that they're in order of size, not alphabetical
-Kpatch$bin <- factor(Kpatch$bin, levels=c("core", "marginal", "highlymarginal"), labels=c("Core", "Marginal", "Highly\nMarginal"))
+Kpatch$bin <- factor(Kpatch$bin, levels=c("core", "marginal", "highlymarginal"), labels=c("Core", "Moderate", "Marginal"))
 # Relabel density to be more informative for plot
-Kpatch$density <- factor(Kpatch$density, levels=c("high", "low"), labels=c("22 deer | 27 pigs", "14.3 deer | 8 pigs"))
+Kpatch$density <- factor(Kpatch$density, levels=c("low", "high"), labels=c("14.3 deer | 8 pigs", "22 deer | 27 pigs"))
 
 ggplot(Kpatch) +
   geom_linerange(aes(x=bin, ymin=UCI, ymax=LCI, color=density),position=position_dodge(.2), linewidth=1) +
   geom_point(aes(x=bin, y=mean, color=density), position=position_dodge(.2), size=2) +
-  scale_color_manual(values=c("#21918c","#440154"), name='Density (animals/km<sup>2</sup>)') +
+  scale_color_manual(values=c("#ed7953","#9c179e"), name='Density (animals/km<sup>2</sup>)') +
   scale_y_continuous(breaks=seq(0, 3000000, by=500000), labels=c(0,0.5,1,1.5,2,2.5,3)) +
-  xlab("Patch Type") + ylab("Carrying Capacity (in millions)") +
+  xlab("Suitability Level") + ylab("Carrying Capacity (in millions)") +
   guides(
     colour = guide_legend(position = "inside")
   ) + 
@@ -121,12 +122,12 @@ ggplot(Kpatch) +
   theme_classic() +
   theme(legend.position.inside=c(0,1),
         legend.justification=c(0,1),
-        legend.title = element_markdown(),
-        legend.text=element_text(size=10),
+        legend.title = element_markdown(size=12),
+        legend.text=element_text(size=11),
         legend.background = element_rect(fill=NA),
         strip.text=element_blank(),
-        axis.title=element_text(size=11),
-        axis.text=element_text(size=10),
+        axis.title=element_text(size=12),
+        axis.text=element_text(size=11),
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
 ggsave("figs/patch_carrying_capacity.svg")
 # Saving 7.18 x 4.26 in image

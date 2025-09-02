@@ -8,7 +8,7 @@ source("00_functions.R")
 
 theme_set(theme_bw())
 
-### K at 27 pigs/ km2 - Largest area (HM) ####
+### K at 27 pigs/ km2 - Largest area (Core + Moderate + Marginal) ####
 
 ## Stochastistic model
 step <- 1:100
@@ -390,7 +390,7 @@ fec27 <- fec27 |>
 
 
 
-### K at 27 pigs/ km2 - Marginal ####
+### K at 27 pigs/ km2 - Core + Moderate ####
 
 ## Stochastistic model
 step <- 1:100
@@ -1431,30 +1431,30 @@ r.surv8 <- r.surv
 
 results27_all$density <- "27 pigs km<sup>-2</sup>"
 results8$density <- "8 pigs km<sup>-2</sup>"
-results27_lvl2$density <- "27 pigs km<sup>-2</sup> | Core + Marginal"
+results27_lvl2$density <- "27 pigs km<sup>-2</sup> | Core + Moderate"
 
 results <- bind_rows(results27_all,results27_lvl2,results8)
 
 
 results <- results |>
   as_tibble() |>
-  rename(N.10pct=N.20pct, N.90pct=N.80pct)
+  rename(N.10pct=N.20pct, N.90pct=N.80pct) |>
+  filter(density != "27 pigs km<sup>-2</sup> | Core + Moderate")
 
 
 res_plot <- ggplot(results) +
   coord_cartesian(ylim=c(0,2500000)) +
   geom_hline(yintercept=1000000, color="black", linetype=3) +
-  geom_hline(yintercept=2034396, linetype=2, color="#7ad151") +
-  geom_hline(yintercept=1847127, linetype=2, color="#22a884") +
-  geom_hline(yintercept=603816, linetype=2, color="#440154") +
+  geom_hline(yintercept=2034396, linetype=2, color="#ed7953") +
+  geom_hline(yintercept=603816, linetype=2, color="#0d0887") +
   geom_ribbon(aes(x=Year, ymin=N.10pct, ymax=N.90pct, fill=density, group=density), alpha=.2) +
   geom_line(aes(x=Year, y=N.median, color=density, group=density), alpha=1,linewidth=1) +
   scale_y_continuous(name="Abundance (in millions)", 
                      breaks=c(0,500000, 1000000, 1500000, 2000000, 2500000),
                      labels=c(0, 0.5, 1, 1.5, 2, 2.5)) +
   scale_x_continuous(breaks=c(0,10,20,30,40), labels=c(0,5,10,15,20)) +
-  scale_color_manual(values=c("#7ad151","#22a884","#440154")) +
-  scale_fill_manual(values=c("#7ad151","#22a884","#440154")) +
+  scale_color_manual(values=c("#ed7953","#0d0887")) +
+  scale_fill_manual(values=c("#ed7953","#0d0887")) +
   guides(
     fill=guide_legend(position="inside", title="Density"),
     color=guide_legend(position="inside", title="Density")
@@ -1462,10 +1462,13 @@ res_plot <- ggplot(results) +
   xlab("Simulation Year") +
   theme_classic() +
   theme(panel.border=element_rect(fill=NA, color="black", linewidth=0.5),
-        legend.position.inside=c(0.96,0.02),
+        legend.position.inside=c(0.96,0.05),
         legend.justification=c(1,0),
         # legend.background=element_rect(fill=NA),
-        legend.text=element_markdown()) 
+        legend.text=element_markdown(size=11),
+        legend.title=element_text(size=12),
+        axis.text=element_text(size=11),
+        axis.title=element_text(size=12)) 
 
 ## Survival plot
 r.surv27_all <- r.surv27_all |>
@@ -1477,21 +1480,25 @@ r.surv27_all <- r.surv27_all |>
 
 s_plot <- ggplot(r.surv27_all) +
   coord_cartesian(ylim=c(0,1)) +
-  geom_segment(aes(x=x, y=surv.10pct, yend=surv.90pct), color="#440154", linewidth=1) +
+  geom_segment(aes(x=x, y=surv.10pct, yend=surv.90pct), color="#21918c", linewidth=1) +
   geom_point(aes(x=x, y=survival, color=source, shape=sex), size=3) +
-  scale_color_manual(values=c("#7ad151","#22a884","#440154")) +
+  scale_color_manual(values=c("#5ec962", "#440154", "#21918c")) +
   scale_shape_manual(values=c(17, 16)) +
   guides(
     color="none", #guide_legend(position="inside", title="Source"),
     shape=guide_legend(position="inside", title="Sex")
   ) +
-  scale_x_continuous(breaks=c(0.5,0.6,0.7), labels=c("Piglet", "Yearling", "Adult")) +
+  scale_x_continuous(breaks=c(0.5,0.6,0.7), labels=c("Piglet", "Yearling", "Adult"), expand = expansion(mult = 0.25, add = 0)) +
   ylab("Survival probability") + xlab("Stage") +
   theme_classic() +
   theme(panel.border=element_rect(color="black", fill=NA, linewidth=0.5),
         legend.position.inside = c(0,1),
         legend.justification=c(0,1),
-        legend.background = element_rect(fill=NA))
+        legend.background = element_rect(fill=NA),
+        axis.text=element_text(size=11),
+        axis.title=element_text(size=12),
+        legend.text=element_text(size=11),
+        legend.title=element_text(size=12))
 
 ## Fecundity
 f_plot <- ggplot(fec27) +
@@ -1508,6 +1515,9 @@ f_plot <- ggplot(fec27) +
         legend.position.inside = c(0,1),
         legend.justification=c(0,1),
         legend.background = element_rect(fill=NA),
-        axis.text.x=element_text())
+        axis.text=element_text(size=11),
+        axis.title=element_text(size=12),
+        legend.text=element_text(size=11),
+        legend.title=element_text(size=12))
 
-(res_plot / (f_plot | s_plot)) + plot_annotation(tag_levels = 'A')
+(res_plot / (f_plot | s_plot)) + plot_annotation(tag_levels = 'A') #+ plot_layout(heights=c(3,2))

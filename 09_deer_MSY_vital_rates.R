@@ -814,15 +814,15 @@ results <- results |>
 res_plot <- ggplot(results) +
   coord_cartesian(ylim=c(0,2500000)) +
   geom_hline(yintercept=1610000, color="black", linetype=3) +
-  geom_hline(yintercept=1512638, linetype=2, color="#5ec962") +
-  geom_hline(yintercept=2347197, linetype=2, color="#3b528b") +
+  geom_hline(yintercept=1512638, linetype=2, color="#ed7953") +
+  geom_hline(yintercept=2347197, linetype=2, color="#0d0887") +
   geom_ribbon(aes(x=Year, ymin=N.10pct, ymax=N.90pct, fill=density, group=density), alpha=.2) +
   geom_line(aes(x=Year, y=N.median, color=density, group=density), alpha=1,linewidth=1) +
   scale_y_continuous(name="Abundance (in millions)", 
                      breaks=c(0,500000, 1000000, 1500000, 2000000, 2500000),
                      labels=c(0, 0.5, 1, 1.5, 2, 2.5))+
-  scale_color_manual(values=c("#5ec962","#3b528b")) +
-  scale_fill_manual(values=c("#5ec962","#3b528b")) +
+  scale_color_manual(values=c("#ed7953","#0d0887")) +
+  scale_fill_manual(values=c("#ed7953","#0d0887")) +
   guides(
     fill=guide_legend(position="inside", title="Density"),
     color=guide_legend(position="inside", title="Density")
@@ -833,7 +833,10 @@ res_plot <- ggplot(results) +
     legend.position.inside=c(0,0),
     legend.justification=c(0,0),
     legend.background=element_rect(fill=NA),
-    legend.text=element_markdown()) 
+    legend.text=element_markdown(size=11),
+    legend.title=element_text(size=12),
+    axis.text=element_text(size=11),
+    axis.title=element_text(size=12)) 
 
 s_text <- data.frame(x=rep("Fawn",2), y=1, sex=c("Female", "Male"), label=c("Female", "Male"))
 
@@ -856,7 +859,11 @@ s_plot <- ggplot(r.surv14) +
         legend.justification=c(0,0),
         legend.background = element_rect(fill=NA),
         strip.background=element_blank(),
-        axis.text.x=element_text(angle=25, vjust=0.8, hjust=0.8, size=10),
+        axis.text.x=element_text(angle=25, vjust=0.8, hjust=0.8, size=11),
+        axis.text.y=element_text(size=11),
+        axis.title=element_text(size=12),
+        legend.text=element_markdown(size=11),
+        legend.title=element_text(size=12),
         strip.text=element_blank())
 
 
@@ -876,8 +883,11 @@ s_plot <- ggplot(r.surv14) +
   theme(panel.border=element_rect(color="black", fill=NA, linewidth=0.5),
         legend.position.inside = c(0,1),
         legend.justification=c(0,1),
-        legend.direction="horizontal",
+        # legend.direction="horizontal",
         legend.background = element_rect(fill=NA),
-        axis.text.x=element_text(angle=25, vjust=0.8, hjust=0.8, size=10))
+        legend.text=element_markdown(size=11),
+        legend.title=element_text(size=12),
+        axis.title=element_text(size=12),
+        axis.text=element_text(size=11))
 
-((res_plot / f_plot) | s_plot) + plot_annotation(tag_levels = 'A')
+(free(res_plot / f_plot) | s_plot) + plot_annotation(tag_levels = 'A') + plot_layout(widths=c(1.2,1))
