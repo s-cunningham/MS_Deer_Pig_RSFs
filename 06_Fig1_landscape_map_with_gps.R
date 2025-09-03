@@ -3,20 +3,35 @@ library(terra)
 library(tidyterra)
 library(ggspatial)
 
+## Read region map
+regions <- vect("data/landscape_data/ms_soil_ecoregions.shp")
+
+# add region names
+regions <- regions |>
+  mutate(name=c("Delta", "Interior Flatwoods", "Upper Coastal Plain", "Blackland Prairie", "Coastal Flatwoods",
+                "Lower Coastal Plain", "Thin Loess", "Thick Loess"))
+
+# Check the names are correct
+ggplot() +
+  geom_spatvector(data=regions, aes(fill=name))
+
 ## Read GPS locations
 # Pigs
 pigs <- read_csv("data/location_data/pigs_filtered.csv")
-pigs <- vect(pigs, geom=c("X", "Y"), crs=32616)
+pigs <- vect(pigs, geom=c("X", "Y"), crs="epsg:32616")
 
 # Deer
 deer <- read_csv("data/location_data/deer_filtered.csv")
+deer <- vect(deer, geom=c("X", "Y"), crs="epsg:32616")
 
 ## Create 1km buffers
 # Pigs
-pigs <- vect("data/location_data/pigs_1km_buffer.shp")
+pigs <- buffer(pigs, width=1000)
+pigs <- aggregate(pigs) # Dissolve buffers
 
 # Deer
-deer <- vect("data/location_data/deer_1km_buffer.shp")
+deer <- buffer(deer, width=1000)
+deer <- aggregate(deer) # Dissolve buffers
 
 ## Read spatial data
 nlcd <- rast("data/landscape_data/NLCD2023_MS50kmbuff_90m.tif")
@@ -55,14 +70,15 @@ nlcd <- crop(nlcd, ext(ms))
 # Reproject polygons
 deer <- project(deer, nlcd)
 pigs <- project(pigs, nlcd)
-
+regions <- project(regions, nlcd)
 
 map <- ggplot() +
   geom_spatraster(data=nlcd) +
-  scale_fill_coltab(data=nlcd,   na.translate = FALSE,
-                    na.value = "transparent", name="NLCD") +
-  geom_spatvector(data=pigs, col="black", fill="black", alpha=0.9, linewidth=0.7) +
-  geom_spatvector(data=deer, col="black", fill="white", alpha=0.9, linewidth=0.7) +
+  scale_fill_coltab(data=nlcd, na.translate = FALSE,
+                    na.value="transparent", name="NLCD") +
+  geom_spatvector(data=regions, col="black", fill=NA, linewidth=0.4) +
+  geom_spatvector(data=pigs, col="black", fill="black", alpha=0.8, linewidth=0.7) +
+  geom_spatvector(data=deer, col="black", fill="white", alpha=0.8, linewidth=0.7) +
   annotation_north_arrow(
     which_north = TRUE,
     pad_x = unit(0.05, "npc"),
@@ -72,10 +88,10 @@ map <- ggplot() +
     height = unit(0.015, "npc"),
     width_hint = 0.5,
     pad_x = unit(0.07, "npc"),
-    pad_y = unit(0.07, "npc"),
+    pad_y = unit(0.15, "npc"),
     text_cex = .8) +
-  theme_classic() +
-  theme(panel.border=element_rect(fill=NA, color="black"),
+  theme_bw() +
+  theme(panel.border=element_rect(fill=NA, color=NA),
         legend.margin=margin(t = 12, unit='cm')) 
 
 # Create inset
@@ -89,6 +105,19 @@ inset <- ggplot() +
   theme_bw() +
   theme(panel.border=element_rect(fill=NA, color="black"))
 
+## Create 2nd inset (regions)
+# get centroid of each polygon
+r_centers <- centroids(regions)
+
+
+ggplot() +
+  geom_spatvector(data=regions, aes(fill=name), color=NA) + #linewidth=0.8,
+  scale_fill_viridis_d(option="A", name="Region") +
+  theme_void()
+
+
+
+## Combine with patchwork
 library(patchwork)
 layout <- c(
   area(t = 1, l = 1, b = 15, r = 4),  # map
