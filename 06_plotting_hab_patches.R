@@ -112,7 +112,7 @@ expanse(cwd_deer_marg, unit="km")
 ## For each species, combine into multiclass raster (mean predictions)
 # Will use the patch values to reclassify
 patch_vals <- c(3,2,1)
-patch_class <- c("Core", "Marginal", "Highly Marginal")
+patch_class <- c("Core", "Moderate", "Marginal")
 
 ## Mosaic rasters
 deer_mn <- mosaic(patches["deer_highlymarginal"], patches["deer_marginal"], fun = "sum")
@@ -129,12 +129,41 @@ levels(deer_mn) <- list(data.frame(ID = patch_vals,
 levels(pigs_mn) <- list(data.frame(ID = patch_vals,
                                    patch = patch_class))
 
+### Read in region polygon
+regions <- vect("data/landscape_data/ms_soil_ecoregions.shp")
+
+# Assign names to polygons
+regions <- regions |>
+  mutate(name=c("Delta", "Interior Flatwoods", "Upper Coastal Plain", "Blackland Prairie", "Coastal Flatwoods",
+                "Lower Coastal Plain", "Thin Loess", "Thick Loess"))
+
+# Combine Thick and Thin Loess into just Loess
+regions[["diss_id"]]<- c(2, 2, 2, 2, 2, 2, 1, 1)
+
+# split
+split_vectors <- split(regions, f = regions$diss_id)
+
+# Dissolve the loess regions
+split_vectors$`1` <- aggregate(split_vectors$`1`)
+
+# Add name to dissolved loess
+# values(split_vectors$`1`) <- "Loess"
+
+# # drop all columns from the rest of the polygons (except region names)
+split_vectors$`2` <- split_vectors$`2`["name"]
+
+# Combine the list of SpatVectors back into a single SpatVector
+regions <- rbind(split_vectors$`1`, split_vectors$`2`)
+
+regions[["name"]] <- ifelse(is.na(regions$name), "Loess", regions$name)
+
 #### Plot ####
 # Deer plot
 deer_patches <- ggplot() +
-  geom_spatraster(data=deer_mn) +
-  scale_fill_viridis_d(option="D", direction=-1, name="Patch Type:", na.value="transparent", na.translate=FALSE) +
-  geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.4) +
+  geom_spatraster(data=deer_mn, alpha=0.8) +
+  scale_fill_viridis_d(option="D", direction=-1, name="Suitability Level", na.value="transparent", na.translate=FALSE) +
+  geom_spatvector(data=regions, color="black", fill=NA, linewidth=0.4) +
+  # geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.4) +
   theme_void() +
   annotation_north_arrow(
     which_north = TRUE,
@@ -144,9 +173,10 @@ deer_patches <- ggplot() +
 
 # Pig plot
 pig_patches <- ggplot() +
-  geom_spatraster(data=pigs_mn) +
-  scale_fill_viridis_d(option="D", direction=-1, name="Patch Type:", na.value="transparent", na.translate=FALSE) +
-  geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.4) +
+  geom_spatraster(data=pigs_mn, alpha=0.8) +
+  scale_fill_viridis_d(option="D", direction=-1, name="Suitability Level", na.value="transparent", na.translate=FALSE) +
+  geom_spatvector(data=regions, color="black", fill=NA, linewidth=0.4) +
+  # geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.4) +
   theme_void() +
   annotation_scale(
     height = unit(0.015, "npc"),

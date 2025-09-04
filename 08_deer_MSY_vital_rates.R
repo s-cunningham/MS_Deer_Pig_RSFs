@@ -207,11 +207,7 @@ for (i in 1:Sims) {
     
     # Calcuate density factor
     density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
-    
-    # reduce fecundity
-    # R0y_dd <- R0y_s * density_factor  deer.array[,,i]
-    # R0a_dd <- R0a_s * density_factor
-    
+
     # Check adult age ratio
     asr <- sum(deer.array[8:12,y-1,i])/sum(deer.array[2:6,y-1,i], 1e-6)
     # cat("Adult Sex Ratio:", asr, "\n")

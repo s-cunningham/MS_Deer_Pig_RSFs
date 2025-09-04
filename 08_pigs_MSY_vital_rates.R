@@ -162,15 +162,15 @@ for (i in 1:Sims) {
   ## Stochasticity on Survival 
   # Female survival
   # Survive & go
-  A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.02)
-  A_s[3,2] <- rtruncnorm(1, b=1, mean=A_adj[3,2], sd=0.02)
+  A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.01)
+  A_s[3,2] <- rtruncnorm(1, b=1, mean=A_adj[3,2], sd=0.01)
   # Survive & stay
-  A_s[3,3] <- rtruncnorm(1, a=0, b=1, mean=A_adj[3,3], sd=0.02)
+  A_s[3,3] <- rtruncnorm(1, a=0, b=1, mean=A_adj[3,3], sd=0.01)
   # Male survival
-  A_s[5,4] <- rtruncnorm(1, b=1, mean=A_adj[5,4], sd=0.02)
-  A_s[6,5] <- rtruncnorm(1, b=1, mean=A_adj[6,5], sd=0.02)
+  A_s[5,4] <- rtruncnorm(1, b=1, mean=A_adj[5,4], sd=0.01)
+  A_s[6,5] <- rtruncnorm(1, b=1, mean=A_adj[6,5], sd=0.01)
   # Survive & stay
-  A_s[6,6] <- rtruncnorm(1, b=1, mean=A_adj[6,6], sd=0.02)
+  A_s[6,6] <- rtruncnorm(1, b=1, mean=A_adj[6,6], sd=0.01)
   
   # save new matrix
   A_dd <- A_s
@@ -543,15 +543,15 @@ for (i in 1:Sims) {
   ## Stochasticity on Survival 
   # Female survival
   # Survive & go
-  A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.02)
-  A_s[3,2] <- rtruncnorm(1, b=1, mean=A_adj[3,2], sd=0.02)
+  A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.01)
+  A_s[3,2] <- rtruncnorm(1, b=1, mean=A_adj[3,2], sd=0.01)
   # Survive & stay
-  A_s[3,3] <- rtruncnorm(1, a=0, b=1, mean=A_adj[3,3], sd=0.02)
+  A_s[3,3] <- rtruncnorm(1, a=0, b=1, mean=A_adj[3,3], sd=0.01)
   # Male survival
-  A_s[5,4] <- rtruncnorm(1, b=1, mean=A_adj[5,4], sd=0.02)
-  A_s[6,5] <- rtruncnorm(1, b=1, mean=A_adj[6,5], sd=0.02)
+  A_s[5,4] <- rtruncnorm(1, b=1, mean=A_adj[5,4], sd=0.01)
+  A_s[6,5] <- rtruncnorm(1, b=1, mean=A_adj[6,5], sd=0.01)
   # Survive & stay
-  A_s[6,6] <- rtruncnorm(1, b=1, mean=A_adj[6,6], sd=0.02)
+  A_s[6,6] <- rtruncnorm(1, b=1, mean=A_adj[6,6], sd=0.01)
   
   # save new matrix
   A_dd <- A_s

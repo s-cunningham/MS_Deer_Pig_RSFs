@@ -6,10 +6,30 @@ library(ggspatial)
 ## Read region map
 regions <- vect("data/landscape_data/ms_soil_ecoregions.shp")
 
-# add region names
+# Assign names to polygons
 regions <- regions |>
   mutate(name=c("Delta", "Interior Flatwoods", "Upper Coastal Plain", "Blackland Prairie", "Coastal Flatwoods",
                 "Lower Coastal Plain", "Thin Loess", "Thick Loess"))
+
+# Combine Thick and Thin Loess into just Loess
+regions[["diss_id"]]<- c(2, 2, 2, 2, 2, 2, 1, 1)
+
+# split
+split_vectors <- split(regions, f = regions$diss_id)
+
+# Dissolve the loess regions
+split_vectors$`1` <- aggregate(split_vectors$`1`)
+
+# Add name to dissolved loess
+# values(split_vectors$`1`) <- "Loess"
+
+# # drop all columns from the rest of the polygons (except region names)
+split_vectors$`2` <- split_vectors$`2`["name"]
+
+# Combine the list of SpatVectors back into a single SpatVector
+regions <- rbind(split_vectors$`1`, split_vectors$`2`)
+
+regions[["name"]] <- ifelse(is.na(regions$name), "Loess", regions$name)
 
 # Check the names are correct
 ggplot() +
@@ -92,7 +112,10 @@ map <- ggplot() +
     text_cex = .8) +
   theme_bw() +
   theme(panel.border=element_rect(fill=NA, color=NA),
-        legend.margin=margin(t = 12, unit='cm')) 
+        legend.margin=margin(t = 12, unit='cm'),
+        legend.text=element_text(size=11),
+        legend.title=element_text(size=12),
+        legend.background = element_blank()) 
 
 # Create inset
 us <- vect("data/landscape_data/north_am_states.shp")
@@ -106,14 +129,12 @@ inset <- ggplot() +
   theme(panel.border=element_rect(fill=NA, color="black"))
 
 ## Create 2nd inset (regions)
-# get centroid of each polygon
-r_centers <- centroids(regions)
 
-
-ggplot() +
-  geom_spatvector(data=regions, aes(fill=name), color=NA) + #linewidth=0.8,
+r_map <- ggplot() +
+  geom_spatvector(data=regions, aes(fill=name), color="black") + #linewidth=0.8,
   scale_fill_viridis_d(option="A", name="Region") +
-  theme_void()
+  theme_void() +
+  theme(legend.position="none")
 
 
 
@@ -127,5 +148,21 @@ layout <- c(
 map + inset +
   plot_layout(design = layout)
 
-# ggsave("figs/figure1_map.svg")
+
+layout <- "
+AAAADD
+AAAADD
+AAAABB
+AAAABB
+AAAACC
+AAAACC
+AAAA##
+AAAA##
+AAAA##
+AAAA##
+"
+
+map + r_map + guide_area() + inset + plot_layout(design = layout, guides = "collect")
+
+ggsave("figs/Figure1_map.svg")
 # Saving 8.47 x 9.06 in image
