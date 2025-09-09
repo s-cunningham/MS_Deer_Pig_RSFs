@@ -104,10 +104,10 @@ A_adj[6,6] <- A_base[6,6]*deer_opt$par[3]#+0.02
 
 # Male survival
 A_adj[9,8] <- A_base[9,8]*deer_opt$par[4]
-A_adj[10,9] <- A_base[10,9]*deer_opt$par[5]+0.03
-A_adj[11,10] <- A_base[11,10]*deer_opt$par[6]+0.03
-A_adj[12,11] <- A_base[12,11]*deer_opt$par[7]+0.05
-A_adj[12,12] <- A_base[12,12]*deer_opt$par[8]-0.02
+A_adj[10,9] <- A_base[10,9]*deer_opt$par[5]#+0.03
+A_adj[11,10] <- A_base[11,10]*deer_opt$par[6]#+0.03
+A_adj[12,11] <- A_base[12,11]*deer_opt$par[7]#+0.05
+A_adj[12,12] <- A_base[12,12]*deer_opt$par[8]#-0.02
 
 ## Fecundity
 # Yearlings
@@ -160,7 +160,7 @@ asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
 # Calibrate density dependence parameter
 theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
-theta <- 5
+# theta <- 5
 
 # Set up arrays to save realized demographic rates
 realized_survival <- array(NA, dim=c(12, length(Year), Sims))
@@ -177,17 +177,17 @@ for (i in 1:Sims) {
   # Female survival
   for (s in 2:5) {
     # Survive & go
-    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.01)
+    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
   }
   # Survive & stay
-  A_s[6,6] <- rtruncnorm(1, a=0, b=1, mean=A_adj[6,6], sd=0.01)
+  A_s[6,6] <- rtruncnorm(1, a=0, b=1, mean=A_adj[6,6], sd=0.02)
   # Male survival
   for (s in 8:11) {
     # Survive & go
-    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.01)
+    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
   }
   # Survive & stay
-  A_s[12,12] <- rtruncnorm(1, b=1, mean=A_adj[12,12], sd=0.01)
+  A_s[12,12] <- rtruncnorm(1, b=1, mean=A_adj[12,12], sd=0.02)
   
   # save new matrix
   A_dd <- A_s
@@ -590,17 +590,17 @@ for (i in 1:Sims) {
   # Female survival
   for (s in 2:5) {
     # Survive & go
-    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.01)
+    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
   }
   # Survive & stay
-  A_s[6,6] <- rtruncnorm(1, a=0, b=1, mean=A_adj[6,6], sd=0.01)
+  A_s[6,6] <- rtruncnorm(1, a=0, b=1, mean=A_adj[6,6], sd=0.02)
   # Male survival
   for (s in 8:11) {
     # Survive & go
-    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.01)
+    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
   }
   # Survive & stay
-  A_s[12,12] <- rtruncnorm(1, b=1, mean=A_adj[12,12], sd=0.01)
+  A_s[12,12] <- rtruncnorm(1, b=1, mean=A_adj[12,12], sd=0.02)
   
   # save new matrix
   A_dd <- A_s

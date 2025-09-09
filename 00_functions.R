@@ -1,3 +1,4 @@
+
 library(tidyverse)
 library(R.utils)
 
@@ -205,7 +206,7 @@ estimate_theta_opt <- function(N0, lambda, K, t_max = 100) {
     N <- theta_logistic_proj(N0, lambda, K, theta, t_max)
     (tail(N, 1) - K)^2
   }
-  result <- optimize(objective_fn, lower = 0.01, upper = 3)
+  result <- optimize(objective_fn, lower = 0.1, upper = 10)
   return(result$minimum)
 }
 
@@ -350,7 +351,7 @@ objective_fn_deer <- function(params) {
 scale_pigs <- function(A_base,surv_scale_f,surv_scale_m,fec_scale) {
   
   pig.matrix <- matrix(0,6,6)
- 
+  
   ## Survival
   # Females
   pig.matrix[2,1] <- A_base[2,1]*surv_scale_f
@@ -360,12 +361,12 @@ scale_pigs <- function(A_base,surv_scale_f,surv_scale_m,fec_scale) {
   pig.matrix[5,4] <- A_base[5,4]*surv_scale_m
   pig.matrix[6,5] <- A_base[6,5]*surv_scale_m
   pig.matrix[6,6] <- A_base[6,6]*surv_scale_m
-
+  
   ## Fecundity
   # Maximum fecundity
   R0y <- A_base[1,2]*fec_scale
   R0a <- A_base[1,3]*fec_scale
-
+  
   FecundityF <- c(R0y, R0a)*0.5
   FecundityM <- c(R0y, R0a)*0.5
   
@@ -379,11 +380,11 @@ scale_pigs <- function(A_base,surv_scale_f,surv_scale_m,fec_scale) {
 
 ## project population
 pig_pop_proj <- function(A, N0, Kf, theta, step) {
-
+  
   # Empty array to hold pop count
   pig.array <- matrix(0,nrow=6, ncol=length(step))
   pig.array[,1] <- N0
-
+  
   for (y in 2:length(step)){
     
     # Density dependent adjustment in fecundity
@@ -395,7 +396,7 @@ pig_pop_proj <- function(A, N0, Kf, theta, step) {
     
     # save new matrix
     A_dd <- A
-
+    
     # reduce fecundity
     R0j_dd <- A[1,2] * density_factor 
     R0a_dd <- A[1,3] * density_factor 
@@ -403,7 +404,7 @@ pig_pop_proj <- function(A, N0, Kf, theta, step) {
     # Adjust sex ratio at birth
     A_dd[1,2:3] <- c(R0j_dd*A[3,2], R0a_dd*A[3,3]) 
     A_dd[4,2:3] <- c(R0j_dd*A[3,2], R0a_dd*A[3,3])
-
+    
     # Calculate new pop size
     pig.array[,y] <- A_dd %*% pig.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)
   }
@@ -426,7 +427,7 @@ objective_fn_pigs <- function(params) {
   surv_scale_f <- params[1]
   surv_scale_m <- params[2]
   fec_scale <- params[3]
-
+  
   # Scale demographic rates
   A_scaled <- scale_pigs(A_base,surv_scale_f,surv_scale_m,fec_scale)
   
@@ -460,4 +461,3 @@ safe_divide <- function(numerator, denominator) {
     return(numerator / denominator)
   }
 }
-
