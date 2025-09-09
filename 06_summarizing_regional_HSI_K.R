@@ -32,7 +32,17 @@ d_avgRSF$mean <- round(d_avgRSF$mean, digits=2)
 p_avgRSF$mean <- round(p_avgRSF$mean, digits=2) 
 
 # calculate fraction of area suitable for pigs
+
+# Calculate area of regions
+reg_area <- data.frame(regions$name, area_km2=st_area(regions)/1000/1000)
+reg_area <- reg_area |>
+  mutate(area_km2 =as.numeric(area_km2)) |>
+  rename(name=regions.name)
+
 regions <- st_transform(regions, crs=st_crs(deer_area))
+
+# Calcuate percentages
+## deer
 suitability_deer <- exact_extract(deer_area, regions, function(df) {
   df %>%
     mutate(frac_total = coverage_fraction / sum(coverage_fraction)) %>%
@@ -40,5 +50,48 @@ suitability_deer <- exact_extract(deer_area, regions, function(df) {
     summarize(freq = sum(frac_total))
 }, summarize_df = TRUE, include_cols = 'name', progress = FALSE)
 
+suitability_deer <- suitability_deer |>
+  ungroup() |>
+  # drop NAs 
+  filter(!is.na(value)) |>
+  # pivot
+  pivot_wider(names_from = "value", values_from = "freq") |>
+  rename(marginal=`1`, moderate=`2`, core=`3`) 
+  
+suitability_deer <- left_join(suitability_deer, reg_area, by="name")
 
-expanse(deer_area, unit="km")
+suitability_deer <- suitability_deer |>
+  mutate(core_km2 = core*area_km2,
+         moderate_km2 = moderate*area_km2,
+         marginal_km2 = marginal*area_km2)
+
+## pigs
+suitability_pigs <- exact_extract(pigs_area, regions, function(df) {
+  df %>%
+    mutate(frac_total = coverage_fraction / sum(coverage_fraction)) %>%
+    group_by(name, value) %>%
+    summarize(freq = sum(frac_total))
+}, summarize_df = TRUE, include_cols = 'name', progress = FALSE)
+
+suitability_pigs <- suitability_pigs |>
+  ungroup() |>
+  # drop NAs 
+  filter(!is.na(value)) |>
+  # pivot
+  pivot_wider(names_from = "value", values_from = "freq") |>
+  rename(marginal=`1`, moderate=`2`, core=`3`) 
+
+suitability_pigs <- left_join(suitability_pigs, reg_area, by="name")
+
+suitability_pigs <- suitability_pigs |>
+  mutate(core_km2 = core*area_km2,
+         moderate_km2 = moderate*area_km2,
+         marginal_km2 = marginal*area_km2)
+
+
+# area-adjusted total suitability?
+
+
+d_totRSF <- left_join(d_totRSF, reg_area, by="name")
+d_totRSF <- d_totRSF |>
+  mutate(a_adj_totalHSI = sum/area_km2)

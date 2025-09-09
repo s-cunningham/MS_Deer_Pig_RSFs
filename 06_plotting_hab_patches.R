@@ -121,6 +121,9 @@ deer_mn <- mosaic(deer_mn, patches["deer_core"], fun="sum")
 pigs_mn <- mosaic(patches["pigs_highlymarginal"], patches["pigs_marginal"], fun = "sum")
 pigs_mn <- mosaic(pigs_mn, patches["pigs_core"], fun="sum")
 
+writeRaster(pigs_mn, "data/landscape_data/pigs_suitability_levels.tif")
+writeRaster(deer_mn, "data/landscape_data/deer_suitability_levels.tif")
+
 ## Reclassify
 # Add patch types to raster
 levels(deer_mn) <- list(data.frame(ID = patch_vals,
@@ -156,6 +159,11 @@ split_vectors$`2` <- split_vectors$`2`["name"]
 regions <- rbind(split_vectors$`1`, split_vectors$`2`)
 
 regions[["name"]] <- ifelse(is.na(regions$name), "Loess", regions$name)
+
+ggplot(regions) +
+  geom_spatvector(color="black", aes(fill=name))
+
+writeVector(regions, "data/landscape_data/edited_ms_soil_regions.shp")
 
 #### Plot ####
 # Deer plot
