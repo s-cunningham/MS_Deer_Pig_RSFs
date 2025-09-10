@@ -97,17 +97,17 @@ A_adj[8,7] <- A_base[8,7]*deer_opt$par[1]
 
 # Female survival
 A_adj[3,2] <- A_base[3,2]*deer_opt$par[2]
-A_adj[4,3] <- A_base[4,3]*deer_opt$par[3]#+0.02
-A_adj[5,4] <- A_base[5,4]*deer_opt$par[3]#+0.02
-A_adj[6,5] <- A_base[6,5]*deer_opt$par[3]#+0.02
-A_adj[6,6] <- A_base[6,6]*deer_opt$par[3]#+0.02
+A_adj[4,3] <- A_base[4,3]*deer_opt$par[3]
+A_adj[5,4] <- A_base[5,4]*deer_opt$par[3]
+A_adj[6,5] <- A_base[6,5]*deer_opt$par[3]
+A_adj[6,6] <- A_base[6,6]*deer_opt$par[3]
 
 # Male survival
 A_adj[9,8] <- A_base[9,8]*deer_opt$par[4]
-A_adj[10,9] <- A_base[10,9]*deer_opt$par[5]#+0.03
-A_adj[11,10] <- A_base[11,10]*deer_opt$par[6]#+0.03
-A_adj[12,11] <- A_base[12,11]*deer_opt$par[7]#+0.05
-A_adj[12,12] <- A_base[12,12]*deer_opt$par[8]#-0.02
+A_adj[10,9] <- A_base[10,9]*deer_opt$par[5]
+A_adj[11,10] <- A_base[11,10]*deer_opt$par[6]
+A_adj[12,11] <- A_base[12,11]*deer_opt$par[7]
+A_adj[12,12] <- A_base[12,12]*deer_opt$par[8]
 
 ## Fecundity
 # Yearlings
@@ -177,17 +177,17 @@ for (i in 1:Sims) {
   # Female survival
   for (s in 2:5) {
     # Survive & go
-    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
+    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.01)
   }
   # Survive & stay
-  A_s[6,6] <- rtruncnorm(1, a=0, b=1, mean=A_adj[6,6], sd=0.02)
+  A_s[6,6] <- rtruncnorm(1, a=0, b=1, mean=A_adj[6,6], sd=0.01)
   # Male survival
   for (s in 8:11) {
     # Survive & go
-    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
+    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.01)
   }
   # Survive & stay
-  A_s[12,12] <- rtruncnorm(1, b=1, mean=A_adj[12,12], sd=0.02)
+  A_s[12,12] <- rtruncnorm(1, b=1, mean=A_adj[12,12], sd=0.01)
   
   # save new matrix
   A_dd <- A_s
@@ -590,17 +590,17 @@ for (i in 1:Sims) {
   # Female survival
   for (s in 2:5) {
     # Survive & go
-    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
+    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.01)
   }
   # Survive & stay
-  A_s[6,6] <- rtruncnorm(1, a=0, b=1, mean=A_adj[6,6], sd=0.02)
+  A_s[6,6] <- rtruncnorm(1, a=0, b=1, mean=A_adj[6,6], sd=0.01)
   # Male survival
   for (s in 8:11) {
     # Survive & go
-    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
+    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.01)
   }
   # Survive & stay
-  A_s[12,12] <- rtruncnorm(1, b=1, mean=A_adj[12,12], sd=0.02)
+  A_s[12,12] <- rtruncnorm(1, b=1, mean=A_adj[12,12], sd=0.01)
   
   # save new matrix
   A_dd <- A_s
@@ -673,15 +673,26 @@ for (i in 1:Sims) {
     deer.array[,y,i] <- pmax(N_next, 0)
     
     # ---- Realized survival ----
-    
-    # Female stages
+   
+     # Female stages
     realized_survival[1, y, i] <- safe_divide(pmax(deer.array[2, y, i],0), pmax(deer.array[1, y-1, i],0)) # Fawn → yearling (F)
     realized_survival[2, y, i] <- deer.array[3, y, i] / deer.array[2, y-1, i]  # yearling → 2-year-old  
     realized_survival[3, y, i] <- deer.array[4, y, i] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
     realized_survival[4, y, i] <- deer.array[5, y, i] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
     
+    # female ssd
+    w_f <- Re(eigen(A_dd)$vectors[, 1])[1:6]
+    w_f <- w_f / sum(w_f)
+    
+    # male ssd
+    w_m <- Re(eigen(A_dd)$vectors[, 1])[7:12]
+    w_m <- w_m / sum(w_m)
+    
+    c5_f <- (A_dd[6,5] * w_f[5]) / ((A_dd[6,5] * w_f[5]) + (A_dd[6,6] * w_f[6]))
+    c5_m <- (A_dd[12,11] * w_m[5]) / ((A_dd[12,11] * w_m[5]) + (A_dd[12,12] * w_m[6]))
+    
     # Stages 5 and 6 are tricky...
-    est_from5 <- deer.array[6, y, i] * 0.12
+    est_from5 <- deer.array[6, y, i] * c5_f
     est_from6 <- deer.array[6, y, i] - est_from5
     
     realized_survival[5, y, i] <- safe_divide(est_from5, deer.array[5, y-1, i])
@@ -699,7 +710,7 @@ for (i in 1:Sims) {
     realized_survival[10, y, i] <- deer.array[11, y, i] / deer.array[10, y-1, i] # 10 → 11
     
     # Stages 5 and 6 are tricky...
-    est_from11 <- deer.array[12, y, i] * 0.24
+    est_from11 <- deer.array[12, y, i] * c5_m
     est_from12 <- deer.array[12, y, i] - est_from11
     
     realized_survival[11, y, i] <- safe_divide(est_from11, deer.array[11, y-1, i])

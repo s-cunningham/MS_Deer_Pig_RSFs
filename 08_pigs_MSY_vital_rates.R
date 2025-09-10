@@ -68,36 +68,32 @@ N0 <- w * 0.1 * K  # e.g., start at 50% of K
 lambda <- Re(eigen(pig.matrix)$values[1])
 
 # How many pig are harvested?
-observed_harvest <- 160000 
+observed_harvest <- 170000 
 
 ### Optimize survival and fecundities
 # set up bounds
 pig_lower <- c(1, 1, 1)
-pig_upper <- c(1.68, 1.5, 2.5)
+pig_upper <- c(1.5, 1.4, 2.5)
 
 # run optimizer
 set.seed(1)
-pig_opt <- optim(par=c(runif(1, 1.15, 1.65), runif(1, 1.02, 1.45), runif(1, 1.55, 2.490)), fn=objective_fn_pigs, method="L-BFGS-B", lower=pig_lower, upper=pig_upper, control = list(trace = 1))
-
-# final  value 673.472746 
-# converged
+pig_opt <- optim(par=c(runif(1, 1.15, 1.45), runif(1, 1.02, 1.35), runif(1, 1.55, 2.490)), fn=objective_fn_pigs, method="L-BFGS-B", lower=pig_lower, upper=pig_upper, control = list(trace = 1))
 
 # What are optimized parameter values 
 pig_opt$par
-# [1] 1.104417 1.499024 1.049855
 
 #### Adjusted matrix ####
 A_adj <- A_base
 
 # Female survival
 A_adj[2,1] <- A_base[2,1]*pig_opt$par[1]
-A_adj[3,2] <- A_base[3,2]*pig_opt$par[1]#+0.05
-A_adj[3,3] <- A_base[3,3]*pig_opt$par[1]#+0.05
+A_adj[3,2] <- A_base[3,2]*pig_opt$par[1]
+A_adj[3,3] <- A_base[3,3]*pig_opt$par[1]
 
 # Male survival
-A_adj[5,4] <- A_base[5,4]*pig_opt$par[2]#-0.08
-A_adj[6,5] <- A_base[6,5]*pig_opt$par[2]#-0.08
-A_adj[6,6] <- A_base[6,6]*pig_opt$par[2]#-0.08
+A_adj[5,4] <- A_base[5,4]*pig_opt$par[2]
+A_adj[6,5] <- A_base[6,5]*pig_opt$par[2]
+A_adj[6,6] <- A_base[6,6]*pig_opt$par[2]
 
 ## Fecundity
 # Yearlings
@@ -151,7 +147,6 @@ asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
 # Calibrate density dependence parameter
 theta <- estimate_theta_opt(N0[1:3], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
-# theta <- 4
 
 # Set up arrays to save realized demographic rates
 realized_survival <- array(NA, dim=c(6, length(Year), Sims))
@@ -166,15 +161,15 @@ for (i in 1:Sims) {
   ## Stochasticity on Survival 
   # Female survival
   # Survive & go
-  A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.02)
-  A_s[3,2] <- rtruncnorm(1, b=1, mean=A_adj[3,2], sd=0.02)
+  A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.01)
+  A_s[3,2] <- rtruncnorm(1, b=1, mean=A_adj[3,2], sd=0.01)
   # Survive & stay
-  A_s[3,3] <- rtruncnorm(1, a=0, b=1, mean=A_adj[3,3], sd=0.02)
+  A_s[3,3] <- rtruncnorm(1, a=0, b=1, mean=A_adj[3,3], sd=0.01)
   # Male survival
-  A_s[5,4] <- rtruncnorm(1, b=1, mean=A_adj[5,4], sd=0.02)
-  A_s[6,5] <- rtruncnorm(1, b=1, mean=A_adj[6,5], sd=0.02)
+  A_s[5,4] <- rtruncnorm(1, b=1, mean=A_adj[5,4], sd=0.01)
+  A_s[6,5] <- rtruncnorm(1, b=1, mean=A_adj[6,5], sd=0.01)
   # Survive & stay
-  A_s[6,6] <- rtruncnorm(1, b=1, mean=A_adj[6,6], sd=0.02)
+  A_s[6,6] <- rtruncnorm(1, b=1, mean=A_adj[6,6], sd=0.01)
   
   # save new matrix
   A_dd <- A_s
@@ -203,8 +198,8 @@ for (i in 1:Sims) {
     s_f <- 1 - s_m
     
     # Adjust sex ratio at birth
-    A_dd[1,2:3] <- c(R0j_s, R0a_s) * s_f * density_factor
-    A_dd[4,2:3] <- c(R0j_s, R0a_s) * s_m * density_factor
+    A_dd[1,2:3] <- c(R0j_s, R0a_s) * 0.5 * density_factor
+    A_dd[4,2:3] <- c(R0j_s, R0a_s) * 0.5 * density_factor
     
     # Save fecundity
     realized_fecundity[1,y-1,i] <- A_dd[1,2] # Females per yearling female
@@ -458,11 +453,11 @@ observed_harvest <- 180000
 ### Optimize survival and fecundities
 # set up bounds
 pig_lower <- c(1, 1, 1)
-pig_upper <- c(1.68, 1.5, 2.5)
+pig_upper <- c(1.5, 1.4, 2.5)
 
 # run optimizer
 set.seed(1)
-pig_opt <- optim(par=c(runif(1, 1.15, 1.65), runif(1, 1.02, 1.45), runif(1, 1.55, 2.490)), fn=objective_fn_pigs, method="L-BFGS-B", lower=pig_lower, upper=pig_upper, control = list(trace = 1))
+pig_opt <- optim(par=c(runif(1, 1.15, 1.45), runif(1, 1.02, 1.35), runif(1, 1.55, 2.490)), fn=objective_fn_pigs, method="L-BFGS-B", lower=pig_lower, upper=pig_upper, control = list(trace = 1))
 
 # What are optimized parameter values 
 pig_opt$par
@@ -532,7 +527,6 @@ asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
 # Calibrate density dependence parameter
 theta <- estimate_theta_opt(N0[1:3], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
-# theta <- 5
 
 # Set up arrays to save realized demographic rates
 realized_survival <- array(NA, dim=c(6, length(Year), Sims))
@@ -547,15 +541,15 @@ for (i in 1:Sims) {
   ## Stochasticity on Survival 
   # Female survival
   # Survive & go
-  A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.02)
-  A_s[3,2] <- rtruncnorm(1, b=1, mean=A_adj[3,2], sd=0.02)
+  A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.01)
+  A_s[3,2] <- rtruncnorm(1, b=1, mean=A_adj[3,2], sd=0.01)
   # Survive & stay
-  A_s[3,3] <- rtruncnorm(1, a=0, b=1, mean=A_adj[3,3], sd=0.02)
+  A_s[3,3] <- rtruncnorm(1, a=0, b=1, mean=A_adj[3,3], sd=0.01)
   # Male survival
-  A_s[5,4] <- rtruncnorm(1, b=1, mean=A_adj[5,4], sd=0.02)
-  A_s[6,5] <- rtruncnorm(1, b=1, mean=A_adj[6,5], sd=0.02)
+  A_s[5,4] <- rtruncnorm(1, b=1, mean=A_adj[5,4], sd=0.01)
+  A_s[6,5] <- rtruncnorm(1, b=1, mean=A_adj[6,5], sd=0.01)
   # Survive & stay
-  A_s[6,6] <- rtruncnorm(1, b=1, mean=A_adj[6,6], sd=0.02)
+  A_s[6,6] <- rtruncnorm(1, b=1, mean=A_adj[6,6], sd=0.01)
   
   # save new matrix
   A_dd <- A_s
@@ -759,16 +753,15 @@ results <- results |>
 
 
 res_plot <- ggplot(results) +
-  coord_cartesian(ylim=c(0,4500000)) +
+  coord_cartesian(ylim=c(0,2500000)) +
   geom_hline(yintercept=1000000, color="black", linetype=3) +
   geom_hline(yintercept=2034396, linetype=2, color="#ed7953") +
   geom_hline(yintercept=603816, linetype=2, color="#0d0887") +
   geom_ribbon(aes(x=Year, ymin=N.10pct, ymax=N.90pct, fill=density, group=density), alpha=.2) +
   geom_line(aes(x=Year, y=N.median, color=density, group=density), alpha=1,linewidth=1) +
   scale_y_continuous(name="Abundance (in millions)", 
-                     breaks=c(0,500000, 1000000, 1500000, 2000000, 2500000, 
-                              3000000, 3500000, 4000000,4500000),
-                     labels=c(0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5)) +
+                     breaks=c(0,500000, 1000000, 1500000, 2000000, 2500000),
+                     labels=c(0, 0.5, 1, 1.5, 2, 2.5)) +
   scale_x_continuous(breaks=c(0,10,20,30,40), labels=c(0,5,10,15,20)) +
   scale_color_manual(values=c("#ed7953","#0d0887")) +
   scale_fill_manual(values=c("#ed7953","#0d0887")) +
