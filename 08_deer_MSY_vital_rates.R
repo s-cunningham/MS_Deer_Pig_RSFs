@@ -783,7 +783,7 @@ r.surv <- r.surv |>
 r.surv$stage <- factor(r.surv$stage, levels=c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"),
                        labels=c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"))
 
-r.surv$source <- factor(r.surv$source, levels=c("literature", "est", "surv.50pct"), labels=c("Literature", "Optimized", "Realized"))
+r.surv$source <- factor(r.surv$source, levels=c("literature", "est", "surv.50pct"), labels=c("Literature", "Optimized", "Implied"))
 
 ggplot(r.surv) +
   coord_cartesian(ylim=c(0,1)) +

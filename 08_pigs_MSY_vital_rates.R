@@ -714,7 +714,7 @@ r.surv <- r.surv |>
 r.surv$stage <- factor(r.surv$stage, levels=c("Piglet","Yearling","Adult"),
                        labels=c("Piglet","Yearling","Adult"))
 
-r.surv$source <- factor(r.surv$source, levels=c("literature", "est", "surv.50pct"), labels=c("Literature", "Optimized", "Realized"))
+r.surv$source <- factor(r.surv$source, levels=c("literature", "est", "surv.50pct"), labels=c("Literature", "Optimized", "Implied"))
 
 ggplot(r.surv) +
   coord_cartesian(ylim=c(0,1)) +
