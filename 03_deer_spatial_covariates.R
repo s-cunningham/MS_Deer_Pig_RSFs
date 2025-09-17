@@ -5,14 +5,8 @@ theme_set(theme_bw())
 
 #### Read Data ####
 # locations (used & available)
-deer <- read_csv("output/deer_used_avail_locations.csv") %>%
-  # Add column for weight
-  mutate(weight=if_else(case==1, 1, 5000))
-
-deer %>% group_by(key, case) %>% count() %>% 
-  pivot_wider(names_from="case", values_from="n") %>%
-  mutate(ratioUA=`1`/`0`) %>% 
-  ggplot() + geom_density(aes(x=ratioUA))
+deer <- read_csv("output/deer_used_avail_locations.csv") |>
+  select(-avail, -used, -n_avail_used)
 
 # Rasters
 rast_list <- c("data/landscape_data/allhardwoods_180m_sum.tif",
