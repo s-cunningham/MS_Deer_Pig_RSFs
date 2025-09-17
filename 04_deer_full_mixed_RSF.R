@@ -19,6 +19,15 @@ deer <- deer |>
 ## Set up to loop by individual
 un.id <- unique(deer$key)
 
+#
+isw <- deer |> group_by(key, case) |> count() |> pivot_wider(names_from="case", values_from="n") |>
+  mutate(ratio=`1`/`0`) |> mutate(weight = 5000*ratio) |>
+  select(key, weight)
+
+deer <- left_join(deer, isw, by="key")
+deer <- deer |> mutate(weight.x = if_else(case==0, weight.y, weight.x)) |>
+  select(X:water_dist) |>
+  rename(weight=weight.x)
 
 ## Run the full mixed-effects RSF
 system.time(
