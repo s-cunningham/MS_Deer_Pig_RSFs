@@ -12,13 +12,13 @@ layers <- rast(layers)
 #### Predict across MS counties ####
 ## Read in coefficients
 # Betas
-betas <- read_csv("output/pigs_mixed_effects_betas.csv") 
+betas <- read_csv("output/pigs_mixed_effects_betas_indwt_30m.csv") 
 
-beta_hat <- readRDS("output/pigs_mixed_effects_beta.RDS")
+beta_hat <- readRDS("output/pigs_mixed_effects_beta_indwt_30m.RDS")
 names(beta_hat) <- c("hardwoods", "shrubs", "gramanoids", "developed", "dist_water", "Water2")
 
 # Covariance
-vcov_beta <- readRDS("output/pigs_mixed_effects_vcov.RDS")
+vcov_beta <- readRDS("output/pigs_mixed_effects_vcov_indwt_30m.RDS")
 
 # drop intercept
 vcov_beta <- vcov_beta[-1,-1]
@@ -170,7 +170,7 @@ pt_preds <- extract(pred, pigsSV)$RSF
 
 obs <- pigs$case
 
-Boyce(obs=obs, pred=pt_preds)
+Boyce(obs=obs, pred=pt_preds, bin.width=3.1)
 
 ## List county rasters
 files <- list.files(path="output/pig_county_preds/", pattern="_SE.tif$", full.names=TRUE)
@@ -200,6 +200,42 @@ water <- project(water, se_rast)
 se_rast <- mask(se_rast, water, inverse=TRUE)
 
 plot(se_rast)
+
+
+
+#### Resample to 90m ####
+# Load template raster (cells must be *exactly* the same width/length for RAMAS)
+temp_rast <- rast("data/landscape_data/CDL2023_90mACEA_mask.tif")
+
+# Resample
+pred90 <- resample(pred, temp_rast)
+pred90 <- crop(pred90, pred)
+
+## Calculate cutoff values for core and moderate areas
+# convert raster to table, removing NAs
+pred90_vals <- values(pred90, dataframe=TRUE)
+pred90_vals <- pred90_vals |>
+  as_tibble() |>
+  filter(!is.na(RSF))
+
+moderate <- (0 - minmax(pred)[1])/(minmax(pred)[2]-minmax(pred)[1])
+moderate
+
+# Filter values above 0
+above0 <- pred90_vals |>
+  filter(RSF > 0)
+
+# Calculate 50th percentile
+quantile(above0$RSF, probs=0.5)
+
+# Where does 50th percentile fall on the linear stretch?
+core <- (quantile(above0$RSF, probs=0.5) - minmax(pred)[1])/(minmax(pred)[2]-minmax(pred)[1])
+core
+
+marginal <- core / 2
+marginal
+
+
 
 #### Lower bound CI ####
 ## List county rasters

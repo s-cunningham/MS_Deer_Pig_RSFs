@@ -267,7 +267,7 @@ deer <- deer |> filter(key!="87924_Delta_4" | (key=="87924_Delta_4" & x<155000))
 deer <- deer |> filter(key!="87924_Delta_5" | (key=="87924_Delta_5" & x>151000))
 
 # Save
-write_csv(deer, "output/segmented_deer.csv")
+# write_csv(deer, "output/segmented_deer.csv")
 deer <- read_csv("output/segmented_deer.csv")
 
 # how many days in each segment?
@@ -351,7 +351,7 @@ for (i in 1:length(ids)) {
     out[[i]] <- list(dat[[i]]@info$identity, var, var2, UD) 
   })
 }
-saveRDS(out, "results/home_ranges/raw_deer_AKDEs.rds") # Maybe can restart...with 43
+# saveRDS(out, "results/home_ranges/raw_deer_AKDEs.rds") # Maybe can restart...with 43
 out <- readRDS("results/home_ranges/raw_deer_AKDEs.rds")
 
 # Take just the AKDE
@@ -407,7 +407,7 @@ ud <- ud |>
   unite("id", 1:2, sep="_")
 
 # Write shapefile
-st_write(ud, "output/deer_AKDE_est.shp", append=FALSE)
+# st_write(ud, "output/deer_AKDE_est.shp", append=FALSE)
 
 #### 6. Extract available points from home range ####
 ud <- st_read("output/deer_AKDE_est.shp")
@@ -482,7 +482,7 @@ for (i in 1:nrow(ud)) {
 }
 # Save available points
 # write_csv(avail, "output/deer_avail_pts.csv")
-# avail <- read_csv("output/deer_avail_pts.csv")
+avail <- read_csv("output/deer_avail_pts.csv")
 avail <- avail |> unite("key", c("id", "burst"), sep="_") 
 
 ## Now on to the used locations
@@ -530,8 +530,8 @@ for (i in 1:nrow(ud)) {
   # Add to data frame
   used <- bind_rows(used, temp)
 }
-write_csv(used, "output/deer_used_locs.csv")
-# used <- read_csv("output/deer_used_locs.csv")
+# write_csv(used, "output/deer_used_locs.csv")
+used <- read_csv("output/deer_used_locs.csv")
 
 # Organize so used data matches available data
 used <- used |>
@@ -556,7 +556,7 @@ dat <- dat |>
   mutate(weight = if_else(case==1, 1, W/avail))
 
 # save data
-write_csv(dat, "output/deer_used_avail_locations.csv")
+write_csv(dat, "output/deer_used_avail_locations_indwts.csv")
 
 
 

@@ -5,8 +5,10 @@ theme_set(theme_bw())
 
 #### Read Data ####
 # locations (used & available)
-deer <- read_csv("output/deer_used_avail_locations.csv") |>
-  select(-avail, -used, -n_avail_used)
+# deer <- read_csv("output/deer_used_avail_locations_indwts.csv") |>
+#   select(-avail, -used, -n_avail_used)
+deer <- read_csv("output/deer_used_avail_locations_30m_grid.csv")|>
+    select(-avail, -used, -n_avail_used)
 
 # Rasters
 rast_list <- c("data/landscape_data/allhardwoods_180m_sum.tif",
@@ -35,11 +37,11 @@ layers <- c(layers, water)
 names(layers) <- c("allhardwoods", "shrubs", "gramanoids", "foodcrops", "developed", "water_dist")
 
 # Read in MS shapefile (to drop islands)
-# ms <- vect("data/landscape_data/mississippi_ACEA.shp")
-# ms <- project(ms, layers)
-# 
-# # Remove islands
-# layers <- mask(layers, ms)
+ms <- vect("data/landscape_data/mississippi_ACEA.shp")
+ms <- project(ms, layers)
+
+# Remove islands
+layers <- mask(layers, ms)
 
 # Read in permanent water mask
 # water <- vect("data/landscape_data/perm_water_grth500000m2.shp")
@@ -84,5 +86,7 @@ deer <- bind_cols(deer, dat_deer)
 # correlation matrix
 cor(deer[,7:ncol(deer)])
 
+deer <- deer |> na.omit()
+
 # write file so we don't always have to wait for the rasters to do stuff
-write_csv(deer, "output/deer_used_avail_covariates.csv")
+write_csv(deer, "output/deer_used_avail_covariates_ind-wts_30m.csv")
