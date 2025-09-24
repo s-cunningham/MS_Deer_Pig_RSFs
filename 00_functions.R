@@ -122,25 +122,6 @@ simulate_pop <- function(a, A, N0, K_obs, years = 100) {
   return(final_N)
 }
 
-calibrate_a <- function(A, N0, K_obs) {
-  error_fn <- function(a) simulate_pop(a, A, N0, K_obs) - K_obs
-  
-  # Use uniroot to find a where error ≈ 0
-  result <- uniroot(error_fn, lower = 1e-6, upper = 500,extendInt = "yes")
-  # result <- optimize(error_fn, interval = c(1e-6, 100))
-  return(result$root)
-}
-
-calibrate_a_opt <- function(A, N0, K_obs) {
-  error_fn <- function(a) {
-    final_N <- simulate_pop(a, A, N0, K_obs)
-    abs(final_N - K_obs)
-  }
-  result <- optimize(error_fn, interval = c(1e-6, 50))
-  return(result$minimum)
-}
-
-
 ## theta-logistic function
 # Example theta-logistic projection function
 theta_logistic_proj <- function(N0, lambda, K, theta, t_max = 100) {
