@@ -14,13 +14,7 @@ theme_set(theme_bw())
 
 #### Read Data ####
 # locations (used & available)
-pigs <- read_csv("output/pigs_used_avail_locations_indwt_30m.csv") %>%
-  # Add column for weight
-  # mutate(weight=if_else(case==1, 1, 5000)) %>%
-  # drop 19212_Delta_4 - not HR, very exploratory
-  filter(key!="19212_Delta_4") |>
-  select(-avail, -used)
-
+pigs <- read_csv("output/pigs_used_avail_locations.csv") 
 
 # Read in rasters
 rast_list <- c("data/landscape_data/shrublands_210m_sum.tif",
@@ -86,7 +80,7 @@ pigs <- bind_cols(pigs, dat_pigs)
 cor(pigs[,7:ncol(pigs)])
 
 # write file so we don't always have to wait for the rasters to do stuff
-write_csv(pigs, "output/pigs_used_avail_covariates_indwt_30m.csv")
+write_csv(pigs, "output/pigs_used_avail_covariates.csv")
 
 
 

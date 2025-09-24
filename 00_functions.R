@@ -28,15 +28,18 @@ ramas_area <- function(x) {
   
   # Species column
   y$species <- n[[1]][3]
-  # bin ID
-  bintype <- str_detect(n[[1]][4], "\\d") # check if there is a number in string
-  y$bin <- ifelse(bintype, as.character(parse_number(n[[1]][4])), n[[1]][4])
+  # suitability level
+  y$level <- n[[1]][4]
+  
+  # mean, LCI, UCI
+  y$value <- ifelse(length(n[[1]])==7, "mean", n[[1]][6])  
+
   # density
   y$density <- as.numeric(n[[1]][5])
   
   # Rearrange columns
   y <- y %>%
-    select(species, density, bin, Patch:FractDim)
+    select(species, density, level, value, Patch:FractDim)
   
   return(y)
 }
@@ -65,21 +68,13 @@ ramas_K <- function(x) {
   
   # Species column
   y$species <- n[[1]][3]
+  y$suitability <- n[[1]][4]
   # bin ID
   # bintype <- str_detect(n[[1]][4], "\\d") & str_detect(n[[1]][4], "CI") # check if there is a number in string
-  if (str_detect(n[[1]][4], "CI") & str_detect(n[[1]][4], "\\d")) {
-    y$bin <- as.character(parse_number(n[[1]][4]))
-    y$value <- str_sub(n[[1]][4], -3, -1)
-  } else if (str_detect(n[[1]][4], "\\d") & !str_detect(n[[1]][4], "CI")) {
-    # check if there is a digit without CI
-    y$bin <- as.character(parse_number(n[[1]][4]))
+  if (str_detect(n[[1]][6], "CI")) {
+    y$value <- n[[1]][6]
+  }  else {
     y$value <- "mean"
-  } else if (!str_detect(n[[1]][4], "C") & !str_detect(n[[1]][4], "\\d")) {
-    y$bin <- n[[1]][4]
-    y$value <- "mean"
-  } else {
-    y$bin <- str_sub(n[[1]][4], 1, -4)
-    y$value <- str_sub(n[[1]][4], -3, -1)
   }
   
   # y$bin <- ifelse(bintype, as.character(parse_number(n[[1]][4])), n[[1]][4])
@@ -88,49 +83,7 @@ ramas_K <- function(x) {
   
   # Rearrange columns
   y <- y %>%
-    select(species, density, bin, value, Patch:Y)
-  
-  return(y)
-}
-
-# Get trajectory summary (MP simulation)
-ramas_abun <- function(x) {
-  
-  # Read in .txt file 
-  y <- read_table(x, skip=14, n_max=11, col_types= "ddddddd") %>% suppressWarnings()
-  # Rename column headers
-  names(y) <- c("time", "minimum", "lowerSD", "average", "upperSD", "maximum", "drop")
-  y <- y %>% select(-drop)
-  
-  # Split up file name to add column for identifying information (species, bin, density)
-  n <- str_split(x, pattern="[:punct:]")
-  
-  # Species column
-  y$species <- n[[1]][3]
-  # bin ID
-  # bintype <- str_detect(n[[1]][4], "\\d") & str_detect(n[[1]][4], "CI") # check if there is a number in string
-  if (str_detect(n[[1]][4], "CI") & str_detect(n[[1]][4], "\\d")) {
-    y$bin <- as.character(parse_number(n[[1]][4]))
-    y$value <- str_sub(n[[1]][4], -3, -1)
-  } else if (str_detect(n[[1]][4], "\\d") & !str_detect(n[[1]][4], "CI")) {
-    # check if there is a digit without CI
-    y$bin <- as.character(parse_number(n[[1]][4]))
-    y$value <- "mean"
-  } else if (!str_detect(n[[1]][4], "C") & !str_detect(n[[1]][4], "\\d")) {
-    y$bin <- n[[1]][4]
-    y$value <- "mean"
-  } else {
-    y$bin <- str_sub(n[[1]][4], 1, -4)
-    y$value <- str_sub(n[[1]][4], -3, -1)
-  }
-  # density
-  y$density <- as.numeric(n[[1]][5])
-  # density dependence?
-  # y$densDep <- ifelse(length(n[[1]])==8, "scramble", "exp") 
-  
-  # Rearrange columns
-  y <- y %>%
-    select(species, density, bin, value, time:maximum)
+    select(species, density, suitability, value, Patch:Y)
   
   return(y)
 }

@@ -335,7 +335,7 @@ for (i in 1:length(ids)) {
     var2 <- variogram.fit(var,  name="GuessBM", interactive=F)
     
     # Automated model selection
-    tt <- ctmm.select(dat[[i]], var2, IC="BIC") 
+    tt <- ctmm.select(dat[[i]], var2, IC="BIC") # This is what takes a while
     
     # Fit AKDE
     UD <- akde(dat[[i]], tt, weights=TRUE) 
@@ -483,7 +483,7 @@ for (i in 1:nrow(ud)) {
 # Save available points
 # write_csv(avail, "output/deer_avail_pts.csv")
 avail <- read_csv("output/deer_avail_pts.csv")
-avail <- avail |> unite("key", c("id", "burst"), sep="_") 
+avail <- avail |> unite("key", c("id", "burst"), sep="_", remove=FALSE) |> dplyr::select(-burst)
 
 ## Now on to the used locations
 deer_sf <- deer |> 
@@ -533,30 +533,43 @@ for (i in 1:nrow(ud)) {
 # write_csv(used, "output/deer_used_locs.csv")
 used <- read_csv("output/deer_used_locs.csv")
 
-# Organize so used data matches available data
-used <- used |>
-  # drop extra columns
-  dplyr::select(X, Y, key, case)
-
 ## Combine used and available points
 dat <- bind_rows(used, avail)
 
-# Check ratio of used:avail
-ratios <- dat |> group_by(key, case) |> count() |>
-  pivot_wider(names_from=case, values_from=n) |>
-  rename(used=`1`, avail=`0`) |>
-  mutate(n_avail_used=avail/used) 
-
 ## Per-individual scaling
-# total weight per ID
-W <- 5000
+# Parameters
+W <- 5000  # Target multiplier for available points relative to used points
 
-dat <- dat |>
-  left_join(ratios,by="key") |>
-  mutate(weight = if_else(case==1, 1, W/avail))
+# dat must have columns:
+# id = individual animal
+# used = 1 for used points, 0 for available points
+
+# calulate weights
+counts <- dat |>
+  group_by(id,case) |>
+  count() |>
+  pivot_wider(names_from="case", values_from="n") |>
+  rename(n_used=`1`, n_avail=`0`)
+
+dat <- dat |> left_join(counts, by="id") 
+
+dat_final <- dat |>
+  mutate(
+    weight = case_when(
+      case == 1 ~ 1,  # used points keep weight 1
+      case == 0 ~ (W * n_used) / n_avail
+    )
+  ) %>%
+  ungroup() %>%
+  select(-n_used, -n_avail)  # optional cleanup
+
+# Quick check: sum of weights per animal
+dat_final %>%
+  group_by(id, case) %>%
+  summarise(total_weight = sum(weight))
 
 # save data
-write_csv(dat, "output/deer_used_avail_locations_indwts.csv")
+write_csv(dat_final, "output/deer_used_avail_locations.csv")
 
 
 

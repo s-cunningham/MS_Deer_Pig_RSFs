@@ -5,10 +5,7 @@ theme_set(theme_bw())
 
 #### Read Data ####
 # locations (used & available)
-# deer <- read_csv("output/deer_used_avail_locations_indwts.csv") |>
-#   select(-avail, -used, -n_avail_used)
-deer <- read_csv("output/deer_used_avail_locations_30m_grid.csv")|>
-    select(-avail, -used, -n_avail_used)
+deer <- read_csv("output/deer_used_avail_locations.csv")
 
 # Rasters
 rast_list <- c("data/landscape_data/allhardwoods_180m_sum.tif",
@@ -84,9 +81,7 @@ dat_deer <- extract(layers, deer_v)
 deer <- bind_cols(deer, dat_deer)
 
 # correlation matrix
-cor(deer[,7:ncol(deer)])
-
-deer <- deer |> na.omit()
+cor(deer[,8:ncol(deer)])
 
 # write file so we don't always have to wait for the rasters to do stuff
-write_csv(deer, "output/deer_used_avail_covariates_ind-wts_30m.csv")
+write_csv(deer, "output/deer_used_avail_covariates.csv")

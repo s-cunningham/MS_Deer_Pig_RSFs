@@ -419,7 +419,7 @@ for (i in 1:nrow(ud)) {
 }
 # Save available points
 write_csv(avail, "output/pigs_avail_pts_30m.csv")
-avail <- read_csv("output/pigs_avail_pts_30m.csv")
+avail <- read_csv("output/pigs_avail_pts_30m.csv") |> rename(key=id)
 
 ## Now on to the used locations
 pigs_sf <- pigs |> 
@@ -464,44 +464,60 @@ for (i in 1:nrow(ud)) {
 write_csv(used, "output/pigs_used_locs.csv")
 used <- read_csv("output/pigs_used_locs.csv")
 
-# Organize so used data matches available data
-used <- used |>
-  # split key
-  # separate("key", into=c("rm1", "rm2", "burst"), sep="_") |>
-  # drop extra columns
-  dplyr::select(X, Y, key, case)
-
-## Combine used and available points
-avail <- avail |> rename(key=id)
+# Combine used and available
 dat <- bind_rows(used, avail)
 
-
-# Check ratio of used:avail
-ratios <- dat |> group_by(key, case) |> count() |>
-  pivot_wider(names_from=case, values_from=n) |>
-  rename(used=`1`, avail=`0`) |>
-  mutate(n_avail_used=avail/used) 
-
-# Drop IDs with HRs that are too big
-dat <- dat |> filter(key!="19212_Delta_4")
-
-low <- ratios |> filter(n_avail_used < 1)
-un.low <- unique(low$key)
-
-dat <- dat |> filter(key!="19211_Delta_1")
-
-## Per-individual scaling of weights
-# total weight per ID
-W <- 5000
+# put the id column back
+# Function for removing 2nd instance of _
+rm_char <- function(the_str, the_char, n) {
+  sub(
+    paste0("((?:", the_char, ".*?){", n - 1, "})", the_char), 
+    "\\1", 
+    the_str, 
+    perl = TRUE
+  )
+}
 
 dat <- dat |>
-  left_join(ratios,by="key") |>
-  mutate(weight = if_else(case==1, 1, W/avail))
+  # Remove 2nd underscore
+  mutate(id = rm_char(key, "_", 2),
+         # remove digit at the end
+         id = str_remove(id, "\\d$"))
 
-dat <- dat |>
-  dplyr::select(-n_avail_used, -pts_needed_for_2x, -additional_pts_needed)
+## Per-individual scaling
+# Parameters
+W <- 5000  # Target multiplier for available points relative to used points
+
+# dat must have columns:
+# id = individual animal
+# used = 1 for used points, 0 for available points
+
+# calulate weights
+counts <- dat |>
+  group_by(id,case) |>
+  count() |>
+  pivot_wider(names_from="case", values_from="n") |>
+  rename(n_used=`1`, n_avail=`0`)
+
+dat <- dat |> left_join(counts, by="id") 
+
+dat_final <- dat |>
+  mutate(
+    weight = case_when(
+      case == 1 ~ 1,  # used points keep weight 1
+      case == 0 ~ (W * n_used) / n_avail
+    )
+  ) %>%
+  ungroup() %>%
+  select(-n_used, -n_avail)  # optional cleanup
+
+# Quick check: sum of weights per animal
+dat_final %>%
+  group_by(id, case) %>%
+  summarise(total_weight = sum(weight))
 
 # save data
-write_csv(dat, "output/pigs_used_avail_locations_indwt_30m.csv")
+write_csv(dat_final, "output/pigs_used_avail_locations.csv")
+
 
 
