@@ -14,7 +14,7 @@ theme_set(theme_bw())
 step <- 1:100
 
 # Carrying capacity
-K <- 2034396 
+K <- 1239278
 
 Kf <- K * 0.5
 
@@ -43,8 +43,8 @@ FecundityM <- c(R0j, R0a)
 FecundityF <- c(R0j, R0a)
 
 # Add to matrix
-A_base[1,2:3] <- FecundityF
-A_base[4,2:3] <- FecundityM
+A_base[1,2:3] <- FecundityF 
+A_base[4,2:3] <- FecundityM 
 
 pig.matrix <- A_base
 # 1.3:1 males:females
@@ -72,12 +72,12 @@ observed_harvest <- 170000
 
 ### Optimize survival and fecundities
 # set up bounds
-pig_lower <- c(1, 1, 1)
-pig_upper <- c(1.5, 1.4, 2.5)
+pig_lower <- c(1.5, 1.5, 1.5)
+pig_upper <- c(1.8, 1.9, 2.8)
 
 # run optimizer
 set.seed(1)
-pig_opt <- optim(par=c(runif(1, 1.15, 1.45), runif(1, 1.02, 1.35), runif(1, 1.55, 2.490)), fn=objective_fn_pigs, method="L-BFGS-B", lower=pig_lower, upper=pig_upper, control = list(trace = 1))
+pig_opt <- optim(par=c(runif(1, 1.54, 1.75), runif(1, 1.52, 1.89), runif(1, 1.65, 2.7)), fn=objective_fn_pigs, method="L-BFGS-B", lower=pig_lower, upper=pig_upper, control = list(trace = 1))
 
 # What are optimized parameter values 
 pig_opt$par
@@ -97,11 +97,11 @@ A_adj[6,6] <- A_base[6,6]*pig_opt$par[2]
 
 ## Fecundity
 # Yearlings
-A_adj[1,2] <- A_base[1,2]*pig_opt$par[3]
-A_adj[4,2] <- A_base[4,2]*pig_opt$par[3]
+A_adj[1,2] <- A_base[1,2]*(pig_opt$par[3]/2)
+A_adj[4,2] <- A_base[4,2]*(pig_opt$par[3]/2)
 # Adults
-A_adj[1,3] <- A_base[1,3]*pig_opt$par[3]
-A_adj[4,3] <- A_base[4,3]*pig_opt$par[3]
+A_adj[1,3] <- A_base[1,3]*(pig_opt$par[3]/2)
+A_adj[4,3] <- A_base[4,3]*(pig_opt$par[3]/2)
 
 #### Run population model ####
 

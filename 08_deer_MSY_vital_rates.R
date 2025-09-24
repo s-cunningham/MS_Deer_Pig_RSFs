@@ -14,9 +14,8 @@ set.seed(1)
 # Years in simulation
 Year <- 1:100
 
-# Carrying capacity
-# K <- 2347197
-K <- 1512638
+# Carrying capacity 14.3 deer/km2
+K <- 1347232
 
 # Set up deer matrix
 A_base <- matrix(0,12,12)
@@ -74,7 +73,7 @@ lambda <- Re(eigen(deer.matrix)$values[1])
 Kf <- K * 0.60
 
 # How many deer are harvested?
-observed_harvest <- 290000 
+observed_harvest <- 280000 
 
 ### Optimize survival and fecundities
 # set up bounds
@@ -652,7 +651,8 @@ for (i in 1:Sims) {
     ## Harvest deer 
     if (y > 0) {
       # Randomly select a random number to harvest
-      h <- round(runif(1, 190000, 280000), digits=0)
+      # h <- round(runif(1, 190000, 280000), digits=0)
+      h <- round(rnorm(1, 270000, 10000), digits=0)
       
       # Split bucks and does
       doe_h <- h * 0.54
