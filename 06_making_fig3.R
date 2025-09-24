@@ -38,9 +38,9 @@ d_map <- ggplot() +
         legend.text=element_blank()) +
   annotation_north_arrow(
     which_north = TRUE,
-    pad_x = unit(0.05, "npc"),
-    pad_y = unit(0.02, "npc"),
-    style = north_arrow_minimal())
+    pad_x = unit(0.01, "npc"),
+    pad_y = unit(0.80, "npc"),
+    style = north_arrow_minimal()) 
 
 p_map <- ggplot() +
   geom_spatraster(data=pigs) +
@@ -165,22 +165,21 @@ covar_labels <- c("Hardwoods", "Graminoids", "Shrubs", "Crops", "Developed",
                      "Shrubs", "Developed", "Dist. Water", expression(Dist.~Water^2))
 
 # Create plot showing beta coefficients
-coef_plt <- ggplot() +
+coef_plt <- ggplot(se) +
   geom_hline(yintercept=0, color="gray") +
-  # scale_y_continuous(limits = c(-3, 2), breaks = seq(-2.5, 2.5, by=0.50)) +
+  geom_errorbar(aes(x=x_covar, ymin=se_min, ymax=se_max), width=0.1, color="black") +
+  geom_point(aes(x=x_covar, y=beta, fill=beta), shape=22, size=4) +
+  scale_fill_viridis_c(option="D") +
   scale_x_continuous(breaks=1:13, labels=covar_labels) +
-  geom_segment(data=coefs, aes(x=x, xend=xend, y=beta, yend=beta, color=beta)) +
-  scale_color_gradientn(colours=c("#440154", "#3b528b", "#21918c", "#5ec962", "#fde725")) +
-  geom_errorbar(data=se, aes(x=x_covar, ymin=se_min, ymax=se_max), width=0.1, color="gray70") +
-  facet_wrap(vars(species), scales="free_x") +
-  labs(y = expression(beta)) +
-  theme(panel.border=element_rect(fill=NA, color="black", linewidth=0.5),
-        legend.position="none",
-        strip.text=element_blank(),
-        axis.title.x=element_blank(),
-        axis.title.y=element_text(angle = 0, vjust = 0.5, size=16),
-        axis.text.x=element_text(angle=25, vjust=0.8, hjust=0.8, size=10),
-        axis.text.y=element_text(size=10))
+  facet_wrap(vars(species), scales="free") +
+  labs(y = "Selection Coefficient") +
+  theme(#panel.border=element_rect(fill=NA, color="black", linewidth=1),
+    legend.position="none",
+    strip.text=element_blank(),
+    axis.title.x=element_blank(),
+    axis.title.y=element_text(size=12),
+    axis.text.x=element_text(angle=25, vjust=0.8, hjust=0.8, size=11),
+    axis.text.y=element_text(size=11))
 
 # Set up layout
 layout <- "
@@ -190,8 +189,13 @@ AAAA
 BBBB
 "
 # Combine figures
-maps / free(coef_plt) + plot_layout(design = layout)
+maps / free(coef_plt) + plot_layout(design = layout) #+ plot_annotation(tag_levels = 'a')
 
 # save figure
-ggsave("figs/new_figure3.svg")
+ggsave("figs/Fig2_maps_betas.svg")
 # Saving 7.71 x 9 in image
+
+
+
+
+

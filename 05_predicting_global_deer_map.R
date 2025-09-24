@@ -20,15 +20,15 @@ water <- project(water, layers)
 #### Predict across MS counties ####
 ## Read in coefficients
 # Betas
-betas <- read_csv("output/deer_mixed_effects_betas_indwt30.csv") 
+betas <- read_csv("output/deer_mixed_effects_betas.csv") 
 betas[betas$covariate=="allhardwoods",1] <- "hardwoods"
 betas[betas$covariate=="I(water_dist^2)",1] <- "water2"
 
-beta_hat <- readRDS("output/deer_mixed_effects_beta_indwt30.RDS")
+beta_hat <- readRDS("output/deer_mixed_effects_beta.RDS")
 names(beta_hat) <- c("hardwoods", "gramanoids", "foodcrops", "shrubs", "developed", "water_dist", "water2")
   
 # Covariance
-vcov_beta <- readRDS("output/deer_mixed_effects_vcov_indwt30.RDS")
+vcov_beta <- readRDS("output/deer_mixed_effects_vcov.RDS")
 
 # drop intercept
 vcov_beta <- vcov_beta[-1,-1]
@@ -79,14 +79,8 @@ for (i in 1:length(split_counties)) {
   
   # rearrange column order
   X_pred <- X_pred[,c("hardwoods", "gramanoids", "foodcrops", "shrubs", "developed", "water_dist", "water2")]
-  
   # Efficient matrix math
   SE <- sqrt(rowSums((X_pred %*% vcov_beta) * X_pred))
-  
-  # Back transform
-  eta <- X_pred %*% beta_hat
-  upper <- eta + 1.96 * SE
-  lower <- eta - 1.96 * SE
   
   # Just need 1 layer to form a template
   template <- cty_layers[[1]]
@@ -100,16 +94,25 @@ for (i in 1:length(split_counties)) {
   filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_SE.tif")
   writeRaster(se_raster, filename, overwrite=TRUE)
   
+  ## Get 95% CI
+  lin_pred <- betas$beta[1]*cty_layers[["hardwoods"]] +
+    betas$beta[2]*cty_layers[["gramanoids"]] +
+    betas$beta[3]*cty_layers[["foodcrops"]] +
+    betas$beta[4]*cty_layers[["shrubs"]] +
+    betas$beta[5]*cty_layers[["developed"]] +
+    betas$beta[6]*cty_layers[["water_dist"]] +
+    betas$beta[7]*(cty_layers[["water_dist"]]^2)
+  
+  # Compute upper and lower bounds
+  lci_raster <- exp(lin_pred - 1.96 * se_raster)
+  uci_raster <- exp(lin_pred + 1.96 * se_raster)
+  
   # Lower
-  lci_raster <- template # template raster
-  terra::values(lci_raster) <- lower
   names(lci_raster) <- "lower"
   filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_LCI.tif")
   writeRaster(lci_raster, filename, overwrite=TRUE)
   
   # Upper
-  uci_raster <- template # template raster
-  terra::values(uci_raster) <- upper
   names(uci_raster) <- "upper"
   filename <- paste0("output/deer_county_preds/deer_pred_", split_counties[[i]]$COUNTYNAME, "_UCI.tif")
   writeRaster(uci_raster, filename, overwrite=TRUE)
@@ -255,20 +258,22 @@ rsrc <- sprc(rlist)
 lci_rast <- mosaic(rsrc)
 
 # rename layer
-names(lci_rast) <- "LCI"
+names(lci_rast) <- "LowerCI"
 
-# Read in MS shapefile (to drop islands)
-ms <- project(ms, lci_rast)
+# take ln of map
+lci_rast <- lci_rast + 0.000001
+lci_rast <- log(lci_rast)
+
+# Reclassify missing data to 0
+m <- rbind(c(NA, minmax(lci_rast)[1]))
+lci_rast <- classify(lci_rast, m)
 
 # Remove islands
 lci_rast <- mask(lci_rast, ms)
-
-# Read in permanent water mask
-water <- project(water, lci_rast)
+lci_rast <- crop(lci_rast, ms)
 
 # Remove water
 lci_rast <- mask(lci_rast, water, inverse=TRUE)
-lci_rast <- crop(lci_rast, ms)
 
 plot(lci_rast)
 
@@ -286,20 +291,22 @@ rsrc <- sprc(rlist)
 uci_rast <- mosaic(rsrc)
 
 # rename layer
-names(uci_rast) <- "UCI"
+names(uci_rast) <- "UpperCI"
 
-# Read in MS shapefile (to drop islands)
-ms <- project(ms, uci_rast)
+# take ln of map
+uci_rast <- uci_rast + 0.000001
+uci_rast <- log(uci_rast)
+
+# Reclassify missing data to 0
+m <- rbind(c(NA, minmax(uci_rast)[1]))
+uci_rast <- classify(uci_rast, m)
 
 # Remove islands
 uci_rast <- mask(uci_rast, ms)
-
-# Read in permanent water mask
-water <- project(water, uci_rast)
+uci_rast <- crop(uci_rast, ms)
 
 # Remove water
 uci_rast <- mask(uci_rast, water, inverse=TRUE)
-uci_rast <- crop(uci_rast, ms)
 
 plot(uci_rast)
 
@@ -312,8 +319,16 @@ minmax(uci_rast)
 
 # linear stretch (so that values >=0)
 predls <- (pred - minmax(pred)[1])/(minmax(pred)[2]-minmax(pred)[1])
-lcils <- (lci_rast - minmax(lci_rast)[1])/(minmax(lci_rast)[2]-minmax(lci_rast)[1])
-ucils <- (uci_rast - minmax(uci_rast)[1])/(minmax(uci_rast)[2]-minmax(uci_rast)[1])
+
+stretch_with_mean_range <- function(r, mean_rast) {
+  (r - minmax(mean_rast)[1]) / (minmax(mean_rast)[2] - minmax(mean_rast)[1])
+}
+
+# Apply to CI rasters
+lci_stretched <- stretch_with_mean_range(lci_rast, pred)
+uci_stretched <- stretch_with_mean_range(uci_rast, pred)
+# make sure its really between 0 and 1 (uci)...make all values >1 equal to 1
+uci_stretched[uci_stretched > 1] <- 1
 
 ## Calculate quantiles
 qrtls <- global(predls, quantile, probs=c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1), na.rm=TRUE)
@@ -372,11 +387,11 @@ names(predls) <- "RSF"
 ## Conf. Int
 
 # Resample confidence interval rasters
-lci90 <- resample(lcils, temp_rast)
-lci90 <- crop(lci90, lcils)
+lci90 <- resample(lci_stretched, temp_rast)
+lci90 <- crop(lci90, lci_stretched)
 
-uci90 <- resample(ucils, temp_rast)
-uci90 <- crop(uci90, ucils)
+uci90 <- resample(uci_stretched, temp_rast)
+uci90 <- crop(uci90, uci_stretched)
 
 ## Write rasters
 

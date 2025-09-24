@@ -5,57 +5,7 @@ library(ggtext)
 
 source("00_functions.R")
 
-## abundance
-N <- list.files(path="results/simulations/", pattern="_pop1.txt$", full.names=TRUE)
-N <- lapply(N, ramas_abun)
-N <- do.call("bind_rows", N)
-
-N <- N |> 
-  # Filter to keep only rows with 0 or no digits
-  filter(str_detect(bin, "0") | !str_detect(bin, "\\d")) |>
-  # drop marginal
-  filter(bin!="marginal") |>
-  # make 'above0' layer 'marginal'
-  mutate(bin=if_else(bin=="0", "marginal", bin)) |>
-  # drop mean column (didn't do CIs for pop simulation)
-  select(-value) |>
-  # convert density to categorical
-  mutate(density=if_else(density==14 | density==8, "low", "high")) |>
-  # keep just the high densityies
-  filter(density=="high")
-
-# Reorder so patches are not in alphabetical order
-N$bin <- factor(N$bin, levels=c("core", "marginal", "highlymarginal"), labels=c("Core", "Marginal", "Highly\nMarginal"))
-
-ggplot(N) +
-  geom_ribbon(aes(x=time, ymin=lowerSD, ymax=upperSD, group=bin, color=bin, fill=bin), alpha=0.3) +
-  scale_y_continuous(breaks=seq(0, 30000000, by=5000000), labels=seq(0,30, by=5)) +
-  geom_line(aes(x=time, y=average, group=bin, color=bin)) +
-  scale_color_manual(values=c("#fde725","#21918c","#440154"), name="Patch Type") + 
-  scale_fill_manual(values=c("#fde725","#21918c","#440154"), name="Patch Type") + 
-  facet_grid(.~species) +
-  guides(
-    colour = guide_legend(position = "inside"),
-    fill = guide_legend(position = "inside")
-  ) + 
-  ylab("Abundance (in millions)") +
-  theme_classic() +
-  theme(panel.border=element_rect(color="black", fill=NA),
-        legend.position.inside=c(0,1),
-        legend.justification=c(0,1),
-        legend.background=element_rect(fill=NA))
-
-# Calculate lambda and geometric mean for each scenario
-pop_growth <- N |>
-  group_by(species, density, bin) |>
-  reframe(lambda=lambda_calc(average)) |>
-  group_by(species, density, bin) |>
-  reframe(lambda_mgm=gm_mean(lambda)) 
-
-N <- N |>
-  mutate(species=if_else(species=="deer", "White-tailed Deer", "Wild Pigs"))
-
-## Carrying capacity
+### Carrying capacity ####
 K <- list.files(path="results/simulations/", pattern="_K.txt$", full.names=TRUE)
 K <- lapply(K, ramas_K)
 K <- do.call("bind_rows", K)
@@ -64,9 +14,9 @@ K <- K |>
   # drop patches that have K of < 5
   filter(K >= 5) |>
   # filter(value=="mean") |>
-  # summarize by species, density and bin
-  group_by(species, density, bin, value) |>
-  reframe(K=sum(K), N0=sum(N0), avgHS=mean(AvgHS), totHS=sum(TotalHS)) |> # might need to recalculate avgHS
+  # summarize by species, density 
+  group_by(species, density, suitability, value) |>
+  reframe(K=sum(K), avgHS=mean(AvgHS), totHS=sum(TotalHS)) |> # might need to recalculate avgHS
   # replace actual density number with low and high
   mutate(density=if_else(density==14 | density==8, "low", "high")) 
 
@@ -74,46 +24,35 @@ K <- K |>
 K <- K |>
   mutate(species=if_else(species=="deer", "White-tailed Deer", "Wild Pigs"))
 
-# K <- K |>
-#   filter(value=="mean") |>
-#   # Filter to keep only rows with 0 or no digits
-#   filter(str_detect(bin, "0") | !str_detect(bin, "\\d")) |>
-#   # Drop initial abundance and average suitability value
-#   select(-N0, -avgHS) |>
-#   # drop marginal
-#   filter(bin!="marginal") |>
-#   # make 'above0' layer 'marginal'
-#   mutate(bin=if_else(bin=="0", "marginal", bin)) |>
-#   # pivot to wide format
-#   pivot_wider(names_from="value", values_from="K")|>
-#   filter(density=="high")
-#   pivot_wider()
-
 ## Look at patch types
 Kpatch <- K |>
-  # Filter to keep only rows with 0 or no digits
-  filter(str_detect(bin, "0") | !str_detect(bin, "\\d")) |>
   # Drop initial abundance and average suitability value
-  select(-N0, -avgHS, -totHS) |>
-  # drop marginal
-  filter(bin!="marginal") |>
-  # make 'above0' layer 'marginal'
-  mutate(bin=if_else(bin=="0", "marginal", bin)) |>
+  select(-avgHS, -totHS) |>
   # pivot to wide format
   pivot_wider(names_from="value", values_from="K") |>
   # reorder columns
-  select(species, density, bin, UCI, mean, LCI)
+  select(species, density, suitability, LCI, mean, UCI)
+
+# Fill in 0 for the deer one that couldn't find patches (no core)
+Kpatch$LCI[Kpatch$species=="White-tailed Deer" & Kpatch$suitability=="core"] <- 0
 
 # Reorder patch types so that they're in order of size, not alphabetical
-Kpatch$bin <- factor(Kpatch$bin, levels=c("core", "marginal", "highlymarginal"), labels=c("Core", "Moderate", "Marginal"))
+Kpatch$suitability <- factor(Kpatch$suitability, levels=c("core", "moderate", "marginal"), labels=c("Core", "Moderate", "Marginal"))
 # Relabel density to be more informative for plot
 Kpatch$density <- factor(Kpatch$density, levels=c("low", "high"), labels=c("14.3 deer | 8 pigs", "22 deer | 27 pigs"))
 
+## Add dashed line for MDWFP estimate
+Kpatch <- Kpatch |>
+  mutate(mdwfp_est = if_else(species=="Wild Pigs", 1000000, 1610000))
+
+
 ggplot(Kpatch) +
-  geom_linerange(aes(x=bin, ymin=UCI, ymax=LCI, color=density),position=position_dodge(.2), linewidth=1) +
-  geom_point(aes(x=bin, y=mean, color=density), position=position_dodge(.2), size=2) +
+  coord_cartesian(ylim=c(0, 2500000)) +
+  geom_hline(aes(yintercept=mdwfp_est), linetype=2) +
+  geom_linerange(aes(x=suitability, ymin=UCI, ymax=LCI, color=density),position=position_dodge(.2), linewidth=1) +
+  geom_point(aes(x=suitability, y=mean, color=density), position=position_dodge(.2), size=2) +
   scale_color_manual(values=c("#ed7953","#9c179e"), name='Density (animals/km<sup>2</sup>)') +
-  scale_y_continuous(breaks=seq(0, 3000000, by=500000), labels=c(0,0.5,1,1.5,2,2.5,3)) +
+  scale_y_continuous(breaks=seq(0, 2500000, by=500000), labels=c(0,0.5,1,1.5,2,2.5)) +
   xlab("Suitability Level") + ylab("Carrying Capacity (in millions)") +
   guides(
     colour = guide_legend(position = "inside")
@@ -129,19 +68,23 @@ ggplot(Kpatch) +
         axis.title=element_text(size=12),
         axis.text=element_text(size=11),
         panel.border=element_rect(fill=NA, color="black", linewidth=0.5))
+
+
 ggsave("figs/patch_carrying_capacity.svg")
 # Saving 7.18 x 4.26 in image
 
+## Look at suitability in mean patches
+K <- K |>
+  filter(value=="mean")
 
-Kpatch <- Kpatch %>% arrange(species, density, bin)
+### Area ####
+A <- list.files(path="results/simulations/", pattern="_area.txt$", full.names=TRUE)
+A <- lapply(A, ramas_area)
+A <- do.call("bind_rows", A)
 
+# Summarize small patches
+A <- A |>
+  group_by(species, density, level, value) |>
+  reframe(Ncells=sum(Ncells), Area_km2=sum(Area_km2))
 
-Nt <- N %>%
-  filter(species=="White-tailed Deer" & density=="high" & bin=="Highly\nMarginal")
-
-y <- Nt$average[2:nrow(Nt)] - Nt$average[1:(nrow(Nt)-1)]
-
-x <- Nt$average[1:(nrow(Nt)-1)]
-
-plot(y=y, x=x)
-
+A |> filter(value=="mean")

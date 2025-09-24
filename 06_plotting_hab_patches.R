@@ -12,19 +12,16 @@ ms <- vect("data/landscape_data/mississippi_ACEA.shp")
 # List patch .asc files
 patches <- list.files(path="results/exported_patches/", pattern=".ASC", full.names=TRUE)  # note that the pattern argument is case-sensitive, and RAMAS writes ASCII files as .ASC instead of .asc like R
 
-# # grab 1 set per species
-# patches <- patches[str_detect(patches, "2")]
-
 # Make raster "stack"
 patches <- rast(patches)
 
 # Define projection
 crs(patches) <- crs(ms)
 
-# rename because I switched the pig patches
-names(patches) <- c("deer_marginal","deer_core","deer_highlymarginal","deer_extra","pigs_marginal","pigs_core","pigs_extra","pigs_highlymarginal")
+# # rename because I switched the pig patches
+# names(patches) <- c("deer_core","deer_marginal","deer_moderate","pigs_core","pigs_marginal","pigs_moderate")
 
-patches <- patches[[c(2,1,3,6,5,8)]]
+patches <- patches[[c(1,3,2,4,6,5)]]
 
 # Reclassify so that 0 becomes NA (backround is 0, patches are numbered starting with 1), and all patches receive same class value (1)
 # If you want to show different patches, don't do the second part
@@ -57,43 +54,25 @@ names(polylist) <- names(patches)
 expanse(polylist[["deer_core"]], unit="km")
 expanse(polylist[["pigs_core"]], unit="km")
 
+# Moderate
+expanse(polylist[["deer_moderate"]], unit="km")
+expanse(polylist[["pigs_moderate"]], unit="km")
+
 # Marginal
 expanse(polylist[["deer_marginal"]], unit="km")
 expanse(polylist[["pigs_marginal"]], unit="km")
-
-# Highly marginal
-expanse(polylist[["deer_highlymarginal"]], unit="km")
-expanse(polylist[["pigs_highlymarginal"]], unit="km")
 
 ## Calculate area overlap
 # Core deer & core pig habitat overlap 
 ovp1 <- terra::union(polylist$deer_core, polylist$pigs_core)
 expanse(ovp1, unit="km")[[3]]
 
-ovp1 <- ovp1 |>
-  mutate(deer_core=coalesce(deer_core,0),
-         pigs_core=coalesce(pigs_core,0),
-         overlap=deer_core+pigs_core) |>
-  select(overlap)
-
-writeVector(ovp1, "output/overlap.shp", overwrite=TRUE)
-
-# find remaining (non-overlapping area)
-nonovp <- erase(polylist$pigs_core - polylist$deer_core)
-expanse(nonovp, unit="km")
-
-# Core deer & core pig habitat overlap - marginal
-ovp2 <- terra::union(polylist$deer_marginal, polylist$pigs_marginal)
+# Core deer & core pig habitat overlap - moderate
+ovp2 <- terra::union(polylist$deer_moderate, polylist$pigs_moderate)
 expanse(ovp2, unit="km")[[3]]
 
-ovp2 <- ovp2 |>
-  mutate(deer_marginal=coalesce(deer_marginal,0),
-         pigs_marginal=coalesce(pigs_marginal,0),
-         overlap=deer_marginal+pigs_marginal) |>
-  select(overlap)
-
-# Core deer & core pig habitat overlap - highly marginal
-ovp3 <- terra::union(polylist$deer_highlymarginal, polylist$pigs_highlymarginal)
+# Core deer & core pig habitat overlap - marginal
+ovp3 <- terra::union(polylist$deer_marginal, polylist$pigs_marginal)
 expanse(ovp3, unit="km")[[3]]
 
 
@@ -115,14 +94,14 @@ patch_vals <- c(3,2,1)
 patch_class <- c("Core", "Moderate", "Marginal")
 
 ## Mosaic rasters
-deer_mn <- mosaic(patches["deer_highlymarginal"], patches["deer_marginal"], fun = "sum")
+deer_mn <- mosaic(patches["deer_marginal"], patches["deer_moderate"], fun = "sum")
 deer_mn <- mosaic(deer_mn, patches["deer_core"], fun="sum")
 
-pigs_mn <- mosaic(patches["pigs_highlymarginal"], patches["pigs_marginal"], fun = "sum")
+pigs_mn <- mosaic(patches["pigs_marginal"], patches["pigs_moderate"], fun = "sum")
 pigs_mn <- mosaic(pigs_mn, patches["pigs_core"], fun="sum")
 
-writeRaster(pigs_mn, "data/landscape_data/pigs_suitability_levels.tif")
-writeRaster(deer_mn, "data/landscape_data/deer_suitability_levels.tif")
+writeRaster(pigs_mn, "data/landscape_data/pigs_suitability_levels.tif", overwrite=TRUE)
+writeRaster(deer_mn, "data/landscape_data/deer_suitability_levels.tif", overwrite=TRUE)
 
 ## Reclassify
 # Add patch types to raster
@@ -163,28 +142,28 @@ regions[["name"]] <- ifelse(is.na(regions$name), "Loess", regions$name)
 ggplot(regions) +
   geom_spatvector(color="black", aes(fill=name))
 
-writeVector(regions, "data/landscape_data/edited_ms_soil_regions.shp")
+writeVector(regions, "data/landscape_data/edited_ms_soil_regions.shp", overwrite=TRUE)
 
 #### Plot ####
 # Deer plot
 deer_patches <- ggplot() +
   geom_spatraster(data=deer_mn, alpha=0.8) +
   scale_fill_viridis_d(option="D", direction=-1, name="Suitability Level", na.value="transparent", na.translate=FALSE) +
+  geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.4) +
   geom_spatvector(data=regions, color="black", fill=NA, linewidth=0.4) +
-  # geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.4) +
   theme_void() +
   annotation_north_arrow(
     which_north = TRUE,
     pad_x = unit(0.05, "npc"),
-    pad_y = unit(0.85, "npc"),
+    pad_y = unit(0.75, "npc"),
     style = north_arrow_minimal()) 
 
 # Pig plot
 pig_patches <- ggplot() +
   geom_spatraster(data=pigs_mn, alpha=0.8) +
   scale_fill_viridis_d(option="D", direction=-1, name="Suitability Level", na.value="transparent", na.translate=FALSE) +
+  geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.4) +
   geom_spatvector(data=regions, color="black", fill=NA, linewidth=0.4) +
-  # geom_spatvector(data=ms, color="black", fill=NA, linewidth=0.4) +
   theme_void() +
   annotation_scale(
     height = unit(0.015, "npc"),
