@@ -96,7 +96,7 @@ map <- ggplot() +
   geom_spatraster(data=nlcd) +
   scale_fill_coltab(data=nlcd, na.translate = FALSE,
                     na.value="transparent", name="NLCD") +
-  geom_spatvector(data=regions, col="black", fill=NA, linewidth=0.4) +
+  # geom_spatvector(data=regions, col="black", fill=NA, linewidth=0.4) +
   geom_spatvector(data=pigs, col="black", fill="black", alpha=0.8, linewidth=0.7) +
   geom_spatvector(data=deer, col="black", fill="white", alpha=0.8, linewidth=0.7) +
   annotation_north_arrow(
