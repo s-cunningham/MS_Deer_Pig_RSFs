@@ -159,7 +159,7 @@ asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
 # Calibrate density dependence parameter
 theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
-# theta <- 5
+theta <- 5
 
 # Set up arrays to save realized demographic rates
 realized_survival <- array(NA, dim=c(12, length(Year), Sims))
@@ -209,8 +209,7 @@ for (i in 1:Sims) {
 
     # Check adult age ratio
     asr <- sum(deer.array[8:12,y-1,i])/sum(deer.array[2:6,y-1,i], 1e-6)
-    # cat("Adult Sex Ratio:", asr, "\n")
-    
+
     # Save sex ratio
     asr_mat[y-1,i] <- asr
     
@@ -389,13 +388,11 @@ fec14 <- data.frame(stage=rep(c("Yearling", "Adult"), 2),
                     f10pct=fec.10pct,
                     f90pct=fec.90pct,
                     literature=c(0.57, 0.66, 0.74, 0.85),
-                    optimized=c(1.6232055*0.9653393*0.5434342, 2.0682844*0.9541556*0.5434342, 
-                                1.6232055*0.9653393*0.5434342, 2.0682844*0.9541556*0.5434342),
                     x=c(0.9, 1.6, 1.1, 1.8))
 
 fec14 <- fec14 |>
-  pivot_longer(cols=c("realized", "literature", "optimized"), names_to="source", values_to="fec")
-fec14$source <- factor(fec14$source, levels=c("literature", "optimized", "realized"), labels=c("Literature", "Optimized", "Realized"))
+  pivot_longer(cols=c("realized", "literature"), names_to="source", values_to="fec")
+fec14$source <- factor(fec14$source, levels=c("literature", "realized"), labels=c("Literature", "Realized"))
 
 r.surv14 <- r.surv
 
@@ -609,9 +606,9 @@ for (i in 1:Sims) {
     ## Adjust fecundity by female survival
     R0y_s <- A_s[1,2]*(realized_survival[2,y-1,i])
     R0a_s3 <- A_s[1,3]*(realized_survival[3,y-1,i])
-    R0a_s4 <- A_s[1,3]*(realized_survival[4,y-1,i])
-    R0a_s5 <- A_s[1,3]*(realized_survival[5,y-1,i])
-    R0a_s6 <- A_s[1,3]*(realized_survival[6,y-1,i])
+    R0a_s4 <- A_s[1,4]*(realized_survival[4,y-1,i])
+    R0a_s5 <- A_s[1,5]*(realized_survival[5,y-1,i])
+    R0a_s6 <- A_s[1,6]*(realized_survival[6,y-1,i])
     
     # Density dependent adjustment in fecundity
     # What was abundance at time step t-1
@@ -620,13 +617,8 @@ for (i in 1:Sims) {
     # Calcuate density factor
     density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
     
-    # reduce fecundity
-    # R0y_dd <- R0y_s * density_factor  deer.array[,,i]
-    # R0a_dd <- R0a_s * density_factor
-    
     # Check adult age ratio
     asr <- sum(deer.array[8:12,y-1,i])/sum(deer.array[2:6,y-1,i], 1e-6)
-    # cat("Adult Sex Ratio:", asr, "\n")
     
     # Save sex ratio
     asr_mat[y-1,i] <- asr
@@ -651,8 +643,8 @@ for (i in 1:Sims) {
     ## Harvest deer 
     if (y > 0) {
       # Randomly select a random number to harvest
-      # h <- round(runif(1, 190000, 280000), digits=0)
-      h <- round(rnorm(1, 270000, 10000), digits=0)
+      h <- round(runif(1, 190000, 280000), digits=0)
+      # h <- round(rnorm(1, 270000, 10000), digits=0)
       
       # Split bucks and does
       doe_h <- h * 0.54

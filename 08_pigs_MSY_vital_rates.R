@@ -394,7 +394,7 @@ fec27 <- fec27 |>
 step <- 1:100
 
 # Carrying capacity
-K <- 603816
+K <- 367822
 
 Kf <- K * 0.5
 

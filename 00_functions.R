@@ -2,6 +2,7 @@
 library(tidyverse)
 library(R.utils)
 
+### Functions for 07_read_RAMAS_output.R ####
 ## Ramas patch area (RAMAS Spatial Data)
 ramas_area <- function(x) {
   
@@ -89,7 +90,7 @@ ramas_K <- function(x) {
 }
 
 
-### Calculating lambda from trajectory simulations
+### Calculating lambda from trajectory simulations ####
 # Function for calculating geometric mean
 gm_mean <- function(x, na.rm=TRUE){
   exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
@@ -104,14 +105,14 @@ lambda_calc <- function(x) {
   return(lambda)
 }
 
-
+### Functions for validation of carrying capacity/MSY exercise ####
 simulate_pop <- function(a, A, N0, K_obs, years = 100) {
   N <- matrix(NA, nrow = nrow(A), ncol = years)
   N[, 1] <- N0
   
   for (t in 1:(years - 1)) {
     N_total <- sum(N[, t])
-    dd_factor <- 1 / (1 + a * (N_total / K_obs))
+    dd_factor <- 1 / (1 + (N[t - 1] / K)^theta)
     
     A_dd <- A
     A_dd[1, ] <- A[1, ] * dd_factor  # apply DD to fecundity row
@@ -145,13 +146,17 @@ estimate_theta_opt <- function(N0, lambda, K, t_max = 100) {
 }
 
 
-#### Calculate MSY and Objective function for optimizing
-
+#### Calculate MSY and Objective function for optimizing ####
+## Calculate MSY
 get_msy <- function(results) {
   
+  # Calculate net difference in median Nt - Nt-1
   net <- results$N.median[2:nrow(results)] - results$N.median[1:(nrow(results)-1)]
   
+  # Find maximum difference
   peak_idx <- which.max(net)
+  
+  # Save MSY value
   msy <- net[peak_idx]
   
   return(msy)

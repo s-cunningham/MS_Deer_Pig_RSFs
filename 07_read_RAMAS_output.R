@@ -53,7 +53,7 @@ ggplot(Kpatch) +
   geom_point(aes(x=suitability, y=mean, color=density), position=position_dodge(.2), size=2) +
   scale_color_manual(values=c("#ed7953","#9c179e"), name='Density (animals/km<sup>2</sup>)') +
   scale_y_continuous(breaks=seq(0, 2500000, by=500000), labels=c(0,0.5,1,1.5,2,2.5)) +
-  xlab("Suitability Level") + ylab("Carrying Capacity (in millions)") +
+  xlab("Suitability Level (inclusive)") + ylab("Carrying Capacity (in millions)") +
   guides(
     colour = guide_legend(position = "inside")
   ) + 
