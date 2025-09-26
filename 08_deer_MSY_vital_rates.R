@@ -159,11 +159,11 @@ asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
 # Calibrate density dependence parameter
 theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
-theta <- 8
+# theta <- 8
 
 # Set up arrays to save realized demographic rates
-realized_survival <- array(NA, dim=c(12, length(Year), Sims))
-realized_survival[1:12,1,] <- c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6],
+realized_surv <- array(NA, dim=c(12, length(Year), Sims))
+realized_surv[1:12,1,] <- c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6],
                                 A_adj[8,7], A_adj[9,8], A_adj[10,9], A_adj[11,10], A_adj[12,11], A_adj[12,12])
 
 realized_fecundity <- array(NA, dim=c(4,  length(Year) - 1, Sims)) # row 1: yearling F, row 2: adult F, row 3: yearling M, row 4: adult M,
@@ -194,11 +194,11 @@ for (i in 1:Sims) {
   for (y in 2:length(Year)){
     
     ## Adjust fecundity by female survival
-    R0y_s <- A_s[1,2]*(realized_survival[2,y-1,i])
-    R0a_s3 <- A_s[1,3]*(realized_survival[3,y-1,i])
-    R0a_s4 <- A_s[1,3]*(realized_survival[4,y-1,i])
-    R0a_s5 <- A_s[1,3]*(realized_survival[5,y-1,i])
-    R0a_s6 <- A_s[1,3]*(realized_survival[6,y-1,i])
+    R0y_s <- A_s[1,2]*(realized_surv[2,y-1,i])
+    R0a_s3 <- A_s[1,3]*(realized_surv[3,y-1,i])
+    R0a_s4 <- A_s[1,3]*(realized_surv[4,y-1,i])
+    R0a_s5 <- A_s[1,3]*(realized_surv[5,y-1,i])
+    R0a_s6 <- A_s[1,3]*(realized_surv[6,y-1,i])
     
     # Density dependent adjustment in fecundity
     # What was abundance at time step t-1
@@ -233,7 +233,8 @@ for (i in 1:Sims) {
     ## Harvest deer 
     if (y > 0) {
       # Randomly select a random number to harvest
-      h <- round(runif(1, 190000, 280000), digits=0)
+      # h <- round(runif(1, 190000, 280000), digits=0)
+      h <- round(rnorm(1, 240000, 15000),digits=0)
       # h=200000
       
       # Split bucks and does
@@ -257,40 +258,54 @@ for (i in 1:Sims) {
     # ---- Realized survival ----
     
     # Female stages
-    realized_survival[1, y, i] <- safe_divide(pmax(deer.array[2, y, i],0), pmax(deer.array[1, y-1, i],0)) # Fawn → yearling (F)
-    realized_survival[2, y, i] <- deer.array[3, y, i] / deer.array[2, y-1, i]  # yearling → 2-year-old  
-    realized_survival[3, y, i] <- deer.array[4, y, i] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
-    realized_survival[4, y, i] <- deer.array[5, y, i] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
+    realized_surv[1, y, i] <- safe_divide(pmax(deer.array[2, y, i],0), pmax(deer.array[1, y-1, i],0)) # Fawn → yearling (F)
+    realized_surv[2, y, i] <- deer.array[3, y, i] / deer.array[2, y-1, i]  # yearling → 2-year-old  
+    realized_surv[3, y, i] <- deer.array[4, y, i] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
+    realized_surv[4, y, i] <- deer.array[5, y, i] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
     
     # Total adult females projected
-    total_adult_fem <- deer.array[6, y, i]
+    # total_adult_fem <- deer.array[6, y, i]
     
     # Fraction contributed from stage 5 vs stage 6
-    c5_f <- (A_dd[6,5] * deer.array[5,y-1,i]) / ((A_dd[6,5] * deer.array[5,y-1,i]) + (A_dd[6,6] * deer.array[6,y-1,i]))
+    # c5_f <- (A_dd[6,5] * deer.array[5,y-1,i]) / ((A_dd[6,5] * deer.array[5,y-1,i]) + (A_dd[6,6] * deer.array[6,y-1,i]))
     
-    est_from5 <- total_adult_fem * c5_f
-    est_from6 <- total_adult_fem - est_from5
+    incoming_5 <- deer.array[4, y-1, i] + deer.array[5, y-1, i]
+    if (incoming_5 > 0) {
+      realized_surv[5, y, i] <- deer.array[5, y, i] / incoming_5
+    } else {
+      realized_surv[5, y, i] <- NA
+    }
     
-    realized_survival[5,y,i] <- safe_divide(est_from5, deer.array[5,y-1,i])
-    realized_survival[6,y,i] <- safe_divide(est_from6, deer.array[6,y-1,i])
+    # Stage 6 receives from stage 5 → 6 and stage 6 → 6
+    incoming_6 <- deer.array[5, y-1, i] + deer.array[6, y-1, i]
+    if (incoming_6 > 0) {
+      realized_surv[6, y, i] <- deer.array[6, y, i] / incoming_6
+    } else {
+      realized_surv[6, y, i] <- NA
+    }
     
     # Male stages
-    realized_survival[7, y, i] <- safe_divide(deer.array[8, y, i], deer.array[7, y-1, i]) # Fawn → yearling (M)
-    realized_survival[8, y, i] <- deer.array[9, y, i] / deer.array[8, y-1, i]   # 8 → 9
-    realized_survival[9, y, i] <- deer.array[10, y, i] / deer.array[9, y-1, i] # 9 → 10
-    realized_survival[10, y, i] <- deer.array[11, y, i] / deer.array[10, y-1, i] # 10 → 11
+    realized_surv[7, y, i] <- safe_divide(deer.array[8, y, i], deer.array[7, y-1, i]) # Fawn → yearling (M)
+    realized_surv[8, y, i] <- deer.array[9, y, i] / deer.array[8, y-1, i]   # 8 → 9
+    realized_surv[9, y, i] <- deer.array[10, y, i] / deer.array[9, y-1, i] # 9 → 10
+    realized_surv[10, y, i] <- deer.array[11, y, i] / deer.array[10, y-1, i] # 10 → 11
     
-    # Total adult females projected
-    total_adult_males <- deer.array[6, y, i]
+    # Male stages 11–12 (adults)
+    # Stage 11 receives from stage 10 → 11 and stage 11 → 11
+    incoming_11 <- deer.array[10, y-1, i] + deer.array[11, y-1, i]
+    if (incoming_11 > 0) {
+      realized_surv[11, y, i] <- deer.array[11, y, i] / incoming_11
+    } else {
+      realized_surv[11, y, i] <- NA
+    }
     
-    c11_m <- (A_dd[12,11] * deer.array[11,y-1,i]) / ((A_dd[12,11] * deer.array[11,y-1,i]) + (A_dd[12,12] * deer.array[12,y-1,i]))
-    
-    est_from11 <- total_adult_males * c11_m
-    est_from12 <- total_adult_males - est_from11
-    
-    realized_survival[11,y,i] <- safe_divide(est_from11, deer.array[11,y-1,i])
-    realized_survival[12,y,i] <- safe_divide(est_from12, deer.array[12,y-1,i])
-    
+    # Stage 12 receives from stage 11 → 12 and stage 12 → 12
+    incoming_12 <- deer.array[11, y-1, i] + deer.array[12, y-1, i]
+    if (incoming_12 > 0) {
+      realized_surv[12, y, i] <- deer.array[12, y, i] / incoming_12
+    } else {
+      realized_surv[12, y, i] <- NA
+    }
     
     # Check buck:doe ratio
     af <- sum(deer.array[2:6,y,i])
@@ -327,12 +342,12 @@ results14 <- results
 ## Get realized survival rates
 # subset realized survival to last 10 years
 last_10_years <- (max(Year)-10):(max(Year)-1)
-realized_survival_subset <- realized_survival[, last_10_years, ]
+realized_surv_subset <- realized_surv[, last_10_years, ]
 
 # Calculate median survival per stage (over all years and sims)
-surv.50pct <- apply(realized_survival, 1, function(x) median(x, na.rm = TRUE))
-surv.10pct <- apply(realized_survival, 1, quantile, probs = 0.10, na.rm=TRUE)
-surv.90pct <- apply(realized_survival, 1, quantile, probs = 0.90, na.rm=TRUE)
+surv.50pct <- apply(realized_surv, 1, function(x) median(x, na.rm = TRUE))
+surv.10pct <- apply(realized_surv, 1, quantile, probs = 0.10, na.rm=TRUE)
+surv.90pct <- apply(realized_surv, 1, quantile, probs = 0.90, na.rm=TRUE)
 
 r.surv <- data.frame(sex=c(rep("Female",6), rep("Male",6)), 
                      stage=rep(c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"),2),
@@ -573,8 +588,8 @@ cat("Estimated theta:", theta, "\n")
 theta <- 5
 
 # Set up arrays to save realized demographic rates
-realized_survival <- array(NA, dim=c(12, length(Year), Sims))
-realized_survival[1:12,1,] <- c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6],
+realized_surv <- array(NA, dim=c(12, length(Year), Sims))
+realized_surv[1:12,1,] <- c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6],
                                 A_adj[8,7], A_adj[9,8], A_adj[10,9], A_adj[11,10], A_adj[12,11], A_adj[12,12])
 
 realized_fecundity <- array(NA, dim=c(4,  length(Year) - 1, Sims)) # row 1: yearling F, row 2: adult F, row 3: yearling M, row 4: adult M,
@@ -605,11 +620,11 @@ for (i in 1:Sims) {
   for (y in 2:length(Year)){
     
     ## Adjust fecundity by female survival
-    R0y_s <- A_s[1,2]*(realized_survival[2,y-1,i])
-    R0a_s3 <- A_s[1,3]*(realized_survival[3,y-1,i])
-    R0a_s4 <- A_s[1,4]*(realized_survival[4,y-1,i])
-    R0a_s5 <- A_s[1,5]*(realized_survival[5,y-1,i])
-    R0a_s6 <- A_s[1,6]*(realized_survival[6,y-1,i])
+    R0y_s <- A_s[1,2]*(realized_surv[2,y-1,i])
+    R0a_s3 <- A_s[1,3]*(realized_surv[3,y-1,i])
+    R0a_s4 <- A_s[1,4]*(realized_surv[4,y-1,i])
+    R0a_s5 <- A_s[1,5]*(realized_surv[5,y-1,i])
+    R0a_s6 <- A_s[1,6]*(realized_surv[6,y-1,i])
     
     # Density dependent adjustment in fecundity
     # What was abundance at time step t-1
@@ -668,10 +683,10 @@ for (i in 1:Sims) {
     # ---- Realized survival ----
    
      # Female stages
-    realized_survival[1, y, i] <- safe_divide(pmax(deer.array[2, y, i],0), pmax(deer.array[1, y-1, i],0)) # Fawn → yearling (F)
-    realized_survival[2, y, i] <- deer.array[3, y, i] / deer.array[2, y-1, i]  # yearling → 2-year-old  
-    realized_survival[3, y, i] <- deer.array[4, y, i] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
-    realized_survival[4, y, i] <- deer.array[5, y, i] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
+    realized_surv[1, y, i] <- safe_divide(pmax(deer.array[2, y, i],0), pmax(deer.array[1, y-1, i],0)) # Fawn → yearling (F)
+    realized_surv[2, y, i] <- deer.array[3, y, i] / deer.array[2, y-1, i]  # yearling → 2-year-old  
+    realized_surv[3, y, i] <- deer.array[4, y, i] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
+    realized_surv[4, y, i] <- deer.array[5, y, i] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
     
     # female ssd
     w_f <- Re(eigen(A_dd)$vectors[, 1])[1:6]
@@ -688,30 +703,30 @@ for (i in 1:Sims) {
     est_from5 <- deer.array[6, y, i] * c5_f
     est_from6 <- deer.array[6, y, i] - est_from5
     
-    realized_survival[5, y, i] <- safe_divide(est_from5, deer.array[5, y-1, i])
+    realized_surv[5, y, i] <- safe_divide(est_from5, deer.array[5, y-1, i])
     
     # Stage 6 is tricky: receives from 5 and from itself
     incoming_females <- deer.array[6, y-1, i] + deer.array[5, y-1, i]  # crude approx
     if (incoming_females > 0) {
-      realized_survival[6, y, i] <- deer.array[6, y, i] / incoming_females
+      realized_surv[6, y, i] <- deer.array[6, y, i] / incoming_females
     }
     
     # Male stages
-    realized_survival[7, y, i] <- safe_divide(deer.array[8, y, i], deer.array[7, y-1, i]) # Fawn → yearling (M)
-    realized_survival[8, y, i] <- deer.array[9, y, i] / deer.array[8, y-1, i]   # 8 → 9
-    realized_survival[9, y, i] <- deer.array[10, y, i] / deer.array[9, y-1, i] # 9 → 10
-    realized_survival[10, y, i] <- deer.array[11, y, i] / deer.array[10, y-1, i] # 10 → 11
+    realized_surv[7, y, i] <- safe_divide(deer.array[8, y, i], deer.array[7, y-1, i]) # Fawn → yearling (M)
+    realized_surv[8, y, i] <- deer.array[9, y, i] / deer.array[8, y-1, i]   # 8 → 9
+    realized_surv[9, y, i] <- deer.array[10, y, i] / deer.array[9, y-1, i] # 9 → 10
+    realized_surv[10, y, i] <- deer.array[11, y, i] / deer.array[10, y-1, i] # 10 → 11
     
     # Stages 5 and 6 are tricky...
     est_from11 <- deer.array[12, y, i] * c5_m
     est_from12 <- deer.array[12, y, i] - est_from11
     
-    realized_survival[11, y, i] <- safe_divide(est_from11, deer.array[11, y-1, i])
+    realized_surv[11, y, i] <- safe_divide(est_from11, deer.array[11, y-1, i])
     
     # Stage 12 (adult males): 11 → 12 and 12 → 12
     incoming_males <- deer.array[12, y-1, i] + deer.array[11, y-1, i]
     if (incoming_males > 0) {
-      realized_survival[12, y, i] <- deer.array[12, y, i] / incoming_males
+      realized_surv[12, y, i] <- deer.array[12, y, i] / incoming_males
     }
     
     # Check buck:doe ratio
@@ -753,12 +768,12 @@ gm_mean(lambda_calc(results22$N.median))
 ## Get realized survival rates
 # subset realized survival to last 10 years
 last_10_years <- (max(Year)-10):(max(Year)-1)
-realized_survival_subset <- realized_survival[, last_10_years, ]
+realized_surv_subset <- realized_surv[, last_10_years, ]
 
 # Calculate median survival per stage (over all years and sims)
-surv.50pct <- apply(realized_survival, 1, function(x) median(x, na.rm = TRUE))
-surv.10pct <- apply(realized_survival, 1, quantile, probs = 0.10, na.rm=TRUE)
-surv.90pct <- apply(realized_survival, 1, quantile, probs = 0.90, na.rm=TRUE)
+surv.50pct <- apply(realized_surv, 1, function(x) median(x, na.rm = TRUE))
+surv.10pct <- apply(realized_surv, 1, quantile, probs = 0.10, na.rm=TRUE)
+surv.90pct <- apply(realized_surv, 1, quantile, probs = 0.90, na.rm=TRUE)
 
 r.surv <- data.frame(sex=c(rep("Female",6), rep("Male",6)), 
                      stage=rep(c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"),2),

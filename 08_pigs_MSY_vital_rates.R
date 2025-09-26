@@ -97,11 +97,11 @@ A_adj[6,6] <- A_base[6,6]*pig_opt$par[2]
 
 ## Fecundity
 # Yearlings
-A_adj[1,2] <- A_base[1,2]*(pig_opt$par[3]/2)
-A_adj[4,2] <- A_base[4,2]*(pig_opt$par[3]/2)
+A_adj[1,2] <- A_base[1,2]*(pig_opt$par[3])
+A_adj[4,2] <- A_base[4,2]*(pig_opt$par[3])
 # Adults
-A_adj[1,3] <- A_base[1,3]*(pig_opt$par[3]/2)
-A_adj[4,3] <- A_base[4,3]*(pig_opt$par[3]/2)
+A_adj[1,3] <- A_base[1,3]*(pig_opt$par[3])
+A_adj[4,3] <- A_base[4,3]*(pig_opt$par[3])
 
 #### Run population model ####
 
@@ -320,11 +320,10 @@ surv.90pct <- apply(realized_survival, 1, quantile, probs = 0.90, na.rm=TRUE)
 r.surv <- data.frame(sex=c(rep("Female",3), rep("Male",3)), 
                      stage=rep(c("Piglet","Yearling","Adult"),2),
                      surv.50pct,surv.10pct,surv.90pct,
-                     est=c(A_adj[2,1], A_adj[3,2], A_adj[3,3], A_adj[5,4], A_adj[6,5], A_adj[6,6]),
                      literature=c(A_base[2,1], A_base[3,2], A_base[3,3], A_base[5,4], A_base[6,5], A_base[6,6]))
 library(dplyr)
 r.surv <- r.surv |>
-  pivot_longer(cols=c("surv.50pct", "est", "literature"), names_to="source", values_to="survival")
+  pivot_longer(cols=c("surv.50pct", "literature"), names_to="source", values_to="survival")
 
 # Square survival to get annual 
 r.surv <- r.surv |>
@@ -336,13 +335,13 @@ r.surv <- r.surv |>
 r.surv$stage <- factor(r.surv$stage, levels=c("Piglet","Yearling","Adult"),
                        labels=c("Piglet","Yearling","Adult"))
 
-r.surv$source <- factor(r.surv$source, levels=c("literature", "est", "surv.50pct"), labels=c("Literature", "Optimized", "Realized"))
+r.surv$source <- factor(r.surv$source, levels=c("literature", "surv.50pct"), labels=c("Literature", "Realized"))
 
 ggplot(r.surv) +
   coord_cartesian(ylim=c(0,1)) +
   geom_segment(aes(x=stage, y=surv.10pct, yend=surv.90pct), color="#21918c", linewidth=1) +
   geom_point(aes(x=stage, y=survival, shape=source, color=source), size=3) +
-  scale_color_manual(values=c("#5ec962", "#440154", "#21918c")) +
+  scale_color_manual(values=c("#440154", "#21918c")) +
   scale_shape_manual(values=c(17, 18, 16)) +
   guides(
     shape=guide_legend(position="inside", title="Source"),
