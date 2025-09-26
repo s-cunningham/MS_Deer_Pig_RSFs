@@ -77,12 +77,12 @@ observed_harvest <- 280000
 
 ### Optimize survival and fecundities
 # set up bounds
-deer_lower <- c(0.60, 1, 1, 1, 1.2, 1.4, 1.7, 1.7, 0.95, 0.95)
-deer_upper <- c(1.25, 1.05, 1.2, 1.15, 1.5, 1.8, 2.1, 1.95, 1.3, 1.3)
+deer_lower <- c(1, 1, 1, 1, 1, 1, 1.2, 1.4, 1.7, 1.7, 1, 1)
+deer_upper <- c(1.25, 1.05 ,1.05, 1.05, 1.2, 1.15, 1.5, 1.8, 2.1, 1.95, 1.3, 1.3)
 
 # run optimizer
 set.seed(1)
-deer_opt <- optim(par=runif(10, 1, 1.05), fn=objective_fn_deer, method="L-BFGS-B", lower=deer_lower, upper=deer_upper, control = list(trace = 1))
+deer_opt <- optim(par=runif(12, 1, 1.05), fn=objective_fn_deer, method="L-BFGS-B", lower=deer_lower, upper=deer_upper, control = list(trace = 1))
 
 # What are optimized parameter values 
 deer_opt$par
@@ -106,7 +106,7 @@ A_adj[9,8] <- 0.95#A_base[9,8]*deer_opt$par[4]
 A_adj[10,9] <- 0.93#A_base[10,9]*deer_opt$par[5]
 A_adj[11,10] <- 0.94#A_base[11,10]*deer_opt$par[6]
 A_adj[12,11] <- 0.89#A_base[12,11]*deer_opt$par[7]
-A_adj[12,12] <- 0.82#A_base[12,12]*deer_opt$par[8]
+A_adj[12,12] <- A_base[12,12]*deer_opt$par[8] #0.82#
 
 ## Fecundity
 # Yearlings
@@ -159,7 +159,7 @@ asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
 # Calibrate density dependence parameter
 theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
-# theta <- 8
+# theta <- 1
 
 # Set up arrays to save realized demographic rates
 realized_surv <- array(NA, dim=c(12, length(Year), Sims))
@@ -263,12 +263,7 @@ for (i in 1:Sims) {
     realized_surv[3, y, i] <- deer.array[4, y, i] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
     realized_surv[4, y, i] <- deer.array[5, y, i] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
     
-    # Total adult females projected
-    # total_adult_fem <- deer.array[6, y, i]
-    
-    # Fraction contributed from stage 5 vs stage 6
-    # c5_f <- (A_dd[6,5] * deer.array[5,y-1,i]) / ((A_dd[6,5] * deer.array[5,y-1,i]) + (A_dd[6,6] * deer.array[6,y-1,i]))
-    
+    # Stages 5 and 6 are trickier
     incoming_5 <- deer.array[4, y-1, i] + deer.array[5, y-1, i]
     if (incoming_5 > 0) {
       realized_surv[5, y, i] <- deer.array[5, y, i] / incoming_5
@@ -330,19 +325,25 @@ ggplot(results) +
   geom_hline(yintercept=1610000, color="red", linetype=3) +
   # geom_hline(yintercept=1750000, color="red", linetype=3) +
   geom_hline(yintercept=K) +
-  geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="purple") +
-  geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1) +
-  scale_y_continuous(name="Abundance (total population)")+
+  geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="#21918c") +
+  geom_line(aes(x=Year, y=N.median),colour="#21918c",alpha=1,linewidth=1) +
+  scale_y_continuous(name="Abundance (in millions)", 
+                     breaks=c(0,500000, 1000000, 1500000, 2000000, 2500000),
+                     labels=c(0, 0.5, 1, 1.5, 2, 2.5)) +
   theme_bw() +
-  theme(text = element_text(size=16),panel.border = element_blank(), axis.line = element_line(colour="black"),
-        panel.grid.major = element_blank(),panel.grid.minor = element_blank()) 
+  xlab("Simulation Year") +
+  theme_classic() +
+  theme(panel.border=element_rect(fill=NA, color="black", linewidth=0.5),
+        legend.position.inside=c(0,0),
+        legend.justification=c(0,0),
+        legend.background=element_rect(fill=NA),
+        legend.title=element_text(size=14),
+        axis.text=element_text(size=12),
+        axis.title=element_text(size=14)) 
 
 results14 <- results
 
 ## Get realized survival rates
-# subset realized survival to last 10 years
-last_10_years <- (max(Year)-10):(max(Year)-1)
-realized_surv_subset <- realized_surv[, last_10_years, ]
 
 # Calculate median survival per stage (over all years and sims)
 surv.50pct <- apply(realized_surv, 1, function(x) median(x, na.rm = TRUE))
@@ -358,20 +359,20 @@ r.surv <- data.frame(sex=c(rep("Female",6), rep("Male",6)),
                                   A_base[8,7], A_base[9,8], A_base[10,9], A_base[11,10], A_base[12,11], A_base[12,12]))
 library(dplyr)
 r.surv <- r.surv |>
-  pivot_longer(cols=c("surv.50pct", "est", "literature"), names_to="source", values_to="survival")
+  pivot_longer(cols=c("surv.50pct", "literature"), names_to="source", values_to="survival")
 
 
 # Set factor levels
 r.surv$stage <- factor(r.surv$stage, levels=c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"),
                        labels=c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"))
 
-r.surv$source <- factor(r.surv$source, levels=c("literature", "est", "surv.50pct"), labels=c("Literature", "Optimized", "Realized"))
+r.surv$source <- factor(r.surv$source, levels=c("literature", "surv.50pct"), labels=c("Literature", "Realized"))
 
 ggplot(r.surv) +
   coord_cartesian(ylim=c(0,1)) +
   geom_segment(aes(x=stage, y=surv.10pct, yend=surv.90pct), color="#21918c", linewidth=1) +
   geom_point(aes(x=stage, y=survival, shape=source, color=source), size=3) +
-  scale_color_manual(values=c("#5ec962", "#440154", "#21918c")) +
+  scale_color_manual(values=c("#440154", "#21918c")) +
   scale_shape_manual(values=c(17, 18, 16)) +
   guides(
     shape=guide_legend(position="inside", title="Source"),
@@ -379,18 +380,20 @@ ggplot(r.surv) +
   ) +
   facet_grid(.~sex) +
   ylab("Survival probability") + xlab("Stage") +
-  theme_classic() +
-  theme(panel.border=element_rect(color="black", fill=NA, linewidth=0.5),
+  theme_bw() +
+  theme(#panel.border=element_rect(fill=NA, color="black"),
         legend.position.inside = c(0,0),
         legend.justification=c(0,0),
         legend.background = element_rect(fill=NA),
         strip.background=element_blank(),
-        strip.text=element_text(hjust=0))
+        strip.text=element_text(hjust=0, size=14),
+        axis.text.y=element_text(size=12),
+        axis.text.x=element_text(angle=25, vjust=0.8, hjust=0.8, size=12),
+        axis.title=element_text(size=14),
+        legend.text=element_text(size=12))
 
 
 ## Get realized fecundities
-# last_10_years <- (max(Year)-10):(max(Year)-1)
-# realized_fecundities_subset <- realized_fecundity[, last_10_years, ]
 
 # Calculate median survival per stage (over all years and sims)
 median_fec <- apply(realized_fecundity, 1, function(x) median(x, na.rm = TRUE))
@@ -441,7 +444,7 @@ set.seed(1)
 Year <- 1:100
 
 # Carrying capacity
-K <- 2347197
+K <- 2090532
 
 # Set up deer matrix
 A_base <- matrix(0,12,12)
@@ -528,11 +531,11 @@ A_adj[6,5] <- A_base[6,5]*deer_opt$par[3]
 A_adj[6,6] <- A_base[6,6]*deer_opt$par[3]
 
 # Male survival
-A_adj[9,8] <- A_base[9,8]*deer_opt$par[4]
-A_adj[10,9] <- A_base[10,9]*deer_opt$par[5]
-A_adj[11,10] <- A_base[11,10]*deer_opt$par[6]
-A_adj[12,11] <- A_base[12,11]*deer_opt$par[7]
-A_adj[12,12] <- A_base[12,12]*deer_opt$par[8]
+A_adj[9,8] <- 0.95#A_base[9,8]*deer_opt$par[4]
+A_adj[10,9] <- 0.93#A_base[10,9]*deer_opt$par[5]
+A_adj[11,10] <- 0.94#A_base[11,10]*deer_opt$par[6]
+A_adj[12,11] <- 0.89#A_base[12,11]*deer_opt$par[7]
+A_adj[12,12] <- 0.82#A_base[12,12]*deer_opt$par[8]
 
 ## Fecundity
 # Yearlings
@@ -585,7 +588,6 @@ asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
 # Calibrate density dependence parameter
 theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
-theta <- 5
 
 # Set up arrays to save realized demographic rates
 realized_surv <- array(NA, dim=c(12, length(Year), Sims))
@@ -602,17 +604,17 @@ for (i in 1:Sims) {
   # Female survival
   for (s in 2:5) {
     # Survive & go
-    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.01)
+    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
   }
   # Survive & stay
-  A_s[6,6] <- rtruncnorm(1, a=0, b=1, mean=A_adj[6,6], sd=0.01)
+  A_s[6,6] <- rtruncnorm(1, a=0, b=1, mean=A_adj[6,6], sd=0.02)
   # Male survival
   for (s in 8:11) {
     # Survive & go
-    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.01)
+    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
   }
   # Survive & stay
-  A_s[12,12] <- rtruncnorm(1, b=1, mean=A_adj[12,12], sd=0.01)
+  A_s[12,12] <- rtruncnorm(1, b=1, mean=A_adj[12,12], sd=0.02)
   
   # save new matrix
   A_dd <- A_s
@@ -622,9 +624,9 @@ for (i in 1:Sims) {
     ## Adjust fecundity by female survival
     R0y_s <- A_s[1,2]*(realized_surv[2,y-1,i])
     R0a_s3 <- A_s[1,3]*(realized_surv[3,y-1,i])
-    R0a_s4 <- A_s[1,4]*(realized_surv[4,y-1,i])
-    R0a_s5 <- A_s[1,5]*(realized_surv[5,y-1,i])
-    R0a_s6 <- A_s[1,6]*(realized_surv[6,y-1,i])
+    R0a_s4 <- A_s[1,3]*(realized_surv[4,y-1,i])
+    R0a_s5 <- A_s[1,3]*(realized_surv[5,y-1,i])
+    R0a_s6 <- A_s[1,3]*(realized_surv[6,y-1,i])
     
     # Density dependent adjustment in fecundity
     # What was abundance at time step t-1
@@ -659,8 +661,9 @@ for (i in 1:Sims) {
     ## Harvest deer 
     if (y > 0) {
       # Randomly select a random number to harvest
-      h <- round(runif(1, 190000, 280000), digits=0)
-      # h <- round(rnorm(1, 270000, 10000), digits=0)
+      # h <- round(runif(1, 190000, 280000), digits=0)
+      h <- round(rnorm(1, 240000, 15000),digits=0)
+      # h=200000
       
       # Split bucks and does
       doe_h <- h * 0.54
@@ -681,34 +684,27 @@ for (i in 1:Sims) {
     deer.array[,y,i] <- pmax(N_next, 0)
     
     # ---- Realized survival ----
-   
-     # Female stages
+    
+    # Female stages
     realized_surv[1, y, i] <- safe_divide(pmax(deer.array[2, y, i],0), pmax(deer.array[1, y-1, i],0)) # Fawn → yearling (F)
     realized_surv[2, y, i] <- deer.array[3, y, i] / deer.array[2, y-1, i]  # yearling → 2-year-old  
     realized_surv[3, y, i] <- deer.array[4, y, i] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
     realized_surv[4, y, i] <- deer.array[5, y, i] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
     
-    # female ssd
-    w_f <- Re(eigen(A_dd)$vectors[, 1])[1:6]
-    w_f <- w_f / sum(w_f)
+    # Stages 5 and 6 are trickier
+    incoming_5 <- deer.array[4, y-1, i] + deer.array[5, y-1, i]
+    if (incoming_5 > 0) {
+      realized_surv[5, y, i] <- deer.array[5, y, i] / incoming_5
+    } else {
+      realized_surv[5, y, i] <- NA
+    }
     
-    # male ssd
-    w_m <- Re(eigen(A_dd)$vectors[, 1])[7:12]
-    w_m <- w_m / sum(w_m)
-    
-    c5_f <- (A_dd[6,5] * w_f[5]) / ((A_dd[6,5] * w_f[5]) + (A_dd[6,6] * w_f[6]))
-    c5_m <- (A_dd[12,11] * w_m[5]) / ((A_dd[12,11] * w_m[5]) + (A_dd[12,12] * w_m[6]))
-    
-    # Stages 5 and 6 are tricky...
-    est_from5 <- deer.array[6, y, i] * c5_f
-    est_from6 <- deer.array[6, y, i] - est_from5
-    
-    realized_surv[5, y, i] <- safe_divide(est_from5, deer.array[5, y-1, i])
-    
-    # Stage 6 is tricky: receives from 5 and from itself
-    incoming_females <- deer.array[6, y-1, i] + deer.array[5, y-1, i]  # crude approx
-    if (incoming_females > 0) {
-      realized_surv[6, y, i] <- deer.array[6, y, i] / incoming_females
+    # Stage 6 receives from stage 5 → 6 and stage 6 → 6
+    incoming_6 <- deer.array[5, y-1, i] + deer.array[6, y-1, i]
+    if (incoming_6 > 0) {
+      realized_surv[6, y, i] <- deer.array[6, y, i] / incoming_6
+    } else {
+      realized_surv[6, y, i] <- NA
     }
     
     # Male stages
@@ -717,16 +713,21 @@ for (i in 1:Sims) {
     realized_surv[9, y, i] <- deer.array[10, y, i] / deer.array[9, y-1, i] # 9 → 10
     realized_surv[10, y, i] <- deer.array[11, y, i] / deer.array[10, y-1, i] # 10 → 11
     
-    # Stages 5 and 6 are tricky...
-    est_from11 <- deer.array[12, y, i] * c5_m
-    est_from12 <- deer.array[12, y, i] - est_from11
+    # Male stages 11–12 (adults)
+    # Stage 11 receives from stage 10 → 11 and stage 11 → 11
+    incoming_11 <- deer.array[10, y-1, i] + deer.array[11, y-1, i]
+    if (incoming_11 > 0) {
+      realized_surv[11, y, i] <- deer.array[11, y, i] / incoming_11
+    } else {
+      realized_surv[11, y, i] <- NA
+    }
     
-    realized_surv[11, y, i] <- safe_divide(est_from11, deer.array[11, y-1, i])
-    
-    # Stage 12 (adult males): 11 → 12 and 12 → 12
-    incoming_males <- deer.array[12, y-1, i] + deer.array[11, y-1, i]
-    if (incoming_males > 0) {
-      realized_surv[12, y, i] <- deer.array[12, y, i] / incoming_males
+    # Stage 12 receives from stage 11 → 12 and stage 12 → 12
+    incoming_12 <- deer.array[11, y-1, i] + deer.array[12, y-1, i]
+    if (incoming_12 > 0) {
+      realized_surv[12, y, i] <- deer.array[12, y, i] / incoming_12
+    } else {
+      realized_surv[12, y, i] <- NA
     }
     
     # Check buck:doe ratio
@@ -778,27 +779,25 @@ surv.90pct <- apply(realized_surv, 1, quantile, probs = 0.90, na.rm=TRUE)
 r.surv <- data.frame(sex=c(rep("Female",6), rep("Male",6)), 
                      stage=rep(c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"),2),
                      surv.50pct,surv.10pct,surv.90pct,
-                     est=c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6],
-                           A_adj[8,7], A_adj[9,8], A_adj[10,9], A_adj[11,10], A_adj[12,11], A_adj[12,12]),
                      literature=c(A_base[2,1], A_base[3,2], A_base[4,3], A_base[5,4], A_base[6,5], A_base[6,6],
                                   A_base[8,7], A_base[9,8], A_base[10,9], A_base[11,10], A_base[12,11], A_base[12,12]))
 library(dplyr)
 r.surv <- r.surv |>
-  pivot_longer(cols=c("surv.50pct", "est", "literature"), names_to="source", values_to="survival")
+  pivot_longer(cols=c("surv.50pct", "literature"), names_to="source", values_to="survival")
 
 
 # Set factor levels
 r.surv$stage <- factor(r.surv$stage, levels=c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"),
                        labels=c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"))
 
-r.surv$source <- factor(r.surv$source, levels=c("literature", "est", "surv.50pct"), labels=c("Literature", "Optimized", "Implied"))
+r.surv$source <- factor(r.surv$source, levels=c("literature", "surv.50pct"), labels=c("Literature",  "Implied"))
 
 ggplot(r.surv) +
   coord_cartesian(ylim=c(0,1)) +
   geom_segment(aes(x=stage, y=surv.10pct, yend=surv.90pct), color="#21918c", linewidth=1) +
   geom_point(aes(x=stage, y=survival, shape=source, color=source), size=3) +
-  scale_color_manual(values=c("#5ec962", "#440154", "#21918c")) +
-  scale_shape_manual(values=c(17, 18, 16)) +
+  scale_color_manual(values=c("#440154", "#21918c")) +
+  scale_shape_manual(values=c(18, 16)) +
   guides(
     shape=guide_legend(position="inside", title="Source"),
     color=guide_legend(position="inside", title="Source")
@@ -826,7 +825,7 @@ results <- results |>
   rename(N.10pct=N.20pct, N.90pct=N.80pct)
 
 
-res_plot <- ggplot(results) +
+res_plot <- ggplot(results14) +
   coord_cartesian(ylim=c(0,2500000)) +
   geom_hline(yintercept=1610000, color="black", linetype=3) +
   geom_hline(yintercept=1512638, linetype=2, color="#ed7953") +
@@ -886,11 +885,11 @@ s_plot <- ggplot(r.surv14) +
   coord_cartesian(xlim=c(0.7, 2), ylim=c(0,1.4)) +
   geom_segment(aes(x=x, y=f10pct, yend=f90pct), color="#21918c", linewidth=1) +
   geom_point(aes(x=x, y=fec, group=source, color=source, shape=offspring_sex), size=3) +
-  scale_color_manual(values=c("#5ec962", "#440154", "#21918c")) +
+  scale_color_manual(values=c("#440154", "#21918c")) +
   scale_shape_manual(values=c(17, 16)) +
   scale_x_continuous(breaks=c(1,1.7), labels=c("Yearling", "Adult")) +
   guides(
-    color="none",
+    color=guide_legend(position="inside", title="Source"),
     shape=guide_legend(position="inside", title="Offspring Sex")
   ) +
   ylab("Fecundity") + xlab("Stage") +
@@ -900,9 +899,9 @@ s_plot <- ggplot(r.surv14) +
         legend.justification=c(0,1),
         # legend.direction="horizontal",
         legend.background = element_rect(fill=NA),
-        legend.text=element_markdown(size=11),
-        legend.title=element_text(size=12),
-        axis.title=element_text(size=12),
-        axis.text=element_text(size=11))
+        legend.text=element_markdown(size=12),
+        legend.title=element_text(size=14),
+        axis.title=element_text(size=14),
+        axis.text=element_text(size=12))
 
 (free(res_plot / f_plot) | s_plot) + plot_annotation(tag_levels = 'A') + plot_layout(widths=c(1.2,1))

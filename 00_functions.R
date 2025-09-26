@@ -106,7 +106,7 @@ lambda_calc <- function(x) {
 }
 
 ### Functions for validation of carrying capacity/MSY exercise ####
-simulate_pop <- function(a, A, N0, K_obs, years = 100) {
+simulate_pop <- function(a, A, N0, K, years = 100) {
   N <- matrix(NA, nrow = nrow(A), ncol = years)
   N[, 1] <- N0
   
@@ -124,7 +124,6 @@ simulate_pop <- function(a, A, N0, K_obs, years = 100) {
 }
 
 ## theta-logistic function
-# Example theta-logistic projection function
 theta_logistic_proj <- function(N0, lambda, K, theta, t_max = 100) {
   N <- numeric(t_max)
   N[1] <- sum(N0)
@@ -163,7 +162,7 @@ get_msy <- function(results) {
 }
 
 
-scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_scale_y, fec_scale_a) {
+scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_scale) {
   
   # Set up deer matrix
   deer.matrix <- matrix(0,12,12)
@@ -173,9 +172,9 @@ scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_
   deer.matrix[2,1] <- A_base[2,1]*surv_scale_fawn
   deer.matrix[3,2] <- A_base[3,2]*surv_scale_f[1]
   deer.matrix[4,3] <- A_base[4,3]*surv_scale_f[2]
-  deer.matrix[5,4] <- A_base[5,4]*surv_scale_f[2]
-  deer.matrix[6,5] <- A_base[6,5]*surv_scale_f[2]
-  deer.matrix[6,6] <- A_base[6,6]*surv_scale_f[2]
+  deer.matrix[5,4] <- A_base[5,4]*surv_scale_f[3]
+  deer.matrix[6,5] <- A_base[6,5]*surv_scale_f[4]
+  deer.matrix[6,6] <- A_base[6,6]*surv_scale_f[5]
   # Males
   deer.matrix[8,7] <- A_base[8,7]*surv_scale_fawn
   deer.matrix[9,8] <- A_base[9,8]*surv_scale_m[1]
@@ -186,18 +185,16 @@ scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_
   
   ## Fecundity
   # Maximum fecundity
-  R0a <- A_base[1,3]*fec_scale_a
-  R0y <- A_base[1,2]*fec_scale_y
-  
-  # pct_m <- 0.565
-  # pct_f <- 0.435
+  R0a <- A_base[1,3]*fec_scale
+  R0y <- A_base[1,2]*fec_scale
+
+  # sex ratio at birth
+  pct_m <- 0.565
+  pct_f <- 0.435
   
   # Calculate for post-breeding census
-  # FecundityM <- c(0, R0y*deer.matrix[3,2], R0a*deer.matrix[4,3], R0a*deer.matrix[5,4], R0a*deer.matrix[6,5], R0a*deer.matrix[6,6])*pct_m 
-  # FecundityF <- c(0, R0y*deer.matrix[3,2], R0a*deer.matrix[4,3], R0a*deer.matrix[5,4], R0a*deer.matrix[6,5], R0a*deer.matrix[6,6])*pct_f 
-  
-  FecundityF <- c(0, R0y, R0a, R0a, R0a, R0a)*0.5
-  FecundityM <- c(0, R0y, R0a, R0a, R0a, R0a)*0.5
+  FecundityM <- c(0, R0y*deer.matrix[3,2], R0a*deer.matrix[4,3], R0a*deer.matrix[5,4], R0a*deer.matrix[6,5], R0a*deer.matrix[6,6])*pct_m
+  FecundityF <- c(0, R0y*deer.matrix[3,2], R0a*deer.matrix[4,3], R0a*deer.matrix[5,4], R0a*deer.matrix[6,5], R0a*deer.matrix[6,6])*pct_f
   
   # Add to matrix
   deer.matrix[1,1:6] <- FecundityF
@@ -232,9 +229,16 @@ deer_pop_proj <- function(A, N0, Kf, theta, Year) {
     R0y_dd <- A[1,2] * density_factor 
     R0a_dd <- A[1,3] * density_factor 
     
+    # Check adult age ratio
+    asr <- sum(deer.array[8:12,y-1])/sum(deer.array[2:6,y-1], 1e-6)
+
+    # Calculate % males & females
+    s_m <- pmin(pmax(0.5 + 0.1 * (1 - asr), 0.4), 0.6)
+    s_f <- 1 - s_m
+    
     # Adjust sex ratio at birth
-    A_dd[1,1:6] <- c(0, R0y_dd*A[3,2], R0a_dd*A[4,3], R0a_dd*A[5,4], R0a_dd*A[6,5], R0a_dd*A[6,6]) 
-    A_dd[7,1:6] <- c(0, R0y_dd*A[3,2], R0a_dd*A[4,3], R0a_dd*A[5,4], R0a_dd*A[6,5], R0a_dd*A[6,6])
+    A_dd[1,1:6] <- c(0, R0y_dd*A[3,2], R0a_dd*A[4,3], R0a_dd*A[5,4], R0a_dd*A[6,5], R0a_dd*A[6,6])*s_m
+    A_dd[7,1:6] <- c(0, R0y_dd*A[3,2], R0a_dd*A[4,3], R0a_dd*A[5,4], R0a_dd*A[6,5], R0a_dd*A[6,6])*s_f
     
     # Calculate new pop size
     deer.array[,y] <- A_dd %*% deer.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)
@@ -257,13 +261,12 @@ deer_pop_proj <- function(A, N0, Kf, theta, Year) {
 objective_fn_deer <- function(params) {
   
   surv_scale_fawn <- params[1]
-  surv_scale_f <- params[2:3]
-  surv_scale_m <- params[4:8]
-  fec_scale_y <- params[9]
-  fec_scale_a <- params[10]
-  
+  surv_scale_f <- params[2:6]
+  surv_scale_m <- params[7:11]
+  fec_scale <- params[12]
+
   # Scale demographic rates
-  A_scaled <- scale_deer(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_scale_y, fec_scale_a)
+  A_scaled <- scale_deer(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_scale)
   
   # Calculate stable stage distribution
   w <- Re(eigen(A_scaled)$vectors[, 1])
@@ -275,7 +278,8 @@ objective_fn_deer <- function(params) {
   lambda <- Re(eigen(A_scaled)$values[1])
   
   # Calibrate a for density dependence
-  theta <- 3
+  theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
+  # theta <- 3
   
   # Run model and get MSY
   sim_msy <- deer_pop_proj(A_scaled, N0, Kf, theta, Year) 

@@ -295,22 +295,23 @@ results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
 #Plot population projection
 ggplot(results) +
-  coord_cartesian(ylim=c(0,6500000)) +
+  coord_cartesian(ylim=c(0,6000000)) +
   geom_hline(yintercept=1000000, color="red", linetype=3) +
   geom_hline(yintercept=K) +
   geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="purple") +
   geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1) +
-  scale_y_continuous(name="Abundance (total population)")+
-  theme_bw() +
-  theme(text = element_text(size=16),panel.border = element_blank(), axis.line = element_line(colour="black"),
-        panel.grid.major = element_blank(),panel.grid.minor = element_blank()) 
+  scale_y_continuous(name="Abundance (in millions)", 
+                     breaks=c(0,1000000, 2000000, 3000000, 4000000,5000000, 6000000),
+                     labels=c(0, 1, 2, 3, 4, 5, 6)) +
+  scale_x_continuous(breaks=c(0,10,20,30,40), labels=c(0,5,10,15,20), name="Simulation Year") +
+  theme_classic() + 
+  theme(axis.title = element_text(size=14),
+        axis.text = element_text(size=12),
+        panel.border = element_rect(fill=NA, color="black")) 
 
 results27_all <- results
 
 ## Get realized survival rates
-# subset realized survival to last 10 years
-last_10_years <- (max(Year)-10):(max(Year)-1)
-realized_survival_subset <- realized_survival[, last_10_years, ]
 
 # Calculate median survival per stage (over all years and sims)
 surv.50pct <- apply(realized_survival , 1, function(x) median(x, na.rm = TRUE))
@@ -349,13 +350,17 @@ ggplot(r.surv) +
   ) +
   facet_grid(.~sex) +
   ylab("Survival probability") + xlab("Stage") +
-  theme_classic() +
+  theme_bw() +
   theme(panel.border=element_rect(color="black", fill=NA, linewidth=0.5),
         legend.position.inside = c(0,1),
         legend.justification=c(0,1),
         legend.background = element_rect(fill=NA),
         strip.background=element_blank(),
-        strip.text=element_text(hjust=0))
+        strip.text=element_text(hjust=0, size=14),
+        axis.text=element_text(size=12),
+        axis.title=element_text(size=14),
+        legend.text=element_text(size=12),
+        legend.title=element_text(size=14))
 
 
 r.surv27_all <- r.surv
