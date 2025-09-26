@@ -21,9 +21,6 @@ Kf <- K * 0.5
 # Set up pig matrix
 A_base <- matrix(0,6,6)
 
-# Fecundity
-# Fecundity <- c(0.54, 2.24, 2.24)
-
 ## Survival
 # Females
 A_base[2,1] <- sqrt(0.3)
@@ -796,7 +793,7 @@ s_plot <- ggplot(r.surv27_all) +
   coord_cartesian(ylim=c(0,1)) +
   geom_segment(aes(x=x, y=surv.10pct, yend=surv.90pct), color="#21918c", linewidth=1) +
   geom_point(aes(x=x, y=survival, color=source, shape=sex), size=3) +
-  scale_color_manual(values=c("#5ec962", "#440154", "#21918c")) +
+  scale_color_manual(values=c("#440154", "#21918c")) +
   scale_shape_manual(values=c(17, 16)) +
   guides(
     color="none", #guide_legend(position="inside", title="Source"),

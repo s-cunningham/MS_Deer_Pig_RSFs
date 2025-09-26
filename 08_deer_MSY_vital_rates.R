@@ -97,24 +97,24 @@ A_adj[8,7] <- A_base[8,7]*deer_opt$par[1]
 # Female survival
 A_adj[3,2] <- A_base[3,2]*deer_opt$par[2]
 A_adj[4,3] <- A_base[4,3]*deer_opt$par[3]
-A_adj[5,4] <- A_base[5,4]*deer_opt$par[3]
-A_adj[6,5] <- A_base[6,5]*deer_opt$par[3]
-A_adj[6,6] <- A_base[6,6]*deer_opt$par[3]
+A_adj[5,4] <- A_base[5,4]*deer_opt$par[4]
+A_adj[6,5] <- A_base[6,5]*deer_opt$par[5]
+A_adj[6,6] <- A_base[6,6]*deer_opt$par[6]
 
 # Male survival
-A_adj[9,8] <- 0.95#A_base[9,8]*deer_opt$par[4]
-A_adj[10,9] <- 0.93#A_base[10,9]*deer_opt$par[5]
-A_adj[11,10] <- 0.94#A_base[11,10]*deer_opt$par[6]
-A_adj[12,11] <- 0.89#A_base[12,11]*deer_opt$par[7]
-A_adj[12,12] <- A_base[12,12]*deer_opt$par[8] #0.82#
+A_adj[9,8] <- A_base[9,8]*deer_opt$par[7]#0.95#
+A_adj[10,9] <- A_base[10,9]*deer_opt$par[8]#0.93#
+A_adj[11,10] <- A_base[11,10]*deer_opt$par[9] #0.94#
+A_adj[12,11] <- A_base[12,11]*deer_opt$par[10] #0.89#
+A_adj[12,12] <- A_base[12,12]*deer_opt$par[11] #0.82#
 
 ## Fecundity
 # Yearlings
-A_adj[1,2] <- A_base[1,2]*deer_opt$par[9]
-A_adj[7,2] <- A_base[7,2]*deer_opt$par[9]
+A_adj[1,2] <- A_base[1,2]*deer_opt$par[12]
+A_adj[7,2] <- A_base[7,2]*deer_opt$par[12]
 # Adults
-A_adj[1,3:6] <- A_base[1,3:6]*deer_opt$par[10]
-A_adj[7,3:6] <- A_base[7,3:6]*deer_opt$par[10]
+A_adj[1,3:6] <- A_base[1,3:6]*deer_opt$par[12]
+A_adj[7,3:6] <- A_base[7,3:6]*deer_opt$par[12]
 
 
 #### Run population model ####
@@ -159,7 +159,6 @@ asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
 # Calibrate density dependence parameter
 theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
-# theta <- 1
 
 # Set up arrays to save realized demographic rates
 realized_surv <- array(NA, dim=c(12, length(Year), Sims))
@@ -176,17 +175,17 @@ for (i in 1:Sims) {
   # Female survival
   for (s in 2:5) {
     # Survive & go
-    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.01)
+    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
   }
   # Survive & stay
-  A_s[6,6] <- rtruncnorm(1, a=0, b=1, mean=A_adj[6,6], sd=0.01)
+  A_s[6,6] <- rtruncnorm(1, a=0, b=1, mean=A_adj[6,6], sd=0.02)
   # Male survival
   for (s in 8:11) {
     # Survive & go
-    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.01)
+    A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
   }
   # Survive & stay
-  A_s[12,12] <- rtruncnorm(1, b=1, mean=A_adj[12,12], sd=0.01)
+  A_s[12,12] <- rtruncnorm(1, b=1, mean=A_adj[12,12], sd=0.02)
   
   # save new matrix
   A_dd <- A_s
@@ -258,7 +257,7 @@ for (i in 1:Sims) {
     # ---- Realized survival ----
     
     # Female stages
-    realized_surv[1, y, i] <- safe_divide(pmax(deer.array[2, y, i],0), pmax(deer.array[1, y-1, i],0)) # Fawn → yearling (F)
+    realized_surv[1, y, i] <- deer.array[2, y, i] / deer.array[1, y-1, i] # Fawn → yearling (F)
     realized_surv[2, y, i] <- deer.array[3, y, i] / deer.array[2, y-1, i]  # yearling → 2-year-old  
     realized_surv[3, y, i] <- deer.array[4, y, i] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
     realized_surv[4, y, i] <- deer.array[5, y, i] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
@@ -280,7 +279,7 @@ for (i in 1:Sims) {
     }
     
     # Male stages
-    realized_surv[7, y, i] <- safe_divide(deer.array[8, y, i], deer.array[7, y-1, i]) # Fawn → yearling (M)
+    realized_surv[7, y, i] <- deer.array[8, y, i] / deer.array[7, y-1, i] # Fawn → yearling (M)
     realized_surv[8, y, i] <- deer.array[9, y, i] / deer.array[8, y-1, i]   # 8 → 9
     realized_surv[9, y, i] <- deer.array[10, y, i] / deer.array[9, y-1, i] # 9 → 10
     realized_surv[10, y, i] <- deer.array[11, y, i] / deer.array[10, y-1, i] # 10 → 11
@@ -314,10 +313,10 @@ for (i in 1:Sims) {
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.10pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
+N.90pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
 
-results <- data.frame(Year,N.median,N.20pct,N.80pct)
+results <- data.frame(Year,N.median,N.10pct,N.90pct)
 
 #Plot population projection
 ggplot(results) +
@@ -325,7 +324,7 @@ ggplot(results) +
   geom_hline(yintercept=1610000, color="red", linetype=3) +
   # geom_hline(yintercept=1750000, color="red", linetype=3) +
   geom_hline(yintercept=K) +
-  geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="#21918c") +
+  geom_ribbon(aes(x=Year,ymin=N.10pct, ymax=N.90pct), alpha=.2,fill="#21918c") +
   geom_line(aes(x=Year, y=N.median),colour="#21918c",alpha=1,linewidth=1) +
   scale_y_continuous(name="Abundance (in millions)", 
                      breaks=c(0,500000, 1000000, 1500000, 2000000, 2500000),
@@ -506,12 +505,12 @@ observed_harvest <- 290000
 
 ### Optimize survival and fecundities
 # set up bounds
-deer_lower <- c(0.60, 1, 1, 1, 1.2, 1.4, 1.7, 1.7, 0.95, 0.95)
-deer_upper <- c(1.25, 1.05, 1.2, 1.15, 1.5, 1.8, 2.1, 1.95, 1.3, 1.3)
+deer_lower <- c(1, 1, 1, 1, 1, 1, 1.2, 1.4, 1.7, 1.7, 1, 1)
+deer_upper <- c(1.25, 1.05 ,1.05, 1.05, 1.2, 1.15, 1.5, 1.8, 2.1, 1.95, 1.3, 1.3)
 
 # run optimizer
-set.seed(123)
-deer_opt <- optim(par=runif(10, 1, 1.02), fn=objective_fn_deer, method="L-BFGS-B", lower=deer_lower, upper=deer_upper, control = list(trace = 1))
+set.seed(1)
+deer_opt <- optim(par=runif(12, 1, 1.05), fn=objective_fn_deer, method="L-BFGS-B", lower=deer_lower, upper=deer_upper, control = list(trace = 1))
 
 # What are optimized parameter values 
 deer_opt$par
@@ -526,24 +525,24 @@ A_adj[8,7] <- A_base[8,7]*deer_opt$par[1]
 # Female survival
 A_adj[3,2] <- A_base[3,2]*deer_opt$par[2]
 A_adj[4,3] <- A_base[4,3]*deer_opt$par[3]
-A_adj[5,4] <- A_base[5,4]*deer_opt$par[3]
-A_adj[6,5] <- A_base[6,5]*deer_opt$par[3]
-A_adj[6,6] <- A_base[6,6]*deer_opt$par[3]
+A_adj[5,4] <- A_base[5,4]*deer_opt$par[4]
+A_adj[6,5] <- A_base[6,5]*deer_opt$par[5]
+A_adj[6,6] <- A_base[6,6]*deer_opt$par[6]
 
 # Male survival
-A_adj[9,8] <- 0.95#A_base[9,8]*deer_opt$par[4]
-A_adj[10,9] <- 0.93#A_base[10,9]*deer_opt$par[5]
-A_adj[11,10] <- 0.94#A_base[11,10]*deer_opt$par[6]
-A_adj[12,11] <- 0.89#A_base[12,11]*deer_opt$par[7]
-A_adj[12,12] <- 0.82#A_base[12,12]*deer_opt$par[8]
+A_adj[9,8] <- A_base[9,8]*deer_opt$par[7]
+A_adj[10,9] <- A_base[10,9]*deer_opt$par[8]
+A_adj[11,10] <- A_base[11,10]*deer_opt$par[9]
+A_adj[12,11] <- A_base[12,11]*deer_opt$par[10]
+A_adj[12,12] <- A_base[12,12]*deer_opt$par[11]
 
 ## Fecundity
 # Yearlings
-A_adj[1,2] <- A_base[1,2]*deer_opt$par[9]
-A_adj[7,2] <- A_base[7,2]*deer_opt$par[9]
+A_adj[1,2] <- A_base[1,2]*deer_opt$par[12]
+A_adj[7,2] <- A_base[7,2]*deer_opt$par[12]
 # Adults
-A_adj[1,3:6] <- A_base[1,3:6]*deer_opt$par[10]
-A_adj[7,3:6] <- A_base[7,3:6]*deer_opt$par[10]
+A_adj[1,3:6] <- A_base[1,3:6]*deer_opt$par[12]
+A_adj[7,3:6] <- A_base[7,3:6]*deer_opt$par[12]
 
 #### Run population model ####
 
@@ -686,7 +685,7 @@ for (i in 1:Sims) {
     # ---- Realized survival ----
     
     # Female stages
-    realized_surv[1, y, i] <- safe_divide(pmax(deer.array[2, y, i],0), pmax(deer.array[1, y-1, i],0)) # Fawn → yearling (F)
+    realized_surv[1, y, i] <- deer.array[2, y, i] / deer.array[1, y-1, i] # Fawn → yearling (F)
     realized_surv[2, y, i] <- deer.array[3, y, i] / deer.array[2, y-1, i]  # yearling → 2-year-old  
     realized_surv[3, y, i] <- deer.array[4, y, i] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
     realized_surv[4, y, i] <- deer.array[5, y, i] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
@@ -708,7 +707,7 @@ for (i in 1:Sims) {
     }
     
     # Male stages
-    realized_surv[7, y, i] <- safe_divide(deer.array[8, y, i], deer.array[7, y-1, i]) # Fawn → yearling (M)
+    realized_surv[7, y, i] <- deer.array[8, y, i] / deer.array[7, y-1, i] # Fawn → yearling (M)
     realized_surv[8, y, i] <- deer.array[9, y, i] / deer.array[8, y-1, i]   # 8 → 9
     realized_surv[9, y, i] <- deer.array[10, y, i] / deer.array[9, y-1, i] # 9 → 10
     realized_surv[10, y, i] <- deer.array[11, y, i] / deer.array[10, y-1, i] # 10 → 11
@@ -736,14 +735,13 @@ for (i in 1:Sims) {
     
     if (sum(af) < 1) {
       warning("Female bottleneck: reproductive females lost!")
-      # Optionally, set ASR to NA or a capped value
     }
     
   }
 }
 N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
-N.20pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
-N.80pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+N.10pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
+N.90pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
@@ -753,7 +751,7 @@ ggplot(results) +
   geom_hline(yintercept=1610000, color="red", linetype=3) +
   # geom_hline(yintercept=1750000, color="red", linetype=3) +
   geom_hline(yintercept=K) +
-  geom_ribbon(aes(x=Year,ymin=N.20pct, ymax=N.80pct), alpha=.2,fill="purple") +
+  geom_ribbon(aes(x=Year,ymin=N.10pct, ymax=N.90pct), alpha=.2,fill="purple") +
   geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1) +
   scale_y_continuous(name="Abundance (total population)")+
   theme_bw() +
@@ -820,10 +818,6 @@ results22$density <- "22 deer km<sup>-2</sup>"
 
 results <- bind_rows(results14, results22)
 
-results <- results |>
-  as_tibble() |>
-  rename(N.10pct=N.20pct, N.90pct=N.80pct)
-
 
 res_plot <- ggplot(results14) +
   coord_cartesian(ylim=c(0,2500000)) +
@@ -858,7 +852,7 @@ s_plot <- ggplot(r.surv14) +
   coord_cartesian(ylim=c(0,1)) +
   geom_segment(aes(x=stage, y=surv.10pct, yend=surv.90pct), color="#21918c", linewidth=1) +
   geom_point(aes(x=stage, y=survival, color=source), size=3) +
-  scale_color_manual(values=c("#5ec962", "#440154", "#21918c")) +
+  scale_color_manual(values=c("#440154", "#21918c")) +
   # scale_shape_manual(values=c(17, 18, 16)) +
   guides(
     # shape=guide_legend(position="inside", title="Source"),
@@ -879,6 +873,48 @@ s_plot <- ggplot(r.surv14) +
         legend.text=element_markdown(size=11),
         legend.title=element_text(size=12),
         strip.text=element_blank())
+
+## Survival plot
+r.surv27_all <- r.surv27_all |>
+  mutate(x=case_when(stage=="Piglet" ~ 0.5,
+                     stage=="Yearling" ~ 0.6,
+                     stage=="Adult" ~ 0.7)) |>
+  mutate(x = if_else(sex=="Female", x - 0.01, x + 0.01))
+
+
+s_plot <- ggplot(r.surv27_all) +
+  coord_cartesian(ylim=c(0,1)) +
+  geom_segment(aes(x=x, y=surv.10pct, yend=surv.90pct), color="#21918c", linewidth=1) +
+  geom_point(aes(x=x, y=survival, color=source, shape=sex), size=3) +
+  scale_color_manual(values=c("#440154", "#21918c")) +
+  scale_shape_manual(values=c(17, 16)) +
+  guides(
+    color="none", #guide_legend(position="inside", title="Source"),
+    shape=guide_legend(position="inside", title="Sex")
+  ) +
+  scale_x_continuous(breaks=c(0.5,0.6,0.7), labels=c("Piglet", "Yearling", "Adult"), expand = expansion(mult = 0.25, add = 0)) +
+  ylab("Survival probability") + xlab("Stage") +
+  theme_classic() +
+  theme(panel.border=element_rect(color="black", fill=NA, linewidth=0.5),
+        legend.position.inside = c(0,1),
+        legend.justification=c(0,1),
+        legend.background = element_rect(fill=NA),
+        axis.text=element_text(size=11),
+        axis.title=element_text(size=12),
+        legend.text=element_text(size=11),
+        legend.title=element_text(size=12))
+
+
+
+
+
+
+
+
+
+
+
+
 
 
  f_plot <- ggplot(fec14) +

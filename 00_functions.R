@@ -279,8 +279,7 @@ objective_fn_deer <- function(params) {
   
   # Calibrate a for density dependence
   theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
-  # theta <- 3
-  
+
   # Run model and get MSY
   sim_msy <- deer_pop_proj(A_scaled, N0, Kf, theta, Year) 
   
@@ -297,13 +296,13 @@ scale_pigs <- function(A_base,surv_scale_f,surv_scale_m,fec_scale) {
   
   ## Survival
   # Females
-  pig.matrix[2,1] <- A_base[2,1]*surv_scale_f
-  pig.matrix[3,2] <- A_base[3,2]*surv_scale_f
-  pig.matrix[4,3] <- A_base[4,3]*surv_scale_f
+  pig.matrix[2,1] <- A_base[2,1]*surv_scale_f[1]
+  pig.matrix[3,2] <- A_base[3,2]*surv_scale_f[2]
+  pig.matrix[4,3] <- A_base[4,3]*surv_scale_f[3]
   # Males
-  pig.matrix[5,4] <- A_base[5,4]*surv_scale_m
-  pig.matrix[6,5] <- A_base[6,5]*surv_scale_m
-  pig.matrix[6,6] <- A_base[6,6]*surv_scale_m
+  pig.matrix[5,4] <- A_base[5,4]*surv_scale_m[1]
+  pig.matrix[6,5] <- A_base[6,5]*surv_scale_m[2]
+  pig.matrix[6,6] <- A_base[6,6]*surv_scale_m[3]
   
   ## Fecundity
   # Maximum fecundity
@@ -367,9 +366,9 @@ pig_pop_proj <- function(A, N0, Kf, theta, step) {
 
 objective_fn_pigs <- function(params) {
   
-  surv_scale_f <- params[1]
-  surv_scale_m <- params[2]
-  fec_scale <- params[3]
+  surv_scale_f <- params[1:3]
+  surv_scale_m <- params[4:6]
+  fec_scale <- params[7]
   
   # Scale demographic rates
   A_scaled <- scale_pigs(A_base,surv_scale_f,surv_scale_m,fec_scale)
@@ -394,13 +393,3 @@ objective_fn_pigs <- function(params) {
 }
 
 
-
-
-# Helper function to avoid division by zero
-safe_divide <- function(numerator, denominator) {
-  if (is.na(denominator) || is.nan(denominator) || denominator <= 0) {
-    return(NA)
-  } else {
-    return(numerator / denominator)
-  }
-}
