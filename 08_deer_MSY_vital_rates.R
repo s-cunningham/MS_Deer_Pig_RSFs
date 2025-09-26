@@ -102,11 +102,11 @@ A_adj[6,5] <- A_base[6,5]*deer_opt$par[3]
 A_adj[6,6] <- A_base[6,6]*deer_opt$par[3]
 
 # Male survival
-A_adj[9,8] <- A_base[9,8]*deer_opt$par[4]
-A_adj[10,9] <- A_base[10,9]*deer_opt$par[5]
-A_adj[11,10] <- A_base[11,10]*deer_opt$par[6]
-A_adj[12,11] <- A_base[12,11]*deer_opt$par[7]
-A_adj[12,12] <- A_base[12,12]*deer_opt$par[8]
+A_adj[9,8] <- 0.95#A_base[9,8]*deer_opt$par[4]
+A_adj[10,9] <- 0.93#A_base[10,9]*deer_opt$par[5]
+A_adj[11,10] <- 0.94#A_base[11,10]*deer_opt$par[6]
+A_adj[12,11] <- 0.89#A_base[12,11]*deer_opt$par[7]
+A_adj[12,12] <- 0.82#A_base[12,12]*deer_opt$par[8]
 
 ## Fecundity
 # Yearlings
@@ -159,7 +159,7 @@ asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
 # Calibrate density dependence parameter
 theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
-theta <- 5
+theta <- 8
 
 # Set up arrays to save realized demographic rates
 realized_survival <- array(NA, dim=c(12, length(Year), Sims))
@@ -167,7 +167,7 @@ realized_survival[1:12,1,] <- c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], 
                                 A_adj[8,7], A_adj[9,8], A_adj[10,9], A_adj[11,10], A_adj[12,11], A_adj[12,12])
 
 realized_fecundity <- array(NA, dim=c(4,  length(Year) - 1, Sims)) # row 1: yearling F, row 2: adult F, row 3: yearling M, row 4: adult M,
-
+set.seed(1)
 for (i in 1:Sims) {
   
   A_s <- A_adj
@@ -234,6 +234,7 @@ for (i in 1:Sims) {
     if (y > 0) {
       # Randomly select a random number to harvest
       h <- round(runif(1, 190000, 280000), digits=0)
+      # h=200000
       
       # Split bucks and does
       doe_h <- h * 0.54
@@ -261,17 +262,17 @@ for (i in 1:Sims) {
     realized_survival[3, y, i] <- deer.array[4, y, i] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
     realized_survival[4, y, i] <- deer.array[5, y, i] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
     
-    # Stages 5 and 6 are tricky...
-    est_from5 <- deer.array[6, y, i] * 0.12
-    est_from6 <- deer.array[6, y, i] - est_from5
+    # Total adult females projected
+    total_adult_fem <- deer.array[6, y, i]
     
-    realized_survival[5, y, i] <- safe_divide(est_from5, deer.array[5, y-1, i])
+    # Fraction contributed from stage 5 vs stage 6
+    c5_f <- (A_dd[6,5] * deer.array[5,y-1,i]) / ((A_dd[6,5] * deer.array[5,y-1,i]) + (A_dd[6,6] * deer.array[6,y-1,i]))
     
-    # Stage 6 is tricky: receives from 5 and from itself
-    incoming_females <- deer.array[6, y-1, i] + deer.array[5, y-1, i]  # crude approx
-    if (incoming_females > 0) {
-      realized_survival[6, y, i] <- deer.array[6, y, i] / incoming_females
-    }
+    est_from5 <- total_adult_fem * c5_f
+    est_from6 <- total_adult_fem - est_from5
+    
+    realized_survival[5,y,i] <- safe_divide(est_from5, deer.array[5,y-1,i])
+    realized_survival[6,y,i] <- safe_divide(est_from6, deer.array[6,y-1,i])
     
     # Male stages
     realized_survival[7, y, i] <- safe_divide(deer.array[8, y, i], deer.array[7, y-1, i]) # Fawn → yearling (M)
@@ -279,17 +280,17 @@ for (i in 1:Sims) {
     realized_survival[9, y, i] <- deer.array[10, y, i] / deer.array[9, y-1, i] # 9 → 10
     realized_survival[10, y, i] <- deer.array[11, y, i] / deer.array[10, y-1, i] # 10 → 11
     
-    # Stages 5 and 6 are tricky...
-    est_from11 <- deer.array[12, y, i] * 0.24
-    est_from12 <- deer.array[12, y, i] - est_from11
+    # Total adult females projected
+    total_adult_males <- deer.array[6, y, i]
     
-    realized_survival[11, y, i] <- safe_divide(est_from11, deer.array[11, y-1, i])
+    c11_m <- (A_dd[12,11] * deer.array[11,y-1,i]) / ((A_dd[12,11] * deer.array[11,y-1,i]) + (A_dd[12,12] * deer.array[12,y-1,i]))
     
-    # Stage 12 (adult males): 11 → 12 and 12 → 12
-    incoming_males <- deer.array[12, y-1, i] + deer.array[11, y-1, i]
-    if (incoming_males > 0) {
-      realized_survival[12, y, i] <- deer.array[12, y, i] / incoming_males
-    }
+    est_from11 <- total_adult_males * c11_m
+    est_from12 <- total_adult_males - est_from11
+    
+    realized_survival[11,y,i] <- safe_divide(est_from11, deer.array[11,y-1,i])
+    realized_survival[12,y,i] <- safe_divide(est_from12, deer.array[12,y-1,i])
+    
     
     # Check buck:doe ratio
     af <- sum(deer.array[2:6,y,i])
