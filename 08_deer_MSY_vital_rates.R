@@ -2,7 +2,6 @@ library(ggplot2)
 library(ggtext)
 library(patchwork)
 library(truncnorm)
-library(patchwork)
 
 source("00_functions.R")
 
@@ -136,14 +135,6 @@ a2[1,1:6] <- a2[1,1:6]*0.5*mnFs
 a2[7,1:6] <- a2[7,1:6]*0.5*mnFs
 w <- Re(eigen(a2)$vectors[, 1])
 w <- w / sum(w) # normals to equal 1
-
-# female ssd
-w_f <- Re(eigen(a2)$vectors[, 1])[1:6]
-w_f <- w_f / sum(w_f)
-
-# male ssd
-w_m <- Re(eigen(a2)$vectors[, 1])[7:12]
-w_m <- w_m / sum(w_m)
 
 lambda <- Re(eigen(a2)$values[1])
 
@@ -365,7 +356,7 @@ r.surv <- r.surv |>
 r.surv$stage <- factor(r.surv$stage, levels=c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"),
                        labels=c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"))
 
-r.surv$source <- factor(r.surv$source, levels=c("literature", "surv.50pct"), labels=c("Literature", "Realized"))
+r.surv$source <- factor(r.surv$source, levels=c("literature", "surv.50pct"), labels=c("Literature", "Implied"))
 
 ggplot(r.surv) +
   coord_cartesian(ylim=c(0,1)) +
@@ -391,6 +382,7 @@ ggplot(r.surv) +
         axis.title=element_text(size=14),
         legend.text=element_text(size=12))
 
+surv14 <- r.surv
 
 ## Get realized fecundities
 
@@ -410,9 +402,7 @@ fec14 <- data.frame(stage=rep(c("Yearling", "Adult"), 2),
 
 fec14 <- fec14 |>
   pivot_longer(cols=c("realized", "literature"), names_to="source", values_to="fec")
-fec14$source <- factor(fec14$source, levels=c("literature", "realized"), labels=c("Literature", "Realized"))
-
-r.surv14 <- r.surv
+fec14$source <- factor(fec14$source, levels=c("literature", "realized"), labels=c("Literature", "Implied"))
 
 # Summarize sex ratio
 ASR.median <- apply(asr_mat, 1, median)
@@ -743,7 +733,7 @@ N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
 N.10pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
 N.90pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
 
-results <- data.frame(Year,N.median,N.20pct,N.80pct)
+results <- data.frame(Year,N.median,N.10pct,N.90pct)
 
 #Plot population projection
 ggplot(results) +
@@ -810,13 +800,66 @@ ggplot(r.surv) +
         strip.background=element_blank(),
         strip.text=element_text(hjust=0))
 
+surv22 <- r.surv
 
-#### Create projection plot for both densities ####
 
+## Get realized fecundities
+
+# Calculate median survival per stage (over all years and sims)
+median_fec <- apply(realized_fecundity, 1, function(x) median(x, na.rm = TRUE))
+fec.10pct <- apply(realized_fecundity, 1, quantile, probs = 0.10, na.rm=TRUE)
+fec.90pct <- apply(realized_fecundity, 1, quantile, probs = 0.90, na.rm=TRUE)
+
+
+fec22 <- data.frame(stage=rep(c("Yearling", "Adult"), 2),
+                    offspring_sex=rep(c("Female", "Male"), each=2), 
+                    realized=median_fec,
+                    f10pct=fec.10pct,
+                    f90pct=fec.90pct,
+                    literature=c(0.57, 0.66, 0.74, 0.85),
+                    x=c(0.9, 1.6, 1.1, 1.8))
+
+fec22 <- fec22 |>
+  pivot_longer(cols=c("realized", "literature"), names_to="source", values_to="fec")
+fec22$source <- factor(fec22$source, levels=c("literature", "realized"), labels=c("Literature", "Implied"))
+
+
+
+#### Save results from both densities ####
+
+# Combine population projections
 results14$density <- "14.3 deer km<sup>-2</sup>"
 results22$density <- "22 deer km<sup>-2</sup>"
-
 results <- bind_rows(results14, results22)
+
+write_csv(results, "results/deer_population_projections.csv")
+
+# Combine survival
+surv14$density <- "14.3 deer km<sup>-2</sup>"
+surv22$density <- "22 deer km<sup>-2</sup>"
+
+survival <- bind_rows(surv14, surv22)
+
+write_csv(survival, "results/deer_survival.csv")
+
+# Combine fecundity
+fec14$density <- "14.3 deer km<sup>-2</sup>"
+fec22$density <- "22 deer km<sup>-2</sup>"
+
+fecundity <- bind_rows(fec14, fec22)
+
+write_csv(fecundity, "results/deer_fecundity.csv")
+
+
+
+
+
+
+
+
+
+
+
 
 
 res_plot <- ggplot(results14) +
@@ -903,15 +946,6 @@ s_plot <- ggplot(r.surv27_all) +
         axis.title=element_text(size=12),
         legend.text=element_text(size=11),
         legend.title=element_text(size=12))
-
-
-
-
-
-
-
-
-
 
 
 

@@ -145,7 +145,7 @@ estimate_theta_opt <- function(N0, lambda, K, t_max = 100) {
 }
 
 
-#### Calculate MSY and Objective function for optimizing ####
+# Calculate MSY and Objective function for optimizing ####
 ## Calculate MSY
 get_msy <- function(results) {
   
@@ -161,7 +161,7 @@ get_msy <- function(results) {
   return(msy)
 }
 
-
+## Deer ####
 scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_scale) {
   
   # Set up deer matrix
@@ -202,7 +202,6 @@ scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_
   
   return(deer.matrix)
 }
-
 
 deer_pop_proj <- function(A, N0, Kf, theta, Year) {
   
@@ -256,7 +255,6 @@ deer_pop_proj <- function(A, N0, Kf, theta, Year) {
   return(msy)
 }
 
-
 ## Define objective function
 objective_fn_deer <- function(params) {
   
@@ -286,23 +284,21 @@ objective_fn_deer <- function(params) {
   return((sim_msy - observed_harvest)^2) # Squared error
 }
 
-
-
-
+## Wild pigs ####
 # Scale matrices
-scale_pigs <- function(A_base,surv_scale_f,surv_scale_m,fec_scale) {
+scale_pigs <- function(A_base,surv_scale_p,surv_scale_f,surv_scale_m,fec_scale) {
   
   pig.matrix <- matrix(0,6,6)
   
   ## Survival
   # Females
-  pig.matrix[2,1] <- A_base[2,1]*surv_scale_f[1]
-  pig.matrix[3,2] <- A_base[3,2]*surv_scale_f[2]
-  pig.matrix[4,3] <- A_base[4,3]*surv_scale_f[3]
+  pig.matrix[2,1] <- A_base[2,1]*surv_scale_p
+  pig.matrix[3,2] <- A_base[3,2]*surv_scale_f[1]
+  pig.matrix[4,3] <- A_base[4,3]*surv_scale_f[2]
   # Males
-  pig.matrix[5,4] <- A_base[5,4]*surv_scale_m[1]
-  pig.matrix[6,5] <- A_base[6,5]*surv_scale_m[2]
-  pig.matrix[6,6] <- A_base[6,6]*surv_scale_m[3]
+  pig.matrix[5,4] <- A_base[5,4]*surv_scale_p
+  pig.matrix[6,5] <- A_base[6,5]*surv_scale_m[1]
+  pig.matrix[6,6] <- A_base[6,6]*surv_scale_m[2]
   
   ## Fecundity
   # Maximum fecundity
@@ -366,12 +362,13 @@ pig_pop_proj <- function(A, N0, Kf, theta, step) {
 
 objective_fn_pigs <- function(params) {
   
-  surv_scale_f <- params[1:3]
-  surv_scale_m <- params[4:6]
-  fec_scale <- params[7]
+  surv_scale_p <- params[1]
+  surv_scale_f <- params[2:3]
+  surv_scale_m <- params[4:5]
+  fec_scale <- params[6]
   
   # Scale demographic rates
-  A_scaled <- scale_pigs(A_base,surv_scale_f,surv_scale_m,fec_scale)
+  A_scaled <- scale_pigs(A_base,surv_scale_p,surv_scale_f,surv_scale_m,fec_scale)
   
   # Calculate stable stage distribution
   w <- Re(eigen(A_scaled)$vectors[, 1])
@@ -383,8 +380,8 @@ objective_fn_pigs <- function(params) {
   lambda <- Re(eigen(A_scaled)$values[1])
   
   # Calibrate a for density dependence
-  # a <- calibrate_a_opt(A_scaled, N0, K)
   theta <- estimate_theta_opt(N0, lambda, K)
+  # theta <- 1
   
   # Run model and get MSY
   sim_msy <- pig_pop_proj(A_scaled, N0, Kf, theta, step) 
