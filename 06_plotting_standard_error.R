@@ -21,6 +21,29 @@ lower_p <- rast("results/predictions/pigs_rsf_LCI_30m.tif")
 upper_d <- rast("results/predictions/deer_rsf_UCI_30m.tif")
 upper_p <- rast("results/predictions/pigs_rsf_UCI_30m.tif")
 
+# Read SE map
+deer_se <- rast("results/predictions/deer_rsf_se_30m.tif")
+names(deer_se) <- "Deer"
+pigs_se <- rast("results/predictions/pigs_rsf_se_30m.tif")
+names(pigs_se) <- "Pigs"
+
+se_both <- c(deer_sd, pigs_se)
+names(se_both) <- c("Deer", "Pigs")
+
+ggplot() +
+  geom_spatraster(data=se_both) +
+  scale_fill_grass_c(palette="viridis", direction=1, name="Standard Error") +
+  geom_spatvector(data=ms, fill=NA, color="black", linewidth=0.2) +
+  facet_wrap(~lyr) +
+  theme_void() +
+  theme(legend.position="bottom",
+        legend.key.width = unit(2, "cm"),
+        strip.text=element_blank(),
+        legend.text=element_text(size=11), 
+        legend.title=element_text(size=12, vjust=0.9, face="bold"))
+ggsave("figs/standard_error.pdf")
+
+
 # project shapefile
 ms <- project(ms, mean_d)
 
