@@ -183,3 +183,39 @@ deer_patches + pig_patches +
 # Save maps
 ggsave(file="figs/Fig3_patches.svg")
 # Saving 9.95 x 9 in image
+
+
+## Determine average suitabiltiy(exclusive)
+
+## read in RSF
+deer_rsf <- rast("results/predictions/deer_rsf_predicted_90m.tif")
+pig_rsf <- rast("results/predictions/pigs_rsf_predicted_90m.tif")
+
+# Deer core
+d_core <- mask(deer_rsf, polylist[["deer_core"]])
+global(d_core, fun=mean, na.rm=TRUE)
+
+# Deer moderate
+d_moderate_only <- mask(deer_rsf, polylist[["deer_moderate"]])
+d_moderate_only <- mask(d_moderate_only,  polylist[["deer_core"]], inverse = TRUE)
+global(d_moderate_only, fun=mean, na.rm=TRUE)
+
+# Deer marginal
+d_marginal_only <- mask(deer_rsf, polylist[["deer_marginal"]])
+d_marginal_only <- mask(d_marginal_only,  polylist[["deer_moderate"]], inverse = TRUE)
+global(d_marginal_only, fun=mean, na.rm=TRUE)
+
+
+# Pig core
+p_core <- mask(pig_rsf, polylist[["pigs_core"]])
+global(p_core, fun=mean, na.rm=TRUE)
+
+# Deer moderate
+p_moderate_only <- mask(pig_rsf, polylist[["pigs_moderate"]])
+p_moderate_only <- mask(p_moderate_only,  polylist[["pigs_core"]], inverse = TRUE)
+global(p_moderate_only, fun=mean, na.rm=TRUE)
+
+# Deer marginal
+p_marginal_only <- mask(pig_rsf, polylist[["pigs_marginal"]])
+p_marginal_only <- mask(p_marginal_only,  polylist[["pigs_moderate"]], inverse = TRUE)
+global(p_marginal_only, fun=mean, na.rm=TRUE)

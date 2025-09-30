@@ -115,6 +115,12 @@ A_adj[7,2] <- A_base[7,2]*deer_opt$par[12]
 A_adj[1,3:6] <- A_base[1,3:6]*deer_opt$par[12]
 A_adj[7,3:6] <- A_base[7,3:6]*deer_opt$par[12]
 
+# if >1, set to 1
+A_adj[6, 5] <- 1
+A_adj[10, 9] <- 1
+A_adj[11, 10] <- 1
+
+
 
 #### Run population model ####
 set.seed(1)
@@ -253,21 +259,17 @@ for (i in 1:Sims) {
     realized_surv[3, y, i] <- deer.array[4, y, i] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
     realized_surv[4, y, i] <- deer.array[5, y, i] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
     
-    # Stages 5 and 6 are trickier
-    incoming_5 <- deer.array[4, y-1, i] + deer.array[5, y-1, i]
-    if (incoming_5 > 0) {
-      realized_surv[5, y, i] <- deer.array[5, y, i] / incoming_5
-    } else {
-      realized_surv[5, y, i] <- NA
-    }
+    # Stage 5: comes only from stage 4
+    incoming_5 <- deer.array[4, y-1, i]
+    realized_surv[5, y, i] <- ifelse(incoming_5 > 0,
+                                      deer.array[5, y, i] / incoming_5,
+                                      NA)
     
-    # Stage 6 receives from stage 5 → 6 and stage 6 → 6
+    # Stage 6: comes from stage 5 -> 6 and stage 6 -> 6
     incoming_6 <- deer.array[5, y-1, i] + deer.array[6, y-1, i]
-    if (incoming_6 > 0) {
-      realized_surv[6, y, i] <- deer.array[6, y, i] / incoming_6
-    } else {
-      realized_surv[6, y, i] <- NA
-    }
+    realized_surv[6, y, i] <- ifelse(incoming_6 > 0,
+                                      deer.array[6, y, i] / incoming_6,
+                                      NA)
     
     # Male stages
     realized_surv[7, y, i] <- deer.array[8, y, i] / deer.array[7, y-1, i] # Fawn → yearling (M)
@@ -275,22 +277,17 @@ for (i in 1:Sims) {
     realized_surv[9, y, i] <- deer.array[10, y, i] / deer.array[9, y-1, i] # 9 → 10
     realized_surv[10, y, i] <- deer.array[11, y, i] / deer.array[10, y-1, i] # 10 → 11
     
-    # Male stages 11–12 (adults)
-    # Stage 11 receives from stage 10 → 11 and stage 11 → 11
-    incoming_11 <- deer.array[10, y-1, i] + deer.array[11, y-1, i]
-    if (incoming_11 > 0) {
-      realized_surv[11, y, i] <- deer.array[11, y, i] / incoming_11
-    } else {
-      realized_surv[11, y, i] <- NA
-    }
+    # Stage 11: comes only from stage 10
+    incoming_11 <- deer.array[10, y-1, i]
+    realized_surv[11, y, i] <- ifelse(incoming_11 > 0,
+                                      deer.array[11, y, i] / incoming_11,
+                                      NA)
     
-    # Stage 12 receives from stage 11 → 12 and stage 12 → 12
+    # Stage 12: comes from stage 11 -> 12 and stage 12 -> 12
     incoming_12 <- deer.array[11, y-1, i] + deer.array[12, y-1, i]
-    if (incoming_12 > 0) {
-      realized_surv[12, y, i] <- deer.array[12, y, i] / incoming_12
-    } else {
-      realized_surv[12, y, i] <- NA
-    }
+    realized_surv[12, y, i] <- ifelse(incoming_12 > 0,
+                                      deer.array[12, y, i] / incoming_12,
+                                      NA)
     
     # Check buck:doe ratio
     af <- sum(deer.array[2:6,y,i])
@@ -534,6 +531,9 @@ A_adj[7,2] <- A_base[7,2]*deer_opt$par[12]
 A_adj[1,3:6] <- A_base[1,3:6]*deer_opt$par[12]
 A_adj[7,3:6] <- A_base[7,3:6]*deer_opt$par[12]
 
+# if >1, set to 1
+A_adj[6, 5] <- 1
+
 #### Run population model ####
 
 set.seed(1)
@@ -680,21 +680,17 @@ for (i in 1:Sims) {
     realized_surv[3, y, i] <- deer.array[4, y, i] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
     realized_surv[4, y, i] <- deer.array[5, y, i] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
     
-    # Stages 5 and 6 are trickier
-    incoming_5 <- deer.array[4, y-1, i] + deer.array[5, y-1, i]
-    if (incoming_5 > 0) {
-      realized_surv[5, y, i] <- deer.array[5, y, i] / incoming_5
-    } else {
-      realized_surv[5, y, i] <- NA
-    }
+    # Stage 5: comes only from stage 4
+    incoming_5 <- deer.array[4, y-1, i]
+    realized_surv[5, y, i] <- ifelse(incoming_5 > 0,
+                                     deer.array[5, y, i] / incoming_5,
+                                     NA)
     
-    # Stage 6 receives from stage 5 → 6 and stage 6 → 6
+    # Stage 6: comes from stage 5 -> 6 and stage 6 -> 6
     incoming_6 <- deer.array[5, y-1, i] + deer.array[6, y-1, i]
-    if (incoming_6 > 0) {
-      realized_surv[6, y, i] <- deer.array[6, y, i] / incoming_6
-    } else {
-      realized_surv[6, y, i] <- NA
-    }
+    realized_surv[6, y, i] <- ifelse(incoming_6 > 0,
+                                     deer.array[6, y, i] / incoming_6,
+                                     NA)
     
     # Male stages
     realized_surv[7, y, i] <- deer.array[8, y, i] / deer.array[7, y-1, i] # Fawn → yearling (M)
@@ -702,22 +698,17 @@ for (i in 1:Sims) {
     realized_surv[9, y, i] <- deer.array[10, y, i] / deer.array[9, y-1, i] # 9 → 10
     realized_surv[10, y, i] <- deer.array[11, y, i] / deer.array[10, y-1, i] # 10 → 11
     
-    # Male stages 11–12 (adults)
-    # Stage 11 receives from stage 10 → 11 and stage 11 → 11
-    incoming_11 <- deer.array[10, y-1, i] + deer.array[11, y-1, i]
-    if (incoming_11 > 0) {
-      realized_surv[11, y, i] <- deer.array[11, y, i] / incoming_11
-    } else {
-      realized_surv[11, y, i] <- NA
-    }
+    # Stage 11: comes only from stage 10
+    incoming_11 <- deer.array[10, y-1, i]
+    realized_surv[11, y, i] <- ifelse(incoming_11 > 0,
+                                      deer.array[11, y, i] / incoming_11,
+                                      NA)
     
-    # Stage 12 receives from stage 11 → 12 and stage 12 → 12
+    # Stage 12: comes from stage 11 -> 12 and stage 12 -> 12
     incoming_12 <- deer.array[11, y-1, i] + deer.array[12, y-1, i]
-    if (incoming_12 > 0) {
-      realized_surv[12, y, i] <- deer.array[12, y, i] / incoming_12
-    } else {
-      realized_surv[12, y, i] <- NA
-    }
+    realized_surv[12, y, i] <- ifelse(incoming_12 > 0,
+                                      deer.array[12, y, i] / incoming_12,
+                                      NA)
     
     # Check buck:doe ratio
     af <- sum(deer.array[2:6,y,i])

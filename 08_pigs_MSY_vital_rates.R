@@ -126,7 +126,7 @@ asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
 # Calibrate density dependence parameter
 theta <- estimate_theta_opt(N0[1:3], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
-theta <- 2.25
+# theta <- 2.25
 
 # Set up arrays to save realized demographic rates
 realized_surv <- array(NA, dim=c(6, length(Year), Sims))
@@ -218,41 +218,33 @@ for (i in 1:Sims) {
     # Female stages
     realized_surv[1, y, i] <- pig.array[2, y, i] / pig.array[1, y-1, i] # Piglet → yearling (F)
 
-    # Stages 2 and 3 are trickier
-    incoming_2 <- pig.array[1, y-1, i] + pig.array[2, y-1, i]
-    if (incoming_2 > 0) {
-      realized_surv[2, y, i] <- pig.array[2, y, i] / incoming_2
-    } else {
-      realized_surv[2, y, i] <- NA
-    }
+    # Stage 2: comes only from stage 1
+    incoming_2 <- pig.array[1, y-1, i]
+    realized_surv[2, y, i] <- ifelse(incoming_2 > 0,
+                                     pig.array[2, y, i] / incoming_2,
+                                     NA)
     
-    # Stage 3 receives from stage 2 → 3 and stage 3 → 3
+    # Stage 3: comes from stage 2 -> 3 and stage 3 -> 3
     incoming_3 <- pig.array[2, y-1, i] + pig.array[3, y-1, i]
-    if (incoming_3 > 0) {
-      realized_surv[3, y, i] <- pig.array[3, y, i] / incoming_3
-    } else {
-      realized_surv[3, y, i] <- NA
-    }
+    realized_surv[3, y, i] <- ifelse(incoming_3 > 0,
+                                     pig.array[3, y, i] / incoming_3,
+                                     NA)
     
     # Male stages
     realized_surv[4, y, i] <- pig.array[5, y, i] / pig.array[4, y-1, i] # Piglet → yearling (M)
 
     # Male stages 5–6 (adults)
-    # Stage 5 receives from stage 4 → 11 
-    incoming_5 <- pig.array[4, y-1, i] + pig.array[5, y-1, i]
-    if (incoming_5 > 0) {
-      realized_surv[5, y, i] <- pig.array[5, y, i] / incoming_5
-    } else {
-      realized_surv[5, y, i] <- NA
-    }
+    # Stage 5: comes only from stage 4
+    incoming_5 <- pig.array[1, y-1, i]
+    realized_surv[5, y, i] <- ifelse(incoming_5 > 0,
+                                     pig.array[5, y, i] / incoming_5,
+                                     NA)
     
-    # Stage 12 receives from stage 5 → 6 and stage 6 → 6
+    # Stage 6: comes from stage 5 -> 6 and stage 6 -> 6
     incoming_6 <- pig.array[5, y-1, i] + pig.array[6, y-1, i]
-    if (incoming_6 > 0) {
-      realized_surv[6, y, i] <- pig.array[6, y, i] / incoming_6
-    } else {
-      realized_surv[6, y, i] <- NA
-    }
+    realized_surv[6, y, i] <- ifelse(incoming_6 > 0,
+                                     pig.array[6, y, i] / incoming_6,
+                                     NA)
     
     # Check buck:doe ratio
     af <- sum(pig.array[2:3,y,i], na.rm=TRUE)

@@ -65,6 +65,10 @@ suitability_deer <- suitability_deer |>
          moderate_km2 = moderate*area_km2,
          marginal_km2 = marginal*area_km2)
 
+suitability_deer |>
+  mutate(total_km2 = core_km2 + moderate_km2 + marginal_km2)
+
+
 ## pigs
 suitability_pigs <- exact_extract(pigs_area, regions, function(df) {
   df %>%

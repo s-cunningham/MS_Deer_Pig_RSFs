@@ -7,7 +7,7 @@ library(patchwork)
 
 # Deer
 deer <- read_csv("results/deer_population_projections.csv")
-deer_s <- read_csv("results/deer_survival.csv")
+deer_s <- read_csv("results/deer_survival.csv") 
 deer_f <- read_csv("results/deer_fecundity.csv")
 
 # Pigs
@@ -21,7 +21,7 @@ pigs_f <- read_csv("results/pig_fecundity.csv")
 ## Population projection
 deer_pop <- ggplot(deer) +
   coord_cartesian(ylim=c(0,3000000)) +
-  geom_hline(yintercept=1610000, color="gray", linewidth=1) +
+  # geom_hline(yintercept=1610000, color="gray", linewidth=1) +
   geom_hline(yintercept=1347232, linetype=2, color="#ed7953", linewidth=1) +
   geom_hline(yintercept=2090532, linetype=2, color="#9c179e", linewidth=1) +
   geom_ribbon(aes(x=Year, ymin=N.10pct, ymax=N.90pct, fill=density, group=density), alpha=.2) +
@@ -129,7 +129,7 @@ deer_plots <- deer_pop + ds_plot + df_plot + plot_layout(widths = c(1.2, 1.6, 1)
 ## Population projection
 pigs_pop <- ggplot(pigs) +
   coord_cartesian(ylim=c(0,2000000)) +
-  geom_hline(yintercept=1000000, color="gray", linewidth=1) +
+  # geom_hline(yintercept=1000000, color="gray", linewidth=1) +
   geom_hline(yintercept=367822, linetype=2, color="#9c179e", linewidth=1) +
   geom_hline(yintercept=1239278, linetype=2, color="#ed7953", linewidth=1) +
   geom_ribbon(aes(x=Year, ymin=N.10pct, ymax=N.90pct, fill=density, group=density), alpha=.2) +
@@ -243,5 +243,10 @@ pig_plots <- pigs_pop + ps_plot + pf_plot
 
 deer_plots / pig_plots + plot_annotation(tag_levels = "a", tag_prefix = "(", tag_suffix = ")")
 
-ggsave("figs/figure5_pop_sim.svg")
+ggsave("figs/figure5_pop_sim.pdf")
 # Saving 12.4 x 7.62 in image
+
+
+deer_s |> filter(source=="Implied")
+
+pigs_s |> filter(source=="Implied")
