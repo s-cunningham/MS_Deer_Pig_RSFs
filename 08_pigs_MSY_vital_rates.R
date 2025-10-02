@@ -63,12 +63,12 @@ observed_harvest <- 150000
 
 ### Optimize survival and fecundities
 # set up bounds
-pig_lower <- c(1, 1.2, 1.2, 1.2, 1.2, 1.1)
-pig_upper <- c(1.5, 1.5, 1.5, 1.6, 1.6, 2.8)
+pig_lower <- c(1.1, 1.2, 1.2, 1.2, 1.2, 1.5) # piglet survival, female surv (2), male surv(2), fecundity
+pig_upper <- c(1.8, 1.65, 1.65, 1.8, 1.5, 2.8)
 
 # run optimizer
 set.seed(1)
-pig_opt <- optim(par=c(runif(1, 1.01, 1.45), runif(4, 1, 1.45), runif(1, 1.01, 2.75)), fn=objective_fn_pigs, method="L-BFGS-B", lower=pig_lower, upper=pig_upper, control = list(trace = 1))
+pig_opt <- optim(par=c(runif(1, 1.15, 1.75), runif(2, 1.35, 1.55), runif(2, 1.45, 1.95), runif(1, 2.01, 2.95)), fn=objective_fn_pigs, method="L-BFGS-B", lower=pig_lower, upper=pig_upper, control = list(trace = 1))
 
 # What are optimized parameter values 
 pig_opt$par
@@ -126,7 +126,7 @@ asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
 # Calibrate density dependence parameter
 theta <- estimate_theta_opt(N0[1:3], lambda, Kf)
 cat("Estimated theta:", theta, "\n")
-# theta <- 2.25
+# theta <- 2.6#2.25
 
 # Set up arrays to save realized demographic rates
 realized_surv <- array(NA, dim=c(6, length(Year), Sims))

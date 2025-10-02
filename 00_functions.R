@@ -271,7 +271,7 @@ objective_fn_deer <- function(params) {
   w <- w / sum(w) # normalize to equal 1
   
   # Set up initial popualtion size
-  N0 <- w * 0.1 * K  # e.g., start at 50% of K
+  N0 <- w * 0.01 * K  # e.g., start at 50% of K
   
   lambda <- Re(eigen(A_scaled)$values[1])
   
@@ -374,15 +374,14 @@ objective_fn_pigs <- function(params) {
   w <- Re(eigen(A_scaled)$vectors[, 1])
   w <- w / sum(w) # normalize to equal 1
   
-  # Set up initial popualtion size
-  N0 <- w * 0.1 * K  # e.g., start at 50% of K
+  # Set up initial population size
+  N0 <- w * 0.01 * K 
   
   lambda <- Re(eigen(A_scaled)$values[1])
   
   # Calibrate a for density dependence
   theta <- estimate_theta_opt(N0, lambda, K)
-  # theta <- 1
-  
+
   # Run model and get MSY
   sim_msy <- pig_pop_proj(A_scaled, N0, Kf, theta, step) 
   
