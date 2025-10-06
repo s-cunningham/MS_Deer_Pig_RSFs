@@ -793,6 +793,38 @@ ggplot(r.surv) +
 
 surv22 <- r.surv
 
+surv22 <- surv22 |>
+  mutate(x=case_when(stage=="Fawn" ~ 0.2,
+                     stage=="Yearling" ~ 0.3,
+                     stage=="2-year-old" ~ 0.4,
+                     stage=="3-year-old" ~ 0.5,
+                     stage=="4-year-old" ~ 0.6,
+                     stage=="5+ years-old" ~ 0.7)) |>
+  mutate(x = if_else(sex=="Female", x - 0.01, x + 0.01))
+
+s22_plot <- ggplot(surv22) +
+  coord_cartesian(ylim=c(0,1)) +
+  geom_segment(aes(x=x, y=surv.10pct, yend=surv.90pct), color="#21918c", linewidth=1) +
+  geom_point(aes(x=x, y=survival, color=source, shape=sex), size=3) +
+  scale_color_manual(values=c("#440154", "#21918c")) +
+  scale_shape_manual(values=c(17, 16)) +
+  guides(
+    color=guide_legend(position="inside", title="Source"),
+    shape=guide_legend(position="inside", title="Sex")
+  ) +
+  scale_x_continuous(breaks=seq(0.2,0.7, by=0.1), 
+                     labels=c("Fawn", "Yearling", "2 years", "3 years", "4 years", "5+ years"), 
+                     expand = expansion(mult = 0.15, add = 0)) +
+  ylab("Survival probability") + xlab("Stage") +
+  theme_classic() +
+  theme(panel.border=element_rect(color="black", fill=NA, linewidth=0.5),
+        legend.position.inside = c(0,0),
+        legend.justification=c(0,0),
+        legend.background = element_rect(fill=NA),
+        axis.text=element_text(size=11),
+        axis.title=element_text(size=12),
+        legend.text=element_text(size=11),
+        legend.title=element_text(size=12))
 
 ## Get realized fecundities
 
@@ -814,6 +846,35 @@ fec22 <- fec22 |>
   pivot_longer(cols=c("realized", "literature"), names_to="source", values_to="fec")
 fec22$source <- factor(fec22$source, levels=c("literature", "realized"), labels=c("Literature", "Implied"))
 
+
+f22_plot <- ggplot(fec22) +
+  coord_cartesian(xlim=c(0.7, 2), ylim=c(0,1.4)) +
+  geom_segment(aes(x=x, y=f10pct, yend=f90pct), color="#21918c", linewidth=1) +
+  geom_point(aes(x=x, y=fec, group=source, color=source, shape=offspring_sex), size=3) +
+  scale_color_manual(values=c("#440154", "#21918c")) +
+  scale_shape_manual(values=c(17, 16)) +
+  scale_x_continuous(breaks=c(1,1.7), 
+                     labels=c("Yearling", "Adult"), 
+                     expand = expansion(mult = 0.15, add = 0)) +
+  guides(
+    color=guide_legend(position="inside", title="Source"),
+    shape=guide_legend(position="inside", title="Offspring Sex")
+  ) +
+  ylab("Fecundity") + xlab("Stage") +
+  theme_classic() +
+  theme(panel.border=element_rect(color="black", fill=NA, linewidth=0.5),
+        legend.position.inside = c(0,1),
+        legend.justification=c(0,1),
+        # legend.direction="horizontal",
+        legend.background = element_rect(fill=NA),
+        legend.text=element_markdown(size=11),
+        legend.title=element_text(size=12),
+        axis.title=element_text(size=12),
+        axis.text=element_text(size=11))
+
+library(patchwork)
+
+s22_plot + f22_plot + plot_layout(widths = c(1.8, 1))
 
 
 #### Save results from both densities ####
