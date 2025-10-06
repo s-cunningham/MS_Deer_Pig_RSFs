@@ -83,10 +83,34 @@ cwd <- project(cwd, crs(polylist$deer_core))
 
 cwd_deer_core <- crop(polylist$deer_core, cwd)   
 expanse(cwd_deer_core, unit="km")  
+
+cwd_deer_mod <- crop(polylist$deer_moderate, cwd)   
+expanse(cwd_deer_mod, unit="km") 
   
 cwd_deer_marg <- crop(polylist$deer_marginal, cwd)   
 expanse(cwd_deer_marg, unit="km") 
   
+
+cwd_pigs_core <- crop(polylist$pigs_core, cwd)   
+expanse(cwd_pigs_core, unit="km")  
+
+cwd_pigs_mod <- crop(polylist$pigs_moderate, cwd)   
+expanse(cwd_pigs_mod, unit="km") 
+
+cwd_pigs_marg <- crop(polylist$pigs_marginal, cwd)   
+expanse(cwd_pigs_marg, unit="km") 
+
+# How much overlap at each level?
+cwd_ovpC_core <- crop(ovp1, cwd)   
+expanse(cwd_ovpC_core, unit="km")[3] 
+
+cwd_ovpMO_mod <- crop(ovp2, cwd)   
+expanse(cwd_ovpMO_mod, unit="km")[3]
+
+cwd_ovpMA_marg <- crop(ovp3, cwd)   
+expanse(cwd_ovpMA_marg, unit="km")[3]
+
+
 #### Create patch plot for manuscript ####
 ## For each species, combine into multiclass raster (mean predictions)
 # Will use the patch values to reclassify
