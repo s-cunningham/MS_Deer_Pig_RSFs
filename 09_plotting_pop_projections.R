@@ -63,13 +63,13 @@ deer_s <- deer_s |>
 
 ds_plot <- ggplot(deer_s) +
   coord_cartesian(ylim=c(0,1)) +
-  geom_segment(aes(x=x, y=surv.10pct, yend=surv.90pct), color="#21918c", linewidth=1) +
-  geom_point(aes(x=x, y=survival, color=source, shape=sex), size=3) +
+  geom_segment(aes(x=x, y=surv.10pct, yend=surv.90pct, color=sex), linewidth=1) +
+  geom_point(aes(x=x, y=survival, shape=source, color=sex), size=3) +
   scale_color_manual(values=c("#21918c", "#440154")) +
   scale_shape_manual(values=c(17, 16)) +
   guides(
-    color=guide_legend(position="inside", title="Source"),
-    shape=guide_legend(position="inside", title="Sex")
+    color=guide_legend(position="inside", title="Sex"),
+    shape=guide_legend(position="inside", title="Source")
   ) +
   scale_x_continuous(breaks=seq(0.2,0.7, by=0.1), 
                      labels=c("Fawn", "Yearling", "2 years", "3 years", "4 years", "5+ years"), 
@@ -97,16 +97,16 @@ deer_f <- deer_f |>
 
 df_plot <- ggplot(deer_f) +
   coord_cartesian(xlim=c(0.7, 2), ylim=c(0,1.4)) +
-  geom_segment(aes(x=x, y=f10pct, yend=f90pct), color="#21918c", linewidth=1) +
-  geom_point(aes(x=x, y=fec, group=source, color=source, shape=offspring_sex), size=3) +
+  geom_segment(aes(x=x, y=f10pct, yend=f90pct, color=offspring_sex), linewidth=1) +
+  geom_point(aes(x=x, y=fec, group=source, color=offspring_sex, shape=source), size=3) +
   scale_color_manual(values=c("#21918c", "#440154")) +
   scale_shape_manual(values=c(17, 16)) +
   scale_x_continuous(breaks=c(1,1.7), 
                      labels=c("Yearling", "Adult"), 
                      expand = expansion(mult = 0.15, add = 0)) +
   guides(
-    color=guide_legend(position="inside", title="Source"),
-    shape=guide_legend(position="inside", title="Offspring Sex")
+    color=guide_legend(position="inside", title="Offspring Sex"),
+    shape=guide_legend(position="inside", title="Source")
   ) +
   ylab("Fecundity") + xlab("Stage") +
   theme_classic() +
@@ -173,8 +173,8 @@ pigs_s <- pigs_s |>
 
 ps_plot <- ggplot(pigs_s) +
   coord_cartesian(ylim=c(0,1)) +
-  geom_segment(aes(x=x, y=surv.10pct, yend=surv.90pct), color="#21918c", linewidth=1) +
-  geom_point(aes(x=x, y=survival, color=source, shape=sex), size=3) +
+  geom_segment(aes(x=x, y=surv.10pct, yend=surv.90pct, color=sex), linewidth=1) +
+  geom_point(aes(x=x, y=survival, color=sex, shape=source), size=3) +
   scale_color_manual(values=c("#21918c", "#440154")) +
   scale_shape_manual(values=c(17, 16)) +
   guides(
@@ -212,15 +212,15 @@ pigs_f <- pigs_f |>
 
 pf_plot <- ggplot(pigs_f) +
   coord_cartesian(ylim=c(0,2.5)) +
-  geom_segment(aes(x=x, y=f10pct, yend=f90pct), color="#21918c", linewidth=1) +
-  geom_point(aes(x=x, y=fec, group=source, color=source, shape=offspring_sex), size=3) +
+  geom_segment(aes(x=x, y=f10pct, yend=f90pct, color=offspring_sex), linewidth=1) +
+  geom_point(aes(x=x, y=fec, group=source, color=offspring_sex, shape=source), size=3) +
   scale_color_manual(values=c("#21918c", "#440154")) +
   scale_x_continuous(breaks=seq(0.5,0.6, by=0.1), 
                      labels=c("Piglet", "Yearling + Adult"), 
                      expand = expansion(mult = 0.30, add = 0)) +
   guides(
-    color=guide_legend(position="inside", title="Source"),
-    shape=guide_legend(position="inside", title="Offspring Sex")
+    color=guide_legend(position="inside", title="Offspring Sex"),
+    shape=guide_legend(position="inside", title="Source")
   ) +
   ylab("Fecundity") + xlab("Stage") +
   theme_classic() +
