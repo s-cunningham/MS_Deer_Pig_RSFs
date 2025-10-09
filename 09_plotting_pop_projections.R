@@ -182,7 +182,7 @@ ps_plot <- ggplot(pigs_s) +
     shape=guide_legend(position="inside", title="Sex")
   ) +
   scale_x_continuous(breaks=seq(0.5,0.7, by=0.1), 
-                     labels=c("Piglet", "Yearling", "Adult"), 
+                     labels=c("Piglet", "Subadult", "Adult"), 
                      expand = expansion(mult = 0.15, add = 0)) +
   ylab("Survival probability") + xlab("Stage") +
   theme_classic() +
@@ -216,7 +216,7 @@ pf_plot <- ggplot(pigs_f) +
   geom_point(aes(x=x, y=fec, group=source, color=offspring_sex, shape=source), size=3) +
   scale_color_manual(values=c("#21918c", "#440154")) +
   scale_x_continuous(breaks=seq(0.5,0.6, by=0.1), 
-                     labels=c("Piglet", "Yearling + Adult"), 
+                     labels=c("Piglet", "Subadult + Adult"), 
                      expand = expansion(mult = 0.30, add = 0)) +
   guides(
     color=guide_legend(position="inside", title="Offspring Sex"),
