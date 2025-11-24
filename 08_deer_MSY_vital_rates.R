@@ -381,6 +381,8 @@ ggplot(r.surv) +
 
 surv14 <- r.surv
 
+r.surv |> filter(source=="Implied")
+
 ## Get realized fecundities
 
 # Calculate median survival per stage (over all years and sims)

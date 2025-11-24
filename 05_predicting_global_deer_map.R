@@ -51,7 +51,7 @@ for (i in 1:length(split_counties)) {
   cty_layers <- crop(layers, cty, mask=TRUE)
   
   # Predict (w(x) = exp(x*beta))
-  # hardwoods + evergreen + herbwetl + shrubs + gramanoids + developed + dist_Swater + I(dist_Swater^2) + dist_Pwater + I(dist_Pwater^2)
+  # rsf = hardwoods + evergreen + herbwetl + shrubs + gramanoids + developed + dist_Swater + I(dist_Swater^2) + dist_Pwater + I(dist_Pwater^2)
   pred <- exp(betas$beta[1]*cty_layers[["hardwoods"]] +
                 betas$beta[2]*cty_layers[["gramanoids"]] +
                 betas$beta[3]*cty_layers[["foodcrops"]] +
