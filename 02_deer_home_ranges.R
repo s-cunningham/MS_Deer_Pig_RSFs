@@ -339,19 +339,19 @@ for (i in 1:length(ids)) {
 
     # Save fit to Rdata
     out[[i]] <- list(dat[[i]]@info$identity, tt) 
-    
-    # # Fit AKDE
-    # UD <- akde(dat[[i]], tt, weights=TRUE) 
-    # 
-    # # Save area of AKDE
-    # sqkm <- as.data.frame(summary(UD)$CI)
-    # size <- bind_rows(size, sqkm)
-    # 
-    # # Plot with points
-    # plot(dat[[i]], UD)
+
+    # Fit AKDE
+    UD <- akde(dat[[i]], tt, weights=TRUE)
+
+    # Save area of AKDE
+    sqkm <- as.data.frame(summary(UD)$CI)
+    size <- bind_rows(size, sqkm)
+
+    # Plot with points
+    plot(dat[[i]], UD)
     
     # Save the variograms and akde in a list  
-    # out[[i]] <- list(dat[[i]]@info$identity, var, var2, UD) 
+    out[[i]] <- list(dat[[i]]@info$identity, var, var2, UD)
   })
 }
 # saveRDS(out, "results/home_ranges/raw_deer_AKDEs.rds") # Maybe can restart...with 43
