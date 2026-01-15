@@ -8,9 +8,13 @@ Manuscript currently under review and will be linked upon acceptance.
 
 ### Description of scripts:
 
+`00_center_scale_rasters.R`
+
+Reads in moving window rasters, converts sum to proportion, then centers/scales rasters and exports them. This is helpful for predicting across the state.
+
 `00_functions.R`
 
-Helper functions
+Helper functions related to reading RAMAS .txt files into `R`, some functions for calculating geometric mean $\lambda$ from population models, and sets up objective function for optimization process.
 
 `01_setting_up_gps_data.R`
 
@@ -47,6 +51,8 @@ Not actually Figure 3 anymore. Creates combined plot showing RSF maps, and boxpl
 Plotting patches as delineated according to levels of suitability by RAMAS.
 
 `06_plotting_scaled_covariates.R`
+
+Plotting covariate rasters. Just some quick checking I think, not part of analysis.
 
 `06_summarizing_regional_HSI_K.R`
 
