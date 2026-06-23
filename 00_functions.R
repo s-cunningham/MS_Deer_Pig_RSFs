@@ -90,6 +90,278 @@ ramas_K <- function(x) {
 }
 
 
+### Set up function to run population model with K #### 
+run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50) {
+  
+  set.seed(1)
+  
+  ##Stochastistic model
+  Year <- 1:years
+  
+  # Empty array to hold pop count
+  deer.array <- array(0,dim=c(12,length(Year),Sims))
+  
+  # Calculate stable stage distribution
+  mnFs <- mean(c(A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6]))
+  a2 <- A_adj
+  a2[1,1:6] <- a2[1,1:6]*0.5*mnFs
+  a2[7,1:6] <- a2[7,1:6]*0.5*mnFs
+  w <- Re(eigen(a2)$vectors[, 1])
+  w <- w / sum(w) # normals to equal 1
+  
+  lambda <- Re(eigen(a2)$values[1])
+  
+  # Set up initial popualtion size
+  N0 <- w * 1 * K # e.g., start at 50% of K
+  
+  # Fill starting population
+  deer.array[,1,] <- N0
+  
+  # Create matrix to hold ASR
+  asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
+
+  # Set up arrays to save realized demographic rates
+  realized_surv <- array(NA, dim=c(12, length(Year), Sims))
+  realized_surv[1:12,1,] <- c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6],
+                              A_adj[8,7], A_adj[9,8], A_adj[10,9], A_adj[11,10], A_adj[12,11], A_adj[12,12])
+  
+  realized_fecundity <- array(NA, dim=c(4,  length(Year) - 1, Sims)) # row 1: yearling F, row 2: adult F, row 3: yearling M, row 4: adult M,
+  
+  for (i in 1:Sims) {
+    
+    A_s <- A_adj
+    
+    ## Stochasticity on Survival 
+    # Female survival
+    for (s in 2:5) {
+      # Survive & go
+      A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
+    }
+    # Survive & stay
+    A_s[6,6] <- rtruncnorm(1, a=0, b=1, mean=A_adj[6,6], sd=0.02)
+    # Male survival
+    for (s in 8:11) {
+      # Survive & go
+      A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
+    }
+    # Survive & stay
+    A_s[12,12] <- rtruncnorm(1, b=1, mean=A_adj[12,12], sd=0.02)
+    
+    # save new matrix
+    A_dd <- A_s
+    
+    for (y in 2:length(Year)){
+      
+      ## Adjust fecundity by female survival
+      R0y_s <- A_s[1,2]
+      R0a_s3 <- A_s[1,3]
+      R0a_s4 <- A_s[1,3]
+      R0a_s5 <- A_s[1,3]
+      R0a_s6 <- A_s[1,3]
+      
+      # Density dependent adjustment in fecundity
+      # What was abundance at time step t-1
+      Nf_t <- sum(deer.array[1:6,y-1,i], na.rm=TRUE)
+      
+      # Check adult age ratio
+      asr <- sum(deer.array[8:12,y-1,i])/sum(deer.array[2:6,y-1,i], 1e-6)
+      
+      # Save sex ratio
+      asr_mat[y-1,i] <- asr
+      
+      # Calculate % males & females
+      s_m <- pmin(pmax(0.5 + 0.1 * (1 - asr), 0.4), 0.6)
+      s_f <- 1 - s_m
+      
+      # Calcuate density factor
+      c_dd <- 0.2  # Parameter for controling how early density dependence impacts the population
+      density_factor <- max(0, 1 - c_dd * (Nf_t / Kf)^(theta*2))
+      
+      # Apply strong density dependence to fawn survival & yearlings (example: row 2 = fawn survival)
+      A_dd[2,1] <- A_s[2,1] * density_factor  # female fawns
+      A_dd[3,2] <- A_s[3,2] * density_factor  # female yearlings
+      A_dd[8,7] <- A_s[8,7] * density_factor  # male fawns
+      A_dd[9,8] <- A_s[9,8] * density_factor  # male yearlings
+      
+      # Adjust sex ratio at birth and reduce fecundity
+      A_dd[1,1:6] <- c(0, R0y_s, R0a_s3, R0a_s4, R0a_s5, R0a_s6) * s_f * density_factor
+      A_dd[7,1:6] <- c(0, R0y_s, R0a_s3, R0a_s4, R0a_s5, R0a_s6) * s_m * density_factor
+      
+      # Mild DD on adult survival
+      # c_ad <- 0.1
+      # adult_dd <- max(0.7, 1 - c_ad * (Nf_t / Kf)^theta)
+      adult_dd <- 1
+      
+      # apply only to adult survival transitions
+      A_dd[4,3] <- A_s[4,3] * adult_dd
+      A_dd[5,4] <- A_s[5,4] * adult_dd
+      A_dd[6,5] <- A_s[6,5] * adult_dd
+      A_dd[6,6] <- A_s[6,6] * adult_dd
+      
+      A_dd[10,9] <- A_s[10,9] * adult_dd
+      A_dd[11,10] <- A_s[11,10] * adult_dd
+      A_dd[12,11] <- A_s[12,11] * adult_dd
+      A_dd[12,12] <- A_s[12,12] * adult_dd
+      
+      # Save fecundity
+      realized_fecundity[1,y-1,i] <- A_dd[1,2] # Females per yearling female
+      realized_fecundity[2,y-1,i] <- A_dd[1,3] # Females per adult female
+      realized_fecundity[3,y-1,i] <- A_dd[7,2] # Males per yearling female 
+      realized_fecundity[4,y-1,i] <- A_dd[7,3] # Males per adult female
+      
+      ## Harvest deer 
+      # Calculate new pop size BEFORE harvest
+      N_preharvest <- pmax(A_dd %*% deer.array[,y-1,i], 0)# Make sure to multiply matrix x vector (not vice versa)
+      
+      # Harvest
+      if (y > 0) {
+        
+        # Draw the number of deer to harvest each year
+        h <- round(rnorm(1, mean=240000, sd=15000))
+        # h <- min(rnorm(1, 240000, 15000), 0.18 * sum(N_preharvest))
+        
+        doe_h <- h * 0.54
+        buck_h <- h - doe_h
+        
+        doe_r <- c(0.0735, 0.189, 0.1895, 0.183, 0.183, 0.182) * doe_h
+        buck_r <- c(0.04, 0.11, 0.12, 0.23, 0.25, 0.25) * buck_h
+        
+        # Combine for total harvest
+        r <- c(doe_r, buck_r)
+        
+        # Apply harvest AFTER computing proportion
+        N_next <- N_preharvest - r
+        
+      } else {
+        N_next <- N_preharvest
+      }
+      
+      # Save abundance
+      deer.array[,y,i] <- pmax(N_next, 0)
+      
+      # ---- Realized survival ----
+      
+      # Female stages
+      realized_surv[1, y, i] <- N_preharvest[2] / deer.array[1, y-1, i] # Fawn → yearling (F)
+      realized_surv[2, y, i] <- N_preharvest[3] / deer.array[2, y-1, i]  # yearling → 2-year-old  
+      realized_surv[3, y, i] <- N_preharvest[4] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
+      realized_surv[4, y, i] <- N_preharvest[5] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
+      
+      # Stage 5: comes only from stage 4
+      incoming_5 <- deer.array[4, y-1, i]
+      realized_surv[5, y, i] <- ifelse(incoming_5 > 0,
+                                       N_preharvest[5] / incoming_5,
+                                       NA)
+      
+      # Stage 6: from stage 5 and 6
+      incoming_6 <- deer.array[5, y-1, i] + deer.array[6, y-1, i]
+      realized_surv[6, y, i] <- ifelse(incoming_6 > 0,
+                                       N_preharvest[6] / incoming_6,
+                                       NA)
+      
+      # Male stages
+      realized_surv[7, y, i] <- N_preharvest[8] / deer.array[7, y-1, i] # Fawn → yearling (M)
+      realized_surv[8, y, i] <- N_preharvest[9] / deer.array[8, y-1, i]   # 8 → 9
+      realized_surv[9, y, i] <- N_preharvest[10] / deer.array[9, y-1, i] # 9 → 10
+      realized_surv[10, y, i] <- N_preharvest[11] / deer.array[10, y-1, i] # 10 → 11
+      
+      # Stage 11
+      incoming_11 <- deer.array[10, y-1, i]
+      realized_surv[11, y, i] <- ifelse(incoming_11 > 0,
+                                        N_preharvest[11] / incoming_11,
+                                        NA)
+      
+      # Stage 12
+      incoming_12 <- deer.array[11, y-1, i] + deer.array[12, y-1, i]
+      realized_surv[12, y, i] <- ifelse(incoming_12 > 0,
+                                        N_preharvest[12] / incoming_12,
+                                        NA)
+      
+      # Check buck:doe ratio
+      af <- sum(deer.array[2:6,y,i])
+      am <- sum(deer.array[8:12,y,i])
+      
+      if (is.na(af) | sum(af) < 1) {
+        warning("Female bottleneck: reproductive females lost!")
+        # Optionally, set ASR to NA or a capped value
+      }
+      
+    }
+  }
+  N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
+  N.10pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
+  N.90pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
+  
+  results <- data.frame(Year,N.median,N.10pct,N.90pct)
+  
+  ## Get realized survival rates
+  # Calculate median survival per stage (over all years and sims)
+  surv.50pct <- apply(realized_surv, 1, function(x) median(x, na.rm = TRUE))
+  surv.10pct <- apply(realized_surv, 1, quantile, probs = 0.10, na.rm=TRUE)
+  surv.90pct <- apply(realized_surv, 1, quantile, probs = 0.90, na.rm=TRUE)
+  
+  r.surv <- data.frame(sex=c(rep("Female",6), rep("Male",6)), 
+                       stage=rep(c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"),2),
+                       surv.50pct,surv.10pct,surv.90pct,
+                       est=c(A_adj[2,1], A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6],
+                             A_adj[8,7], A_adj[9,8], A_adj[10,9], A_adj[11,10], A_adj[12,11], A_adj[12,12]),
+                       literature=c(A_base[2,1], A_base[3,2], A_base[4,3], A_base[5,4], A_base[6,5], A_base[6,6],
+                                    A_base[8,7], A_base[9,8], A_base[10,9], A_base[11,10], A_base[12,11], A_base[12,12]))
+  
+  r.surv <- r.surv |>
+    pivot_longer(cols=c("surv.50pct", "literature"), names_to="source", values_to="survival")
+  
+  # Set factor levels
+  r.surv$stage <- factor(r.surv$stage, levels=c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"),
+                         labels=c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"))
+  
+  r.surv$source <- factor(r.surv$source, levels=c("literature", "surv.50pct"), labels=c("Literature", "Implied"))
+  
+  ## Get realized fecundities
+  # Calculate median survival per stage (over all years and sims)
+  median_fec <- apply(realized_fecundity, 1, function(x) median(x, na.rm = TRUE))
+  fec.10pct <- apply(realized_fecundity, 1, quantile, probs = 0.10, na.rm=TRUE)
+  fec.90pct <- apply(realized_fecundity, 1, quantile, probs = 0.90, na.rm=TRUE)
+  
+  
+  fec <- data.frame(stage=rep(c("Yearling", "Adult"), 2),
+                      offspring_sex=rep(c("Female", "Male"), each=2), 
+                      realized=median_fec,
+                      f10pct=fec.10pct,
+                      f90pct=fec.90pct,
+                      literature=c(0.57, 0.66, 0.74, 0.85),
+                      x=c(0.9, 1.6, 1.1, 1.8))
+  fec <- fec |>
+    pivot_longer(cols=c("realized", "literature"), names_to="source", values_to="fec")
+  fec$source <- factor(fec$source, levels=c("literature", "realized"), labels=c("Literature", "Implied"))
+  
+  # Summarize sex ratio
+  ASR.median <- apply(asr_mat, 1, median)
+  ASR.20 <- apply(asr_mat, 1, quantile, probs = 0.20)
+  ASR.80 <- apply(asr_mat, 1, quantile, probs = 0.80)
+  
+  ASR <- data.frame(Year, ASR.median, ASR.20, ASR.80)
+  ASR <- ASR[-nrow(ASR),]
+
+  # create list for storing results
+  results_list <- list()
+  results_list$results <- results
+  results_list$realized_fecundity <- realized_fecundity
+  results_list$realized_surv <- realized_surv
+  results_list$r.surv <- r.surv
+  results_list$r.fec <- fec
+  results_list$ASR <- ASR
+  results_list$matrix_lambda <- lambda
+  ## Get Lambda over simulation
+  results_list$final_lambda <- gm_mean(lambda_calc(results$N.median))
+  
+  return(results_list)
+  
+}
+
+
+
+
 ### Calculating lambda from trajectory simulations ####
 # Function for calculating geometric mean
 gm_mean <- function(x, na.rm=TRUE){
@@ -216,17 +488,26 @@ deer_pop_proj <- function(A, N0, Kf, theta, Year) {
     Nf_t <- sum(deer.array[1:6,y-1])
     
     # Calcuate density factor
-    density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
-    
+    c_dd <- 0.2  # Parameter for controling how early density dependence impacts the population
+    density_factor <- max(0, 1 - c_dd * (Nf_t / Kf)^(theta*2))
+
     # save new matrix
     A_dd <- A
     
-    # Calcuate density factor
-    density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
+    # Apply strong density dependence to fawn survival & yearlings (example: row 2 = fawn survival)
+    A_dd[2,1] <- A[2,1] * density_factor  # female fawns
+    A_dd[3,2] <- A[3,2] * density_factor  # female yearlings
+    A_dd[8,7] <- A[8,7] * density_factor  # male fawns
+    A_dd[9,8] <- A[9,8] * density_factor  # male yearlings
+    
+    # Mild DD on adult survival
+    # c_ad <- 0.1
+    # adult_dd <- max(0.7, 1 - c_ad * (Nf_t / Kf)^theta)
+    adult_dd <- 1
     
     # reduce fecundity
-    R0y_dd <- A[1,2] * density_factor 
-    R0a_dd <- A[1,3] * density_factor 
+    R0y_dd <- A[1,2] * density_factor
+    R0a_dd <- A[1,3] * density_factor
     
     # Check adult age ratio
     asr <- sum(deer.array[8:12,y-1])/sum(deer.array[2:6,y-1], 1e-6)
@@ -242,7 +523,7 @@ deer_pop_proj <- function(A, N0, Kf, theta, Year) {
     # Calculate new pop size
     deer.array[,y] <- A_dd %*% deer.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)
   }
-  
+ 
   # Add up stage-specific abundance
   N.median <- apply(deer.array,2,sum)
   
@@ -252,7 +533,9 @@ deer_pop_proj <- function(A, N0, Kf, theta, Year) {
   # Calculate MSY
   msy <- get_msy(results)
   
-  return(msy)
+  # return(msy)
+  # Return population trajectory
+  return(N.median)
 }
 
 ## Define objective function
@@ -265,23 +548,58 @@ objective_fn_deer <- function(params) {
 
   # Scale demographic rates
   A_scaled <- scale_deer(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_scale)
+  # cap survival (so no chance of >1)
+  A_scaled[2:6, 1:6] <- pmin(A_scaled[2:6, 1:6], 0.999)
+  A_scaled[8:12, 7:12] <- pmin(A_scaled[8:12, 7:12], 0.999)
   
   # Calculate stable stage distribution
   w <- Re(eigen(A_scaled)$vectors[, 1])
   w <- w / sum(w) # normalize to equal 1
   
   # Set up initial popualtion size
-  N0 <- w * 0.01 * K  # e.g., start at 50% of K
-  
-  lambda <- Re(eigen(A_scaled)$values[1])
+  N0 <- w * 0.01 * K  # e.g., start at 50% of K (or in this case 1% of K)
   
   # Calibrate a for density dependence
-  theta <- estimate_theta_opt(N0[1:6], lambda, Kf)
+  theta <- params[13]
 
-  # Run model and get MSY
-  sim_msy <- deer_pop_proj(A_scaled, N0, Kf, theta, Year) 
+  error_theta <- (theta - 1)^2
   
-  return((sim_msy - observed_harvest)^2) # Squared error
+  # --- Population trajectory ---
+  sim_N <- deer_pop_proj(A_scaled, N0, Kf, theta, Year) 
+
+  # use last half of time series (avoid transient dynamics)
+  tail_N <- tail(sim_N, length(sim_N) / 2)
+  
+  # simple smooth target: want stable population near K (or at least, the female portion of K)
+  error_pop <- mean(((tail_N - Kf) / Kf)^2) + var(tail_N) / Kf^2
+  
+  # --- MSY --- 
+  sim_msy <- get_msy(data.frame(Year, N.median=sim_N))
+  
+  # Guard against invalid MSY
+  if (!is.finite(sim_msy) || sim_msy <= 0) {
+    return(1e6)
+  }
+  
+  error_msy <- ((sim_msy - observed_harvest) / observed_harvest)^2
+  
+  # --- Regularize deviation from baseline (1 = literature values)
+  error_reg <- sum((params - 1)^2)
+  
+  # --- Penalty for slow pop growth rate ----
+  lambda <- Re(eigen(A_scaled)$values[1])
+  
+  error_lambda <- 0
+  
+  if (lambda < 1.3) {
+    error_lambda <- (1.3 - lambda)^2
+  } else if (lambda > 1.8) {
+    error_lambda <- (lambda - 1.8)^2
+  }
+  
+  # --- Combine ---
+  return(error_pop + error_msy + 0.1 * error_reg + 0.1 * error_theta + 50 * error_lambda)
+
 }
 
 ## Wild pigs ####
