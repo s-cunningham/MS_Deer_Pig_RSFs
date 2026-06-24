@@ -2,7 +2,6 @@ library(ggplot2)
 library(dplyr)
 library(ggtext)
 library(patchwork)
-library(truncnorm)
 
 source("00_functions.R")
 
@@ -22,14 +21,14 @@ A_base <- matrix(0,12,12)
 
 ## Survival
 # Females
-A_base[2,1] <- 0.23
+A_base[2,1] <- 0.27
 A_base[3,2] <- 0.93
 A_base[4,3] <- 0.84
 A_base[5,4] <- 0.84
 A_base[6,5] <- 0.84
 A_base[6,6] <- 0.84
 # Males
-A_base[8,7] <- 0.23
+A_base[8,7] <- 0.27
 A_base[9,8] <- 0.82
 A_base[10,9] <- 0.63
 A_base[11,10] <- 0.53
@@ -77,37 +76,37 @@ observed_harvest <- 280000
 
 ### Optimize survival and fecundities
 # set up bounds (Fawn survival (1), female survival (5), male survival (5), fecundity (1), theta(1))
-deer_lower <- c(0.95, # Fawn survival
-                0.85, # Female survival
-                0.85,
-                0.85,
-                0.85, 
-                0.85, 
-                0.99, # Male survival
-                0.95,
-                0.95,
-                0.95,
-                0.95, 
+deer_lower <- c(0.55, # Fawn survival
+                1.0, # Female survival
+                0.80,
+                0.80,
+                0.80, 
+                0.80, 
+                0.95, # Male survival
+                0.90,
+                0.90,
+                0.90,
+                0.90, 
                 0.75,  # Fecundity
-                0.9) # Theta
+                1) # Theta
 
-deer_upper <- c(3.5, # Fawn survival
-                1.05, # Female survival
-                1.05, 
-                1.05, 
-                1.05,
-                1.05, 
+deer_upper <- c(1.8, # Fawn survival
+                1.06, # Female survival
+                1.1, 
+                1.1, 
+                1.1,
+                1.1, 
                 1.05, # Male survival
                 1.5, 
                 1.8,
                 1.9, 
                 1.9,
-                2.5, # Fecundity
-                6) # Theta
+                1.8, # Fecundity
+                8) # Theta
 
 # run optimizer
 set.seed(1)
-deer_opt <- optim(par=rep(1.2, 13), fn=objective_fn_deer, method="L-BFGS-B", lower=deer_lower, upper=deer_upper, control = list(trace = 1))
+deer_opt <- optim(par=rep(1.4, 13), fn=objective_fn_deer, method="L-BFGS-B", lower=deer_lower, upper=deer_upper, control = list(trace = 1, maxit=1000))
 
 # What are optimized parameter values 
 deer_opt$par
@@ -127,11 +126,11 @@ A_adj[6,5] <- A_base[6,5]*deer_opt$par[5]
 A_adj[6,6] <- A_base[6,6]*deer_opt$par[6]
 
 # Male survival
-A_adj[9,8] <- A_base[9,8]*deer_opt$par[7]      # 0.95 #
-A_adj[10,9] <- A_base[10,9]*deer_opt$par[8]    # 0.93 #
-A_adj[11,10] <- A_base[11,10]*deer_opt$par[9]  # 0.94 #
-A_adj[12,11] <- A_base[12,11]*deer_opt$par[10] # 0.89 #
-A_adj[12,12] <- A_base[12,12]*deer_opt$par[11] # 0.82 #
+A_adj[9,8] <- A_base[9,8]*deer_opt$par[7]      
+A_adj[10,9] <- A_base[10,9]*deer_opt$par[8]    
+A_adj[11,10] <- A_base[11,10]*deer_opt$par[9]  
+A_adj[12,11] <- A_base[12,11]*deer_opt$par[10] 
+A_adj[12,12] <- A_base[12,12]*deer_opt$par[11]
 
 ## Fecundity
 # Yearlings
@@ -144,9 +143,18 @@ A_adj[7,3:6] <- A_base[7,3:6]*deer_opt$par[12]
 
 #### Run population model ####
 set.seed(1)
-res14 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=1347232, Sims=1000, years=50) 
+res14 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=1347232, Sims=1000, years=30, ev_sd=0.02, harvest=TRUE) 
 
-#Plot population projection
+plot(res14$recruits)
+lines(res14$adult_females, col="blue")
+
+# Lambda from adjusted matrix
+res14$matrix_lambda
+
+# Lambda from final matrix
+res14$final_lambda
+
+# Plot population projection
 ggplot(res14$results) +
   coord_cartesian(ylim=c(0,2500000)) +
   geom_hline(yintercept=1610000, color="red", linetype=3) +  # Estimated current population size
@@ -193,7 +201,7 @@ ggplot(res14$r.surv) +
         legend.text=element_text(size=12))
 
 ggplot(res14$r.fec) +
-  coord_cartesian(xlim=c(0.7, 2), ylim=c(0,1.4)) +
+  coord_cartesian(xlim=c(0.7, 2), ylim=c(0,2)) +
   geom_segment(aes(x=x, y=f10pct, yend=f90pct), color="#21918c", linewidth=1) +
   geom_point(aes(x=x, y=fec, group=source, color=source, shape=offspring_sex), size=3) +
   scale_color_manual(values=c("#440154", "#21918c")) +
