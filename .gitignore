@@ -7,6 +7,8 @@
 /figs/
 /results/
 /output/
+/doc/
+/figs_for_digitize/
 
 # Scratch scripts
 spare_code_rsf.R
@@ -21,6 +23,7 @@ scratch_paper.R
 glmm_HR_predict.R
 randomforest_faffing_v2.R
 02_checking_AKDE_flags.R
+survival_extraction.R
 
 # Session Data files
 .RData

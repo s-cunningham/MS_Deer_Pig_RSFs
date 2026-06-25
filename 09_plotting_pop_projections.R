@@ -77,8 +77,8 @@ ds_plot <- ggplot(deer_s) +
   ylab("Survival probability") + xlab("Stage") +
   theme_classic() +
   theme(panel.border=element_rect(color="black", fill=NA, linewidth=0.5),
-        legend.position.inside = c(0,0),
-        legend.justification=c(0,0),
+        legend.position.inside = c(1,0),
+        legend.justification=c(1,0),
         legend.background = element_rect(fill=NA),
         axis.text=element_text(size=11),
         axis.title=element_text(size=12),
@@ -96,7 +96,7 @@ deer_f <- deer_f |>
 
 
 df_plot <- ggplot(deer_f) +
-  coord_cartesian(xlim=c(0.7, 2), ylim=c(0,1.4)) +
+  coord_cartesian(xlim=c(0.7, 2), ylim=c(0,1.6)) +
   geom_segment(aes(x=x, y=f10pct, yend=f90pct, color=offspring_sex), linewidth=1) +
   geom_point(aes(x=x, y=fec, group=source, color=offspring_sex, shape=source), size=3) +
   scale_color_manual(values=c("#21918c", "#440154")) +
@@ -111,8 +111,8 @@ df_plot <- ggplot(deer_f) +
   ylab("Fecundity") + xlab("Stage") +
   theme_classic() +
   theme(panel.border=element_rect(color="black", fill=NA, linewidth=0.5),
-        legend.position.inside = c(0,1),
-        legend.justification=c(0,1),
+        legend.position.inside = c(0,0),
+        legend.justification=c(0,0),
         # legend.direction="horizontal",
         legend.background = element_rect(fill=NA),
         legend.text=element_markdown(size=11),

@@ -15,23 +15,23 @@ step <- 1:200
 # Carrying capacity
 K <- 1239278
 
-Kf <- K * 0.5
+Kf <- K * 0.5 # Carrying capacity of only females
 
 # Set up pig matrix
 A_base <- matrix(0,6,6)
 
 ## Survival
 # Females
-A_base[2,1] <- sqrt(0.3)
-A_base[3,2] <- sqrt(0.35)
-A_base[3,3] <- sqrt(0.35)
+A_base[2,1] <- sqrt(0.44)  # Piglet survival
+A_base[3,2] <- sqrt(0.35) # Subadult survival
+A_base[3,3] <- sqrt(0.35) # Adult survival
 # Males
-A_base[5,4] <- sqrt(0.18)
-A_base[6,5] <- sqrt(0.23)
-A_base[6,6] <- sqrt(0.23)
+A_base[5,4] <- sqrt(0.44) # Piglet survival
+A_base[6,5] <- sqrt(0.23) # Subadult survival
+A_base[6,6] <- sqrt(0.23) # Adult survival
 
 ## Fecundity
-# Maximum fecundity (how many piglets per litter?)
+# Maximum fecundity (how many piglets per litter?) x how many females produce
 R0j <- 6.6*0.75
 R0a <- 10.8
 
@@ -58,13 +58,13 @@ N0 <- w * 0.1 * K  # e.g., start at 50% of K
 
 lambda <- Re(eigen(A_base)$values[1])
 
-# How many pig are harvested?
+# How many pig are removed?
 observed_harvest <- 150000 
 
 ### Optimize survival and fecundities
 # set up bounds
-pig_lower <- c(1.1, 1.2, 1.2, 1.2, 1.2, 1.5) # piglet survival, female surv (2), male surv(2), fecundity
-pig_upper <- c(1.8, 1.65, 1.65, 1.8, 1.5, 2.8)
+pig_lower <- c(0.5, 1.2, 1.2, 1.2, 1.2, 1.5) # piglet survival, female surv (2), male surv(2), fecundity
+pig_upper <- c(1.5, 1.65, 1.65, 1.8, 1.5, 2.8)
 
 # run optimizer
 set.seed(1)
@@ -138,7 +138,7 @@ for (i in 1:Sims) {
   
   A_s <- A_adj
   
-  ## Stochasticity on Survival 
+  ## Stochasticity on Survival (this is environmental variation? Or DS?)
   # Female survival
   # Survive & go
   A_s[2,1] <- rtruncnorm(1, b=1, mean=A_adj[2,1], sd=0.005)
@@ -378,11 +378,11 @@ A_base <- matrix(0,6,6)
 
 ## Survival
 # Females
-A_base[2,1] <- sqrt(0.3)
+A_base[2,1] <- sqrt(0.44)
 A_base[3,2] <- sqrt(0.35)
 A_base[3,3] <- sqrt(0.35)
 # Males
-A_base[5,4] <- sqrt(0.18)
+A_base[5,4] <- sqrt(0.44)
 A_base[6,5] <- sqrt(0.23)
 A_base[6,6] <- sqrt(0.23)
 
@@ -424,12 +424,12 @@ observed_harvest <- 150000
 
 ### Optimize survival and fecundities
 # set up bounds
-pig_lower <- c(1, 1.2, 1.2, 1.2, 1.2, 1.1)
+pig_lower <- c(0.5, 1.2, 1.2, 1.2, 1.2, 1.1)
 pig_upper <- c(1.5, 1.9, 1.9, 2, 2, 2.8)
 
 # run optimizer
 set.seed(1)
-pig_opt <- optim(par=c(runif(1, 1.01, 1.45), runif(4, 1, 1.95), runif(1, 1.01, 2.75)), fn=objective_fn_pigs, method="L-BFGS-B", lower=pig_lower, upper=pig_upper, control = list(trace = 1))
+pig_opt <- optim(par=c(runif(1, 0.51, 1.45), runif(4, 1, 1.75), runif(1, 1.01, 2.75)), fn=objective_fn_pigs, method="L-BFGS-B", lower=pig_lower, upper=pig_upper, control = list(trace = 1))
 
 # What are optimized parameter values 
 pig_opt$par
@@ -640,7 +640,7 @@ N.80pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.90)
 
 results <- data.frame(Year,N.median,N.20pct,N.80pct)
 
-#Plot population projection
+# Plot population projection
 ggplot(results) +
   coord_cartesian(ylim=c(0,2000000)) +
   geom_hline(yintercept=1000000, color="red", linetype=3) +

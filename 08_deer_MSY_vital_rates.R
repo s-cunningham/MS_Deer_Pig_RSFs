@@ -98,13 +98,13 @@ deer_lower <- c(0.6, # Fawn survival
                 female_lower, # Female survival
                 male_lower, # Male survival
                 0.75,  # Fecundity
-                1) # Theta
+                3) # Theta
 
 deer_upper <- c(2.2,          # Fawn survival
                 female_upper, # female survival
                 male_upper,   # male survival
                 1.5,          # Fecundity
-                6)            # Theta
+                5)            # Theta
 
 theta_mult <- 2
 c_dd <- 0.20

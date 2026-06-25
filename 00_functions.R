@@ -91,7 +91,7 @@ ramas_K <- function(x) {
 
 
 ### Set up function to run population model with K #### 
-run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50) {
+run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harvest=TRUE, theta_mult=2, c_dd=0.2) {
   
   set.seed(1)
   
@@ -106,12 +106,13 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50) {
   a2 <- A_adj
   a2[1,1:6] <- a2[1,1:6]*0.5*mnFs
   a2[7,1:6] <- a2[7,1:6]*0.5*mnFs
-  w <- Re(eigen(a2)$vectors[, 1])
-  w <- w / sum(w) # normals to equal 1
-  
+
+  # Calculate lambda from matrix with split fecundity (like it should be)
   lambda <- Re(eigen(a2)$values[1])
   
   # Set up initial popualtion size
+  w <- Re(eigen(a2)$vectors[, 1])
+  w <- w / sum(w) # normals to equal 1
   N0 <- w * 1 * K # e.g., start at 50% of K
   
   # Fill starting population
@@ -135,17 +136,26 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50) {
     # Female survival
     for (s in 2:5) {
       # Survive & go
-      A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
+      # Calculate beta distribution parameters
+      alpha <- A_adj[s+1,s] * (((A_adj[s+1,s]*(1-A_adj[s+1,s]))/(ev_sd^2))-1)
+      beta <- (1-A_adj[s+1,s]) * (((A_adj[s+1,s]*(1-A_adj[s+1,s]))/(ev_sd^2))-1)
+      A_s[s+1,s] <- rbeta(1, alpha, beta)
     }
     # Survive & stay
-    A_s[6,6] <- rtruncnorm(1, a=0, b=1, mean=A_adj[6,6], sd=0.02)
+    alpha <- A_adj[6,6] * (((A_adj[6,6]*(1-A_adj[6,6]))/(ev_sd^2))-1)
+    beta <- (1-A_adj[6,6]) * (((A_adj[6,6]*(1-A_adj[6,6]))/(ev_sd^2))-1)
+    A_s[6,6] <- rbeta(1, alpha, beta)
     # Male survival
     for (s in 8:11) {
       # Survive & go
-      A_s[s+1,s] <- rtruncnorm(1, b=1, mean=A_adj[s+1,s], sd=0.02)
+      alpha <- A_adj[s+1,s] * (((A_adj[s+1,s]*(1-A_adj[s+1,s]))/(ev_sd^2))-1)
+      beta <- (1-A_adj[s+1,s]) * (((A_adj[s+1,s]*(1-A_adj[s+1,s]))/(ev_sd^2))-1)
+      A_s[s+1,s] <- rbeta(1, alpha, beta)
     }
     # Survive & stay
-    A_s[12,12] <- rtruncnorm(1, b=1, mean=A_adj[12,12], sd=0.02)
+    alpha <- A_adj[12,12] * (((A_adj[12,12]*(1-A_adj[12,12]))/(ev_sd^2))-1)
+    beta <- (1-A_adj[12,12]) * (((A_adj[12,12]*(1-A_adj[12,12]))/(ev_sd^2))-1)
+    A_s[12,12] <- rbeta(1, alpha, beta)
     
     # save new matrix
     A_dd <- A_s
@@ -170,12 +180,16 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50) {
       asr_mat[y-1,i] <- asr
       
       # Calculate % males & females
-      s_m <- pmin(pmax(0.5 + 0.1 * (1 - asr), 0.4), 0.6)
+      baseline_sm <- 1.3 / (1.3 + 1)
+      
+      s_m <- baseline_sm + 0.1 * (1 - asr)
+      s_m <- pmin(pmax(s_m, 0.45), 0.65)
       s_f <- 1 - s_m
       
+      
       # Calcuate density factor
-      c_dd <- 0.2  # Parameter for controling how early density dependence impacts the population
-      density_factor <- max(0, 1 - c_dd * (Nf_t / Kf)^(theta*2))
+      # c_dd <- 0.17  # Parameter for controling how early density dependence impacts the population
+      density_factor <- max(0, 1 - c_dd * (Nf_t / Kf)^theta)
       
       # Apply strong density dependence to fawn survival & yearlings (example: row 2 = fawn survival)
       A_dd[2,1] <- A_s[2,1] * density_factor  # female fawns
@@ -186,22 +200,17 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50) {
       # Adjust sex ratio at birth and reduce fecundity
       A_dd[1,1:6] <- c(0, R0y_s, R0a_s3, R0a_s4, R0a_s5, R0a_s6) * s_f * density_factor
       A_dd[7,1:6] <- c(0, R0y_s, R0a_s3, R0a_s4, R0a_s5, R0a_s6) * s_m * density_factor
-      
-      # Mild DD on adult survival
-      # c_ad <- 0.1
-      # adult_dd <- max(0.7, 1 - c_ad * (Nf_t / Kf)^theta)
-      adult_dd <- 1
-      
+
       # apply only to adult survival transitions
-      A_dd[4,3] <- A_s[4,3] * adult_dd
-      A_dd[5,4] <- A_s[5,4] * adult_dd
-      A_dd[6,5] <- A_s[6,5] * adult_dd
-      A_dd[6,6] <- A_s[6,6] * adult_dd
+      A_dd[4,3] <- A_s[4,3]
+      A_dd[5,4] <- A_s[5,4]
+      A_dd[6,5] <- A_s[6,5]
+      A_dd[6,6] <- A_s[6,6]
       
-      A_dd[10,9] <- A_s[10,9] * adult_dd
-      A_dd[11,10] <- A_s[11,10] * adult_dd
-      A_dd[12,11] <- A_s[12,11] * adult_dd
-      A_dd[12,12] <- A_s[12,12] * adult_dd
+      A_dd[10,9] <- A_s[10,9]
+      A_dd[11,10] <- A_s[11,10]
+      A_dd[12,11] <- A_s[12,11]
+      A_dd[12,12] <- A_s[12,12]
       
       # Save fecundity
       realized_fecundity[1,y-1,i] <- A_dd[1,2] # Females per yearling female
@@ -213,18 +222,25 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50) {
       # Calculate new pop size BEFORE harvest
       N_preharvest <- pmax(A_dd %*% deer.array[,y-1,i], 0)# Make sure to multiply matrix x vector (not vice versa)
       
+      # Print effective births per female
+      total_births <- N_preharvest[1] + N_preharvest[7]
+      repro_females <- sum(deer.array[2:6, y-1, i])  # or only adult classes if desired
+      effective_births <- total_births / max(repro_females, 1)
+      print(effective_births)
+      
       # Harvest
-      if (y > 0) {
+      if (harvest) {
         
         # Draw the number of deer to harvest each year
-        h <- round(rnorm(1, mean=240000, sd=15000))
-        # h <- min(rnorm(1, 240000, 15000), 0.18 * sum(N_preharvest))
+        # h <- round(rnorm(1, mean=240000, sd=15000))
+        h <- min(rnorm(1, 240000, 15000), 0.18 * sum(N_preharvest))
         
         doe_h <- h * 0.54
         buck_h <- h - doe_h
         
         doe_r <- c(0.0735, 0.189, 0.1895, 0.183, 0.183, 0.182) * doe_h
-        buck_r <- c(0.04, 0.11, 0.12, 0.23, 0.25, 0.25) * buck_h
+        # buck_r <- c(0.04, 0.11, 0.12, 0.23, 0.25, 0.25) * buck_h
+        buck_r <- c(0.08, 0.12, 0.15, 0.20, 0.22, 0.23) * buck_h
         
         # Combine for total harvest
         r <- c(doe_r, buck_r)
@@ -242,39 +258,39 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50) {
       # ---- Realized survival ----
       
       # Female stages
-      realized_surv[1, y, i] <- N_preharvest[2] / deer.array[1, y-1, i] # Fawn → yearling (F)
-      realized_surv[2, y, i] <- N_preharvest[3] / deer.array[2, y-1, i]  # yearling → 2-year-old  
-      realized_surv[3, y, i] <- N_preharvest[4] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
-      realized_surv[4, y, i] <- N_preharvest[5] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
+      realized_surv[1, y, i] <- N_next[2] / deer.array[1, y-1, i] # Fawn → yearling (F)
+      realized_surv[2, y, i] <- N_next[3] / deer.array[2, y-1, i]  # yearling → 2-year-old  
+      realized_surv[3, y, i] <- N_next[4] / deer.array[3, y-1, i]  # 2-year-old → 3-year-old
+      realized_surv[4, y, i] <- N_next[5] / deer.array[4, y-1, i]  # 3-year-old → 4-year-old
       
       # Stage 5: comes only from stage 4
       incoming_5 <- deer.array[4, y-1, i]
       realized_surv[5, y, i] <- ifelse(incoming_5 > 0,
-                                       N_preharvest[5] / incoming_5,
+                                       N_next[5] / incoming_5,
                                        NA)
       
       # Stage 6: from stage 5 and 6
       incoming_6 <- deer.array[5, y-1, i] + deer.array[6, y-1, i]
       realized_surv[6, y, i] <- ifelse(incoming_6 > 0,
-                                       N_preharvest[6] / incoming_6,
+                                       N_next[6] / incoming_6,
                                        NA)
       
       # Male stages
-      realized_surv[7, y, i] <- N_preharvest[8] / deer.array[7, y-1, i] # Fawn → yearling (M)
-      realized_surv[8, y, i] <- N_preharvest[9] / deer.array[8, y-1, i]   # 8 → 9
-      realized_surv[9, y, i] <- N_preharvest[10] / deer.array[9, y-1, i] # 9 → 10
-      realized_surv[10, y, i] <- N_preharvest[11] / deer.array[10, y-1, i] # 10 → 11
+      realized_surv[7, y, i] <- N_next[8] / deer.array[7, y-1, i] # Fawn → yearling (M)
+      realized_surv[8, y, i] <- N_next[9] / deer.array[8, y-1, i]   # 8 → 9
+      realized_surv[9, y, i] <- N_next[10] / deer.array[9, y-1, i] # 9 → 10
+      realized_surv[10, y, i] <- N_next[11] / deer.array[10, y-1, i] # 10 → 11
       
       # Stage 11
       incoming_11 <- deer.array[10, y-1, i]
-      realized_surv[11, y, i] <- ifelse(incoming_11 > 0,
-                                        N_preharvest[11] / incoming_11,
+      realized_surv[11, y, i] <- ifelse(incoming_11 > 1e-6,
+                                        N_next[11] / incoming_11,
                                         NA)
       
       # Stage 12
       incoming_12 <- deer.array[11, y-1, i] + deer.array[12, y-1, i]
-      realized_surv[12, y, i] <- ifelse(incoming_12 > 0,
-                                        N_preharvest[12] / incoming_12,
+      realized_surv[12, y, i] <- ifelse(incoming_12 > 1e-6,
+                                        N_next[12] / incoming_12,
                                         NA)
       
       # Check buck:doe ratio
@@ -288,11 +304,17 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50) {
       
     }
   }
+  
+  ## Summarize population trajectory
   N.median <- apply(apply(deer.array,c(2,3),sum),1,median)
   N.10pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.10)
   N.90pct <- apply(apply(deer.array,c(2,3),sum),1,quantile, probs = 0.90)
   
   results <- data.frame(Year,N.median,N.10pct,N.90pct)
+  
+  ## Summarize recruits
+  recruits <- deer.array[1,,] + deer.array[7,,]
+  recruits <- rowMeans(recruits)
   
   ## Get realized survival rates
   # Calculate median survival per stage (over all years and sims)
@@ -346,6 +368,12 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50) {
   # create list for storing results
   results_list <- list()
   results_list$results <- results
+  results_list$recruits <- recruits
+  results_list$adult_females <- rowMeans(colSums(deer.array[3:6, , ]))
+  results_list$three_yr_males <- rowMeans(deer.array[10,,])
+  results_list$four_yr_males <- rowMeans(deer.array[11,,])
+  results_list$five_yr_males <- rowMeans(deer.array[12,,])
+  results_list$last_stage <- sum(deer.array[12, , ] > 0)
   results_list$realized_fecundity <- realized_fecundity
   results_list$realized_surv <- realized_surv
   results_list$r.surv <- r.surv
@@ -353,14 +381,11 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50) {
   results_list$ASR <- ASR
   results_list$matrix_lambda <- lambda
   ## Get Lambda over simulation
-  results_list$final_lambda <- gm_mean(lambda_calc(results$N.median))
+  results_list$final_lambda <- gm_mean(lambda_calc(results$N.median[(length(Year)/2):length(Year)]))
   
   return(results_list)
   
 }
-
-
-
 
 ### Calculating lambda from trajectory simulations ####
 # Function for calculating geometric mean
@@ -375,45 +400,6 @@ lambda_calc <- function(x) {
     lambda[y] <- x[y+1]/x[y]
   }
   return(lambda)
-}
-
-### Functions for validation of carrying capacity/MSY exercise ####
-simulate_pop <- function(a, A, N0, K, years = 100) {
-  N <- matrix(NA, nrow = nrow(A), ncol = years)
-  N[, 1] <- N0
-  
-  for (t in 1:(years - 1)) {
-    N_total <- sum(N[, t])
-    dd_factor <- 1 / (1 + (N[t - 1] / K)^theta)
-    
-    A_dd <- A
-    A_dd[1, ] <- A[1, ] * dd_factor  # apply DD to fecundity row
-    N[, t + 1] <- A_dd %*% N[, t]
-  }
-  
-  final_N <- sum(N[, years])
-  return(final_N)
-}
-
-## theta-logistic function
-theta_logistic_proj <- function(N0, lambda, K, theta, t_max = 100) {
-  N <- numeric(t_max)
-  N[1] <- sum(N0)
-  for (t in 2:t_max) {
-    density_factor <- 1 / (1 + (N[t - 1] / K)^theta)
-    N[t] <- N[t - 1] * lambda * density_factor
-  }
-  return(N)
-}
-
-# Estimate with optimize
-estimate_theta_opt <- function(N0, lambda, K, t_max = 100) {
-  objective_fn <- function(theta) {
-    N <- theta_logistic_proj(N0, lambda, K, theta, t_max)
-    (tail(N, 1) - K)^2
-  }
-  result <- optimize(objective_fn, lower = 0.1, upper = 10)
-  return(result$minimum)
 }
 
 
@@ -475,7 +461,7 @@ scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_
   return(deer.matrix)
 }
 
-deer_pop_proj <- function(A, N0, Kf, theta, Year) {
+deer_pop_proj <- function(A, N0, Kf, theta, Year, c_dd) {
   
   # Empty array to hold pop count
   deer.array <- matrix(0,nrow=12, ncol=length(Year))
@@ -488,8 +474,8 @@ deer_pop_proj <- function(A, N0, Kf, theta, Year) {
     Nf_t <- sum(deer.array[1:6,y-1])
     
     # Calcuate density factor
-    c_dd <- 0.2  # Parameter for controling how early density dependence impacts the population
-    density_factor <- max(0, 1 - c_dd * (Nf_t / Kf)^(theta*2))
+    # c_dd <- 0.17  # Parameter for controling how early density dependence impacts the population
+    density_factor <- max(0, 1 - c_dd * (Nf_t / Kf)^theta)
 
     # save new matrix
     A_dd <- A
@@ -565,7 +551,7 @@ objective_fn_deer <- function(params) {
   error_theta <- (theta - 1)^2
   
   # --- Population trajectory ---
-  sim_N <- deer_pop_proj(A_scaled, N0, Kf, theta, Year) 
+  sim_N <- deer_pop_proj(A_scaled, N0, Kf, theta, Year, c_dd=c_dd) 
 
   # use last half of time series (avoid transient dynamics)
   tail_N <- tail(sim_N, length(sim_N) / 2)
@@ -591,14 +577,14 @@ objective_fn_deer <- function(params) {
   
   error_lambda <- 0
   
-  if (lambda < 1.3) {
-    error_lambda <- (1.3 - lambda)^2
-  } else if (lambda > 1.8) {
-    error_lambda <- (lambda - 1.8)^2
+  if (lambda < 1.4) {
+    error_lambda <- (1.4 - lambda)^2
+  } else if (lambda > 1.77) {
+    error_lambda <- (lambda - 1.77)^2
   }
   
   # --- Combine ---
-  return(error_pop + error_msy + 0.1 * error_reg + 0.1 * error_theta + 50 * error_lambda)
+  return(error_pop + error_msy + 0.05 * error_reg + 0.1 * error_theta + 50 * error_lambda) 
 
 }
 
