@@ -77,8 +77,8 @@ observed_harvest <- 280000
 ### Optimize survival and fecundities
 
 # Caps on survival (maximum values)
-female_cap <- 0.97
-male_cap <- 0.93
+female_cap <- 0.95
+male_cap <- 0.95
 
 female_base <- c(0.93, 0.84, 0.84, 0.84, 0.84)
 female_upper <- female_cap / female_base
@@ -88,30 +88,29 @@ male_upper <- male_cap / male_base
 
 # Caps on survival (minimum values)
 female_min <- 0.75
-male_min <- 0.4
+male_min <- 0.6
 
 female_lower <- female_min / female_base
 male_lower <- male_min / male_base
 
 # set up bounds (Fawn survival (1), female survival (5), male survival (5), fecundity (1), theta(1))
-deer_lower <- c(0.6, # Fawn survival
+deer_lower <- c(0.6,          # Fawn survival
                 female_lower, # Female survival
-                male_lower, # Male survival
-                0.75,  # Fecundity
-                3) # Theta
+                male_lower,   # Male survival
+                0.7,         # Fecundity
+                2)          # Theta
 
-deer_upper <- c(2.2,          # Fawn survival
+deer_upper <- c(1.8,          # Fawn survival
                 female_upper, # female survival
                 male_upper,   # male survival
-                1.5,          # Fecundity
-                5)            # Theta
+                1.7,          # Fecundity
+                3.2)            # Theta
 
-theta_mult <- 2
-c_dd <- 0.20
+c_dd <- 0.7
 
 # run optimizer
 set.seed(1)
-deer_opt <- optim(par=rep(1.4, 13), fn=objective_fn_deer, method="L-BFGS-B", lower=deer_lower, upper=deer_upper, control = list(trace = 1, maxit=1000))
+deer_opt <- optim(par=runif(13, 0.9, 1.2), fn=objective_fn_deer, method="L-BFGS-B", lower=deer_lower, upper=deer_upper, control = list(trace = 1, maxit=1000))
 
 # What are optimized parameter values 
 deer_opt$par
@@ -148,7 +147,7 @@ A_adj[7,3:6] <- A_base[7,3:6]*deer_opt$par[12]
 
 #### Run population model ####
 set.seed(1)
-res14 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=1347232, Sims=1000, years=30, ev_sd=0.02, harvest=TRUE, theta_mult=theta_mult, c_dd=c_dd) 
+res14 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=1347232, Sims=1000, years=50, ev_sd=0.01, harvest=TRUE, c_dd=c_dd) 
 
 plot(res14$three_yr_males,type="l", col="purple", ylim=c(0, 100000))
 lines(res14$four_yr_males, col="blue")

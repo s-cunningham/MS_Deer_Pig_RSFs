@@ -174,29 +174,27 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
       Nf_t <- sum(deer.array[1:6,y-1,i], na.rm=TRUE)
       
       # Check adult age ratio
-      asr <- sum(deer.array[8:12,y-1,i])/sum(deer.array[2:6,y-1,i], 1e-6)
+      female_sum <- sum(deer.array[2:6, y-1, i], na.rm=TRUE)
+      male_sum   <- sum(deer.array[8:12, y-1, i], na.rm=TRUE)
+      
+      asr <- ifelse(female_sum > 0,
+                    male_sum / female_sum,
+                    1)   # some kind of default
       
       # Save sex ratio
       asr_mat[y-1,i] <- asr
       
       # Calculate % males & females
-      baseline_sm <- 1.3 / (1.3 + 1)
+      s_m <- 0.5 + 0.1 * (1 - asr)
+      s_m <- pmin(pmax(s_m, 0.4), 0.6)
       
-      s_m <- baseline_sm + 0.1 * (1 - asr)
-      s_m <- pmin(pmax(s_m, 0.45), 0.65)
+      if (is.na(s_m)) s_m <- 0.5
       s_f <- 1 - s_m
       
-      
       # Calcuate density factor
-      # c_dd <- 0.17  # Parameter for controling how early density dependence impacts the population
-      density_factor <- max(0, 1 - c_dd * (Nf_t / Kf)^theta)
-      
-      # Apply strong density dependence to fawn survival & yearlings (example: row 2 = fawn survival)
-      A_dd[2,1] <- A_s[2,1] * density_factor  # female fawns
-      A_dd[3,2] <- A_s[3,2] * density_factor  # female yearlings
-      A_dd[8,7] <- A_s[8,7] * density_factor  # male fawns
-      A_dd[9,8] <- A_s[9,8] * density_factor  # male yearlings
-      
+      density_factor <- 1 / (1 + c_dd * (Nf_t / Kf)^theta)
+      density_factor <- pmax(density_factor, 0.2)
+                             
       # Adjust sex ratio at birth and reduce fecundity
       A_dd[1,1:6] <- c(0, R0y_s, R0a_s3, R0a_s4, R0a_s5, R0a_s6) * s_f * density_factor
       A_dd[7,1:6] <- c(0, R0y_s, R0a_s3, R0a_s4, R0a_s5, R0a_s6) * s_m * density_factor
@@ -212,41 +210,68 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
       A_dd[12,11] <- A_s[12,11]
       A_dd[12,12] <- A_s[12,12]
       
+      # Stop loop if there are zeros
+      if (any(is.na(A_dd))) {
+        stop("NA detected in A_dd")
+      }
+      
       # Save fecundity
       realized_fecundity[1,y-1,i] <- A_dd[1,2] # Females per yearling female
       realized_fecundity[2,y-1,i] <- A_dd[1,3] # Females per adult female
       realized_fecundity[3,y-1,i] <- A_dd[7,2] # Males per yearling female 
       realized_fecundity[4,y-1,i] <- A_dd[7,3] # Males per adult female
       
+      # Make sure we have a population to work with
+      if (any(is.na(deer.array[, y-1, i]))) {
+        stop(paste0("NA detected in deer.array at previous timestep!\n Sim: ",i,"\nYear: ",y ))
+      }
+      
       ## Harvest deer 
       # Calculate new pop size BEFORE harvest
       N_preharvest <- pmax(A_dd %*% deer.array[,y-1,i], 0)# Make sure to multiply matrix x vector (not vice versa)
       
       # Print effective births per female
-      total_births <- N_preharvest[1] + N_preharvest[7]
-      repro_females <- sum(deer.array[2:6, y-1, i])  # or only adult classes if desired
-      effective_births <- total_births / max(repro_females, 1)
-      print(effective_births)
+      # total_births <- N_preharvest[1] + N_preharvest[7]
+      # repro_females <- sum(deer.array[2:6, y-1, i])  # or only adult classes if desired
+      # effective_births <- total_births / max(repro_females, 1)
+      # print(effective_births)
       
       # Harvest
       if (harvest) {
         
         # Draw the number of deer to harvest each year
-        # h <- round(rnorm(1, mean=240000, sd=15000))
-        h <- min(rnorm(1, 240000, 15000), 0.18 * sum(N_preharvest))
-        
+        h <- round(rnorm(1, mean=240000, sd=15000))
+
         doe_h <- h * 0.54
         buck_h <- h - doe_h
         
         doe_r <- c(0.0735, 0.189, 0.1895, 0.183, 0.183, 0.182) * doe_h
-        # buck_r <- c(0.04, 0.11, 0.12, 0.23, 0.25, 0.25) * buck_h
-        buck_r <- c(0.08, 0.12, 0.15, 0.20, 0.22, 0.23) * buck_h
         
+        # make sure we're not losing males by harvesting more than exist in that age class
+        stage_weights <- c(0.04, 0.11, 0.12, 0.23, 0.25, 0.25)
+        available <- N_preharvest[7:12]
+
+        harvest_alloc <- stage_weights * available
+        total_alloc <- sum(harvest_alloc)
+        
+        if (total_alloc > 0) {
+          harvest_alloc <- harvest_alloc / total_alloc
+        } else {
+          harvest_alloc <- rep(0, length(available))
+        }
+
+        buck_r <- harvest_alloc * buck_h
+
         # Combine for total harvest
         r <- c(doe_r, buck_r)
         
+        # make sure we're not taking more animals that exist in a certain age class
+        r <- pmin(r, N_preharvest)
+        
         # Apply harvest AFTER computing proportion
         N_next <- N_preharvest - r
+        # Make sure population is not negative after harvest
+        N_next <- pmax(N_next, 0)
         
       } else {
         N_next <- N_preharvest
@@ -299,7 +324,6 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
       
       if (is.na(af) | sum(af) < 1) {
         warning("Female bottleneck: reproductive females lost!")
-        # Optionally, set ASR to NA or a capped value
       }
       
     }
@@ -474,22 +498,11 @@ deer_pop_proj <- function(A, N0, Kf, theta, Year, c_dd) {
     Nf_t <- sum(deer.array[1:6,y-1])
     
     # Calcuate density factor
-    # c_dd <- 0.17  # Parameter for controling how early density dependence impacts the population
-    density_factor <- max(0, 1 - c_dd * (Nf_t / Kf)^theta)
+    density_factor <- 1 / (1 + c_dd * (Nf_t / Kf)^theta)
+    density_factor <- pmax(density_factor, 0.2)
 
     # save new matrix
     A_dd <- A
-    
-    # Apply strong density dependence to fawn survival & yearlings (example: row 2 = fawn survival)
-    A_dd[2,1] <- A[2,1] * density_factor  # female fawns
-    A_dd[3,2] <- A[3,2] * density_factor  # female yearlings
-    A_dd[8,7] <- A[8,7] * density_factor  # male fawns
-    A_dd[9,8] <- A[9,8] * density_factor  # male yearlings
-    
-    # Mild DD on adult survival
-    # c_ad <- 0.1
-    # adult_dd <- max(0.7, 1 - c_ad * (Nf_t / Kf)^theta)
-    adult_dd <- 1
     
     # reduce fecundity
     R0y_dd <- A[1,2] * density_factor
