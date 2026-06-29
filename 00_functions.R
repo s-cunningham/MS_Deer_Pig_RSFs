@@ -540,6 +540,7 @@ deer_pop_proj <- function(A, N0, Kf, theta, Year, c_dd) {
 ## Define objective function
 objective_fn_deer <- function(params) {
   
+  # Get scaling factors for each demographic rate
   surv_scale_fawn <- params[1]
   surv_scale_f <- params[2:6]
   surv_scale_m <- params[7:11]
@@ -551,26 +552,71 @@ objective_fn_deer <- function(params) {
   A_scaled[2:6, 1:6] <- pmin(A_scaled[2:6, 1:6], 0.999)
   A_scaled[8:12, 7:12] <- pmin(A_scaled[8:12, 7:12], 0.999)
   
+  print(max(A_scaled[1, ]))
+  
+  # --- Get survival rates and penalize for those that are too low (before harvest) ---
+  # Adult females (stages 2–6 transitions)
+  female_surv <- c(A_scaled[3,2],
+                   A_scaled[4,3],
+                   A_scaled[5,4],
+                   A_scaled[6,5],
+                   A_scaled[6,6])
+  
+  # Adult males (stages 7–12 transitions)
+  male_surv <- c(A_scaled[9,8],
+                 A_scaled[10,9],
+                 A_scaled[11,10],
+                 A_scaled[12,11],
+                 A_scaled[12,12])
+  
+  # Fawns
+  fawn_surv <- c(A_scaled[2,1], A_scaled[8,7])
+  
+  # Set target survival values (max expected before harvest mortality - )
+  # lower bounds
+  min_female <- 0.85
+  min_male   <- 0.70
+  
+  error_surv <- 
+    sum(pmax(min_female - female_surv, 0)^2) +
+    0.5 * sum(pmax(min_male - male_surv, 0)^2)
+  
+  # enforce female ≥ male
+  # error_sex <- sum(pmax(male_surv - female_surv, 0)^2)
+  # 
+  # error_surv_total <- 5 * error_surv + 5 * error_sex
+  
+  # --- another penalty for male survival > female survival
+  error_sex_surv <- sum(pmax(male_surv - female_surv, 0)^2)
+  
   # Calculate stable stage distribution
   w <- Re(eigen(A_scaled)$vectors[, 1])
   w <- w / sum(w) # normalize to equal 1
+  
+  # --- Penalty for low population growth
+  lambda <- Re(eigen(A_scaled)$values[1])
+  
+  error_lambda <- pmax(1.4 - lambda, 0)^2
   
   # Set up initial popualtion size
   N0 <- w * 0.01 * K  # e.g., start at 50% of K (or in this case 1% of K)
   
   # Calibrate a for density dependence
   theta <- params[13]
-
-  error_theta <- (theta - 1)^2
+  
+  # --- Penalty for crazy theta values ---
+  error_theta <- pmax(theta - 3.2, 0)^2 + pmax(2 - theta, 0)^2
   
   # --- Population trajectory ---
   sim_N <- deer_pop_proj(A_scaled, N0, Kf, theta, Year, c_dd=c_dd) 
 
   # use last half of time series (avoid transient dynamics)
   tail_N <- tail(sim_N, length(sim_N) / 2)
+  mean_N <- mean(tail_N)
   
-  # simple smooth target: want stable population near K (or at least, the female portion of K)
-  error_pop <- mean(((tail_N - Kf) / Kf)^2) + var(tail_N) / Kf^2
+  error_pop <- 
+    3 * pmax(Kf - mean_N, 0)^2 / Kf^2 +
+    pmax(mean_N - Kf, 0)^2 / Kf^2
   
   # --- MSY --- 
   sim_msy <- get_msy(data.frame(Year, N.median=sim_N))
@@ -585,19 +631,15 @@ objective_fn_deer <- function(params) {
   # --- Regularize deviation from baseline (1 = literature values)
   error_reg <- sum((params - 1)^2)
   
-  # --- Penalty for slow pop growth rate ----
-  lambda <- Re(eigen(A_scaled)$values[1])
-  
-  error_lambda <- 0
-  
-  if (lambda < 1.4) {
-    error_lambda <- (1.4 - lambda)^2
-  } else if (lambda > 1.77) {
-    error_lambda <- (lambda - 1.77)^2
-  }
-  
   # --- Combine ---
-  return(error_pop + error_msy + 0.05 * error_reg + 0.1 * error_theta + 50 * error_lambda) 
+  return(
+    10 * error_pop +      # strongest: controls system behavior
+      5 * error_msy +      # ties to data
+      10 * error_lambda +
+      20 * error_surv +    # biological realism
+      0.05 * error_reg +    # mild regularization
+      0.5 * error_theta     # weak guidance only
+  )
 
 }
 

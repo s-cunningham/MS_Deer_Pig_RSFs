@@ -87,26 +87,26 @@ male_base <- c(0.82, 0.63, 0.53, 0.44, 0.49)
 male_upper <- male_cap / male_base
 
 # Caps on survival (minimum values)
-female_min <- 0.75
-male_min <- 0.6
+female_min <- 0.6
+male_min <- 0.35
 
 female_lower <- female_min / female_base
 male_lower <- male_min / male_base
 
 # set up bounds (Fawn survival (1), female survival (5), male survival (5), fecundity (1), theta(1))
-deer_lower <- c(0.6,          # Fawn survival
+deer_lower <- c(0.8,          # Fawn survival
                 female_lower, # Female survival
                 male_lower,   # Male survival
-                0.7,         # Fecundity
+                0.5,         # Fecundity
                 2)          # Theta
 
 deer_upper <- c(1.8,          # Fawn survival
                 female_upper, # female survival
                 male_upper,   # male survival
-                1.7,          # Fecundity
+                2.2,          # Fecundity
                 3.2)            # Theta
 
-c_dd <- 0.7
+c_dd <- 0.15
 
 # run optimizer
 set.seed(1)
@@ -147,7 +147,7 @@ A_adj[7,3:6] <- A_base[7,3:6]*deer_opt$par[12]
 
 #### Run population model ####
 set.seed(1)
-res14 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=1347232, Sims=1000, years=50, ev_sd=0.01, harvest=TRUE, c_dd=c_dd) 
+res14 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=1347232, Sims=1000, years=100, ev_sd=0.01, harvest=TRUE, c_dd=c_dd) 
 
 plot(res14$three_yr_males,type="l", col="purple", ylim=c(0, 100000))
 lines(res14$four_yr_males, col="blue")
@@ -161,15 +161,15 @@ res14$final_lambda
 
 # Plot population projection
 ggplot(res14$results) +
-  coord_cartesian(ylim=c(0,2500000)) +
+  # coord_cartesian(ylim=c(0,2500000)) +
   geom_hline(yintercept=1610000, color="red", linetype=3) +  # Estimated current population size
   # geom_hline(yintercept=1750000, color="red", linetype=3) +
   geom_hline(yintercept=K) + # Carrying capacity
   geom_ribbon(aes(x=Year,ymin=N.10pct, ymax=N.90pct), alpha=.2,fill="#21918c") +
   geom_line(aes(x=Year, y=N.median),colour="#21918c",alpha=1,linewidth=1) +
-  scale_y_continuous(name="Abundance (in millions)", 
-                     breaks=c(0,500000, 1000000, 1500000, 2000000, 2500000),
-                     labels=c(0, 0.5, 1, 1.5, 2, 2.5)) +
+  # scale_y_continuous(name="Abundance (in millions)", 
+  #                    breaks=c(0,500000, 1000000, 1500000, 2000000, 2500000),
+  #                    labels=c(0, 0.5, 1, 1.5, 2, 2.5)) +
   theme_bw() +
   xlab("Simulation Year") +
   theme_classic() +
