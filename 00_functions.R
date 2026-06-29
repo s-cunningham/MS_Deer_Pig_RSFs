@@ -177,9 +177,12 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
       female_sum <- sum(deer.array[2:6, y-1, i], na.rm=TRUE)
       male_sum   <- sum(deer.array[8:12, y-1, i], na.rm=TRUE)
       
-      asr <- ifelse(female_sum > 0,
-                    male_sum / female_sum,
-                    1)   # some kind of default
+      if (female_sum > 0) {
+        asr <- male_sum / female_sum
+      } else {
+        asr <- 1
+      }
+      if (!is.finite(asr)) asr <- 1
       
       # Save sex ratio
       asr_mat[y-1,i] <- asr
@@ -245,7 +248,21 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
         doe_h <- h * 0.54
         buck_h <- h - doe_h
         
-        doe_r <- c(0.0735, 0.189, 0.1895, 0.183, 0.183, 0.182) * doe_h
+        # doe_r <- c(0.0735, 0.189, 0.1895, 0.183, 0.183, 0.182) * doe_h
+        # 
+        doe_available <- N_preharvest[1:6]
+        doe_weights <- c(0.0735, 0.189, 0.1895, 0.183, 0.183, 0.182)
+        
+        alloc <- doe_weights * doe_available
+        total_alloc <- sum(alloc)
+        
+        if (total_alloc > 0) {
+          alloc <- alloc / total_alloc
+        } else {
+          alloc <- rep(0, 6)
+        }
+        
+        doe_r <- alloc * doe_h
         
         # make sure we're not losing males by harvesting more than exist in that age class
         stage_weights <- c(0.04, 0.11, 0.12, 0.23, 0.25, 0.25)
@@ -257,9 +274,9 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
         if (total_alloc > 0) {
           harvest_alloc <- harvest_alloc / total_alloc
         } else {
-          harvest_alloc <- rep(0, length(available))
+          harvest_alloc <- rep(0, length(harvest_alloc))
         }
-
+        
         buck_r <- harvest_alloc * buck_h
 
         # Combine for total harvest
@@ -552,7 +569,7 @@ objective_fn_deer <- function(params) {
   A_scaled[2:6, 1:6] <- pmin(A_scaled[2:6, 1:6], 0.999)
   A_scaled[8:12, 7:12] <- pmin(A_scaled[8:12, 7:12], 0.999)
   
-  print(max(A_scaled[1, ]))
+  # print(max(A_scaled[1, ]))
   
   # --- Get survival rates and penalize for those that are too low (before harvest) ---
   # Adult females (stages 2–6 transitions)
@@ -575,16 +592,10 @@ objective_fn_deer <- function(params) {
   # Set target survival values (max expected before harvest mortality - )
   # lower bounds
   min_female <- 0.85
-  min_male   <- 0.70
+  min_male   <- 0.75
   
-  error_surv <- 
-    sum(pmax(min_female - female_surv, 0)^2) +
+  error_surv <- sum(pmax(min_female - female_surv, 0)^2) +
     0.5 * sum(pmax(min_male - male_surv, 0)^2)
-  
-  # enforce female ≥ male
-  # error_sex <- sum(pmax(male_surv - female_surv, 0)^2)
-  # 
-  # error_surv_total <- 5 * error_surv + 5 * error_sex
   
   # --- another penalty for male survival > female survival
   error_sex_surv <- sum(pmax(male_surv - female_surv, 0)^2)
@@ -596,7 +607,7 @@ objective_fn_deer <- function(params) {
   # --- Penalty for low population growth
   lambda <- Re(eigen(A_scaled)$values[1])
   
-  error_lambda <- pmax(1.4 - lambda, 0)^2
+  error_lambda <- pmax(1.28 - lambda, 0)^2
   
   # Set up initial popualtion size
   N0 <- w * 0.01 * K  # e.g., start at 50% of K (or in this case 1% of K)
@@ -611,12 +622,10 @@ objective_fn_deer <- function(params) {
   sim_N <- deer_pop_proj(A_scaled, N0, Kf, theta, Year, c_dd=c_dd) 
 
   # use last half of time series (avoid transient dynamics)
-  tail_N <- tail(sim_N, length(sim_N) / 2)
-  mean_N <- mean(tail_N)
+  final_N <- tail(sim_N, 5)   # last few years
+  mean_final <- mean(final_N)
   
-  error_pop <- 
-    3 * pmax(Kf - mean_N, 0)^2 / Kf^2 +
-    pmax(mean_N - Kf, 0)^2 / Kf^2
+  error_pop <- ((mean_final - Kf) / Kf)^2
   
   # --- MSY --- 
   sim_msy <- get_msy(data.frame(Year, N.median=sim_N))
@@ -633,10 +642,10 @@ objective_fn_deer <- function(params) {
   
   # --- Combine ---
   return(
-    10 * error_pop +      # strongest: controls system behavior
+    15 * error_pop +      # strongest: controls system behavior
       5 * error_msy +      # ties to data
-      10 * error_lambda +
-      20 * error_surv +    # biological realism
+      5 * error_lambda +
+      5 * error_surv +    # biological realism
       0.05 * error_reg +    # mild regularization
       0.5 * error_theta     # weak guidance only
   )
