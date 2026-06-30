@@ -217,13 +217,6 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
       # save new matrix
       A_dd <- A_s
       
-      ## Adjust fecundity by female survival
-      R0y_s <- A_s[1,2]
-      R0a_s3 <- A_s[1,3]
-      R0a_s4 <- A_s[1,3]
-      R0a_s5 <- A_s[1,3]
-      R0a_s6 <- A_s[1,3]
-      
       # Density dependent adjustment in fecundity
       # What was abundance at time step t-1
       Nf_t <- sum(deer.array[1:6,y-1,i], na.rm=TRUE)
@@ -277,12 +270,6 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
       ## Harvest deer 
       # Calculate new pop size BEFORE harvest
       N_preharvest <- pmax(A_dd %*% deer.array[,y-1,i], 0) # Make sure to multiply matrix x vector (not vice versa)
-      
-      # Print effective births per female
-      # total_births <- N_preharvest[1] + N_preharvest[7]
-      # repro_females <- sum(deer.array[2:6, y-1, i])  # or only adult classes if desired
-      # effective_births <- total_births / max(repro_females, 1)
-      # print(effective_births)
       
       # Harvest
       if (harvest) {
