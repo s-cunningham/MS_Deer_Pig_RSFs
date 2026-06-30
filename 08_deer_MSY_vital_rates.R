@@ -14,8 +14,7 @@ set.seed(1)
 Year <- 1:100
 
 # Carrying capacity 14.3 deer/km2
-# K <- 1347232
-K <- 2090532
+K <- 1347232
 
 # Set up deer matrix
 A_base <- matrix(0,12,12)
@@ -78,8 +77,8 @@ observed_harvest <- 280000
 ### Optimize survival and fecundities
 
 # Caps on survival (maximum values)
-female_cap <- 0.97
-male_cap <- 0.97
+female_cap <- 0.95
+male_cap <- 0.95
 
 female_base <- c(0.93, 0.84, 0.84, 0.84, 0.84)
 female_upper <- female_cap / female_base
@@ -88,26 +87,26 @@ male_base <- c(0.82, 0.63, 0.53, 0.44, 0.49)
 male_upper <- male_cap / male_base
 
 # Caps on survival (minimum values)
-female_min <- 0.6
-male_min <- 0.5
+female_min <- 0.75
+male_min <- 0.6
 
 female_lower <- female_min / female_base
 male_lower <- male_min / male_base
 
 # set up bounds (Fawn survival (1), female survival (5), male survival (5), fecundity (1), theta(1))
-deer_lower <- c(0.9,          # Fawn survival
+deer_lower <- c(0.6,          # Fawn survival
                 female_lower, # Female survival
                 male_lower,   # Male survival
-                0.5,         # Fecundity
+                0.7,         # Fecundity
                 2)          # Theta
 
 deer_upper <- c(1.8,          # Fawn survival
                 female_upper, # female survival
                 male_upper,   # male survival
-                2.2,          # Fecundity
+                1.7,          # Fecundity
                 3.2)            # Theta
 
-c_dd <- 1 #0.15
+c_dd <- 0.7
 
 # run optimizer
 set.seed(1)
@@ -145,11 +144,10 @@ A_adj[7,2] <- A_base[7,2]*deer_opt$par[12]
 A_adj[1,3:6] <- A_base[1,3:6]*deer_opt$par[12]
 A_adj[7,3:6] <- A_base[7,3:6]*deer_opt$par[12]
 
-Re(eigen(A_adj)$values[1])
 
 #### Run population model ####
 set.seed(1)
-res14 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=1347232, Sims=1000, years=100, ev_sd=0.01, harvest=TRUE, c_dd=c_dd) 
+res14 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=1347232, Sims=1000, years=50, ev_sd=0.01, harvest=TRUE, c_dd=c_dd) 
 
 plot(res14$three_yr_males,type="l", col="purple", ylim=c(0, 100000))
 lines(res14$four_yr_males, col="blue")
@@ -163,15 +161,15 @@ res14$final_lambda
 
 # Plot population projection
 ggplot(res14$results) +
-  # coord_cartesian(ylim=c(0,2500000)) +
+  coord_cartesian(ylim=c(0,2500000)) +
   geom_hline(yintercept=1610000, color="red", linetype=3) +  # Estimated current population size
   # geom_hline(yintercept=1750000, color="red", linetype=3) +
   geom_hline(yintercept=K) + # Carrying capacity
   geom_ribbon(aes(x=Year,ymin=N.10pct, ymax=N.90pct), alpha=.2,fill="#21918c") +
   geom_line(aes(x=Year, y=N.median),colour="#21918c",alpha=1,linewidth=1) +
-  # scale_y_continuous(name="Abundance (in millions)", 
-  #                    breaks=c(0,500000, 1000000, 1500000, 2000000, 2500000),
-  #                    labels=c(0, 0.5, 1, 1.5, 2, 2.5)) +
+  scale_y_continuous(name="Abundance (in millions)", 
+                     breaks=c(0,500000, 1000000, 1500000, 2000000, 2500000),
+                     labels=c(0, 0.5, 1, 1.5, 2, 2.5)) +
   theme_bw() +
   xlab("Simulation Year") +
   theme_classic() +
@@ -197,15 +195,15 @@ ggplot(res14$r.surv) +
   ylab("Survival probability") + xlab("Stage") +
   theme_bw() +
   theme(#panel.border=element_rect(fill=NA, color="black"),
-        legend.position.inside = c(0,0),
-        legend.justification=c(0,0),
-        legend.background = element_rect(fill=NA),
-        strip.background=element_blank(),
-        strip.text=element_text(hjust=0, size=14),
-        axis.text.y=element_text(size=12),
-        axis.text.x=element_text(angle=25, vjust=0.8, hjust=0.8, size=12),
-        axis.title=element_text(size=14),
-        legend.text=element_text(size=12))
+    legend.position.inside = c(0,0),
+    legend.justification=c(0,0),
+    legend.background = element_rect(fill=NA),
+    strip.background=element_blank(),
+    strip.text=element_text(hjust=0, size=14),
+    axis.text.y=element_text(size=12),
+    axis.text.x=element_text(angle=25, vjust=0.8, hjust=0.8, size=12),
+    axis.title=element_text(size=14),
+    legend.text=element_text(size=12))
 
 ggplot(res14$r.fec) +
   coord_cartesian(xlim=c(0.7, 2), ylim=c(0,2)) +
@@ -257,14 +255,14 @@ A_base <- matrix(0,12,12)
 
 ## Survival
 # Females
-A_base[2,1] <- 0.27
+A_base[2,1] <- 0.23
 A_base[3,2] <- 0.93
 A_base[4,3] <- 0.84
 A_base[5,4] <- 0.84
 A_base[6,5] <- 0.84
 A_base[6,6] <- 0.84
 # Males
-A_base[8,7] <- 0.27
+A_base[8,7] <- 0.23
 A_base[9,8] <- 0.82
 A_base[10,9] <- 0.63
 A_base[11,10] <- 0.53
@@ -308,45 +306,41 @@ lambda <- Re(eigen(deer.matrix)$values[1])
 Kf <- K * 0.60
 
 # How many deer are harvested?
-observed_harvest <- 280000 
+observed_harvest <- 290000 
 
 ### Optimize survival and fecundities
-
-# Caps on survival (maximum values)
-female_cap <- 0.97
-male_cap <- 0.97
-
-female_base <- c(0.93, 0.84, 0.84, 0.84, 0.84)
-female_upper <- female_cap / female_base
-
-male_base <- c(0.82, 0.63, 0.53, 0.44, 0.49)
-male_upper <- male_cap / male_base
-
-# Caps on survival (minimum values)
-female_min <- 0.6
-male_min <- 0.5
-
-female_lower <- female_min / female_base
-male_lower <- male_min / male_base
-
 # set up bounds (Fawn survival (1), female survival (5), male survival (5), fecundity (1), theta(1))
-deer_lower <- c(0.8,          # Fawn survival
-                female_lower, # Female survival
-                male_lower,   # Male survival
-                0.5,         # Fecundity
-                2)          # Theta
+deer_lower <- c(0.95, # Fawn survival
+                0.85, # Female survival
+                0.85,
+                0.85,
+                0.85, 
+                0.85, 
+                0.99, # Male survival
+                0.95,
+                0.95,
+                0.95,
+                0.95, 
+                0.75,  # Fecundity
+                0.9) # Theta
 
-deer_upper <- c(1.8,          # Fawn survival
-                female_upper, # female survival
-                male_upper,   # male survival
-                2.2,          # Fecundity
-                3.2)            # Theta
-
-c_dd <- 0.2
+deer_upper <- c(3.5, # Fawn survival
+                1.05, # Female survival
+                1.05, 
+                1.05, 
+                1.05,
+                1.05, 
+                1.05, # Male survival
+                1.5, 
+                1.8,
+                1.9, 
+                1.9,
+                2.5, # Fecundity
+                6) # Theta
 
 # run optimizer
 set.seed(1)
-deer_opt <- optim(par=runif(13, 0.9, 1.2), fn=objective_fn_deer, method="L-BFGS-B", lower=deer_lower, upper=deer_upper, control = list(trace = 1, maxit=1000))
+deer_opt <- optim(par=rep(1.2, 13), fn=objective_fn_deer, method="L-BFGS-B", lower=deer_lower, upper=deer_upper, control = list(trace = 1))
 
 # What are optimized parameter values 
 deer_opt$par
@@ -385,8 +379,7 @@ A_adj[6, 5] <- 1
 
 #### Run population model ####
 set.seed(1)
-res22 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=2090532, Sims=1000, years=50, ev_sd=0.01, harvest=FALSE, c_dd=c_dd) 
-
+res22 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=2090532, Sims=1000, years=50) 
 
 #Plot population projection
 ggplot(res22$results) +
@@ -509,13 +502,13 @@ res_plot <- ggplot(results) +
   xlab("Simulation Year") +
   theme_classic() +
   theme(panel.border=element_rect(fill=NA, color="black", linewidth=0.5),
-    legend.position.inside=c(0,0),
-    legend.justification=c(0,0),
-    legend.background=element_rect(fill=NA),
-    legend.text=element_markdown(size=11),
-    legend.title=element_text(size=12),
-    axis.text=element_text(size=11),
-    axis.title=element_text(size=12)) 
+        legend.position.inside=c(0,0),
+        legend.justification=c(0,0),
+        legend.background=element_rect(fill=NA),
+        legend.text=element_markdown(size=11),
+        legend.title=element_text(size=12),
+        axis.text=element_text(size=11),
+        axis.title=element_text(size=12)) 
 
 s_text <- data.frame(x=rep("Fawn",2), y=1, sex=c("Female", "Male"), label=c("Female", "Male"))
 
@@ -543,7 +536,7 @@ s_plot <- ggplot(survival) +
         axis.title=element_text(size=12),
         legend.text=element_markdown(size=11),
         legend.title=element_text(size=12))#,
-        # strip.text=element_blank())
+# strip.text=element_blank())
 
 ## Survival plot
 r.surv27_all <- r.surv27_all |>
@@ -579,7 +572,7 @@ s_plot <- ggplot(r.surv27_all) +
 
 
 
- f_plot <- ggplot(fec14) +
+f_plot <- ggplot(fec14) +
   coord_cartesian(xlim=c(0.7, 2), ylim=c(0,1.4)) +
   geom_segment(aes(x=x, y=f10pct, yend=f90pct), color="#21918c", linewidth=1) +
   geom_point(aes(x=x, y=fec, group=source, color=source, shape=offspring_sex), size=3) +
