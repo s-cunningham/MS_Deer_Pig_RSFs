@@ -97,6 +97,8 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
   ##Stochastistic model
   Year <- 1:years
   
+  Kf <- K * 0.6
+  
   # Empty array to hold pop count
   deer.array <- array(0,dim=c(12,length(Year),Sims))
   
@@ -107,7 +109,7 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
   a2[7,1:6] <- a2[7,1:6]*0.5*mnFs
   
   # Calculate lambda from matrix with split fecundity (like it should be)
-  lambda <- Re(eigen(a2)$values[1])
+  lambda <- Re(eigen(A_adj)$values[1])
   
   # Set up initial popualtion size
   w <- Re(eigen(a2)$vectors[, 1])
@@ -136,30 +138,84 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
     for (s in 2:5) {
       # Survive & go
       # Calculate beta distribution parameters
-      alpha <- A_adj[s+1,s] * (((A_adj[s+1,s]*(1-A_adj[s+1,s]))/(ev_sd^2))-1)
-      beta <- (1-A_adj[s+1,s]) * (((A_adj[s+1,s]*(1-A_adj[s+1,s]))/(ev_sd^2))-1)
-      A_s[s+1,s] <- rbeta(1, alpha, beta)
+      p <- A_adj[s+1,s]
+      
+      # prevent extreme values
+      p <- min(max(p, 1e-6), 1 - 1e-6)
+      
+      var <- ev_sd^2
+      tmp <- (p * (1 - p) / var) - 1
+      
+      if (tmp <= 0) {
+        # fallback: no stochasticity
+        A_s[s+1,s] <- p
+      } else {
+        alpha <- p * tmp
+        beta  <- (1 - p) * tmp
+        A_s[s+1,s] <- rbeta(1, alpha, beta)
+      }
+      
     }
     # Survive & stay
-    alpha <- A_adj[6,6] * (((A_adj[6,6]*(1-A_adj[6,6]))/(ev_sd^2))-1)
-    beta <- (1-A_adj[6,6]) * (((A_adj[6,6]*(1-A_adj[6,6]))/(ev_sd^2))-1)
-    A_s[6,6] <- rbeta(1, alpha, beta)
+    p <- A_adj[6,6]
+    
+    # prevent extreme values
+    p <- min(max(p, 1e-6), 1 - 1e-6)
+    
+    var <- ev_sd^2
+    tmp <- (p * (1 - p) / var) - 1
+    
+    if (tmp <= 0) {
+      # fallback: no stochasticity
+      A_s[6,6] <- p
+    } else {
+      alpha <- p * tmp
+      beta  <- (1 - p) * tmp
+      A_s[6,6] <- rbeta(1, alpha, beta)
+    }
+    
     # Male survival
     for (s in 8:11) {
       # Survive & go
-      alpha <- A_adj[s+1,s] * (((A_adj[s+1,s]*(1-A_adj[s+1,s]))/(ev_sd^2))-1)
-      beta <- (1-A_adj[s+1,s]) * (((A_adj[s+1,s]*(1-A_adj[s+1,s]))/(ev_sd^2))-1)
-      A_s[s+1,s] <- rbeta(1, alpha, beta)
+      p <- A_adj[s+1,s]
+      
+      # prevent extreme values
+      p <- min(max(p, 1e-6), 1 - 1e-6)
+      
+      var <- ev_sd^2
+      tmp <- (p * (1 - p) / var) - 1
+      
+      if (tmp <= 0) {
+        # fallback: no stochasticity
+        A_s[s+1,s] <- p
+      } else {
+        alpha <- p * tmp
+        beta  <- (1 - p) * tmp
+        A_s[s+1,s] <- rbeta(1, alpha, beta)
+      }
     }
     # Survive & stay
-    alpha <- A_adj[12,12] * (((A_adj[12,12]*(1-A_adj[12,12]))/(ev_sd^2))-1)
-    beta <- (1-A_adj[12,12]) * (((A_adj[12,12]*(1-A_adj[12,12]))/(ev_sd^2))-1)
-    A_s[12,12] <- rbeta(1, alpha, beta)
+    p <- A_adj[12,12]
     
-    # save new matrix
-    A_dd <- A_s
+    # prevent extreme values
+    p <- min(max(p, 1e-6), 1 - 1e-6)
+    
+    var <- ev_sd^2
+    tmp <- (p * (1 - p) / var) - 1
+    
+    if (tmp <= 0) {
+      # fallback: no stochasticity
+      A_s[12,12] <- p
+    } else {
+      alpha <- p * tmp
+      beta  <- (1 - p) * tmp
+      A_s[12,12] <- rbeta(1, alpha, beta)
+    }
     
     for (y in 2:length(Year)){
+      
+      # save new matrix
+      A_dd <- A_s
       
       ## Adjust fecundity by female survival
       R0y_s <- A_s[1,2]
@@ -176,9 +232,12 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
       female_sum <- sum(deer.array[2:6, y-1, i], na.rm=TRUE)
       male_sum   <- sum(deer.array[8:12, y-1, i], na.rm=TRUE)
       
-      asr <- ifelse(female_sum > 0,
-                    male_sum / female_sum,
-                    1)   # some kind of default
+      if (female_sum > 0) {
+        asr <- male_sum / female_sum
+      } else {
+        asr <- 1
+      }
+      if (!is.finite(asr)) asr <- 1
       
       # Save sex ratio
       asr_mat[y-1,i] <- asr
@@ -193,21 +252,11 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
       # Calcuate density factor
       density_factor <- 1 / (1 + c_dd * (Nf_t / Kf)^theta)
       density_factor <- pmax(density_factor, 0.2)
+      if (!is.finite(density_factor)) density_factor <- 1
       
       # Adjust sex ratio at birth and reduce fecundity
       A_dd[1,1:6] <- c(0, R0y_s, R0a_s3, R0a_s4, R0a_s5, R0a_s6) * s_f * density_factor
       A_dd[7,1:6] <- c(0, R0y_s, R0a_s3, R0a_s4, R0a_s5, R0a_s6) * s_m * density_factor
-      
-      # apply only to adult survival transitions
-      A_dd[4,3] <- A_s[4,3]
-      A_dd[5,4] <- A_s[5,4]
-      A_dd[6,5] <- A_s[6,5]
-      A_dd[6,6] <- A_s[6,6]
-      
-      A_dd[10,9] <- A_s[10,9]
-      A_dd[11,10] <- A_s[11,10]
-      A_dd[12,11] <- A_s[12,11]
-      A_dd[12,12] <- A_s[12,12]
       
       # Stop loop if there are zeros
       if (any(is.na(A_dd))) {
@@ -227,7 +276,7 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
       
       ## Harvest deer 
       # Calculate new pop size BEFORE harvest
-      N_preharvest <- pmax(A_dd %*% deer.array[,y-1,i], 0)# Make sure to multiply matrix x vector (not vice versa)
+      N_preharvest <- pmax(A_dd %*% deer.array[,y-1,i], 0) # Make sure to multiply matrix x vector (not vice versa)
       
       # Print effective births per female
       # total_births <- N_preharvest[1] + N_preharvest[7]
@@ -256,8 +305,9 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
         if (total_alloc > 0) {
           harvest_alloc <- harvest_alloc / total_alloc
         } else {
-          harvest_alloc <- rep(0, length(available))
+          harvest_alloc <- rep(0, length(harvest_alloc))
         }
+        
         
         buck_r <- harvest_alloc * buck_h
         

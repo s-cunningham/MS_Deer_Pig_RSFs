@@ -44,8 +44,8 @@ FecundityM <- c(0, R0y, R0a, R0a, R0a, R0a)
 FecundityF <- c(0, R0y, R0a, R0a, R0a, R0a)
 
 # Add to matrix
-A_base[1,1:6] <- FecundityF
-A_base[7,1:6] <- FecundityM
+A_base[1,1:6] <- FecundityF * 0.565
+A_base[7,1:6] <- FecundityM * 0.435
 
 
 deer.matrix <- A_base
@@ -77,8 +77,8 @@ observed_harvest <- 280000
 ### Optimize survival and fecundities
 
 # Caps on survival (maximum values)
-female_cap <- 0.95
-male_cap <- 0.95
+female_cap <- 0.97
+male_cap <- 0.97
 
 female_base <- c(0.93, 0.84, 0.84, 0.84, 0.84)
 female_upper <- female_cap / female_base
@@ -88,7 +88,7 @@ male_upper <- male_cap / male_base
 
 # Caps on survival (minimum values)
 female_min <- 0.75
-male_min <- 0.6
+male_min <- 0.7
 
 female_lower <- female_min / female_base
 male_lower <- male_min / male_base
@@ -97,16 +97,16 @@ male_lower <- male_min / male_base
 deer_lower <- c(0.6,          # Fawn survival
                 female_lower, # Female survival
                 male_lower,   # Male survival
-                0.7,         # Fecundity
-                2)          # Theta
+                0.7,          # Fecundity
+                2)            # Theta
 
-deer_upper <- c(1.8,          # Fawn survival
+deer_upper <- c(1.9,         # Fawn survival
                 female_upper, # female survival
                 male_upper,   # male survival
-                1.7,          # Fecundity
+                2.6,            # Fecundity
                 3.2)            # Theta
 
-c_dd <- 0.7
+c_dd <- 0.64
 
 # run optimizer
 set.seed(1)
@@ -147,11 +147,7 @@ A_adj[7,3:6] <- A_base[7,3:6]*deer_opt$par[12]
 
 #### Run population model ####
 set.seed(1)
-res14 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=1347232, Sims=1000, years=50, ev_sd=0.01, harvest=TRUE, c_dd=c_dd) 
-
-plot(res14$three_yr_males,type="l", col="purple", ylim=c(0, 100000))
-lines(res14$four_yr_males, col="blue")
-lines(res14$five_yr_males, col="darkgreen")
+res14 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=1347232, Sims=1000, years=50, ev_sd=0.02, harvest=TRUE, c_dd=c_dd) 
 
 # Lambda from adjusted matrix
 res14$matrix_lambda
@@ -309,39 +305,41 @@ Kf <- K * 0.60
 observed_harvest <- 290000 
 
 ### Optimize survival and fecundities
-# set up bounds (Fawn survival (1), female survival (5), male survival (5), fecundity (1), theta(1))
-deer_lower <- c(0.95, # Fawn survival
-                0.85, # Female survival
-                0.85,
-                0.85,
-                0.85, 
-                0.85, 
-                0.99, # Male survival
-                0.95,
-                0.95,
-                0.95,
-                0.95, 
-                0.75,  # Fecundity
-                0.9) # Theta
+# Caps on survival (maximum values)
+female_cap <- 0.95
+male_cap <- 0.95
 
-deer_upper <- c(3.5, # Fawn survival
-                1.05, # Female survival
-                1.05, 
-                1.05, 
-                1.05,
-                1.05, 
-                1.05, # Male survival
-                1.5, 
-                1.8,
-                1.9, 
-                1.9,
-                2.5, # Fecundity
-                6) # Theta
+female_base <- c(0.93, 0.84, 0.84, 0.84, 0.84)
+female_upper <- female_cap / female_base
+
+male_base <- c(0.82, 0.63, 0.53, 0.44, 0.49)
+male_upper <- male_cap / male_base
+
+# Caps on survival (minimum values)
+female_min <- 0.75
+male_min <- 0.7
+
+female_lower <- female_min / female_base
+male_lower <- male_min / male_base
+
+# set up bounds (Fawn survival (1), female survival (5), male survival (5), fecundity (1), theta(1))
+deer_lower <- c(0.6,          # Fawn survival
+                female_lower, # Female survival
+                male_lower,   # Male survival
+                0.7,         # Fecundity
+                2)          # Theta
+
+deer_upper <- c(1.5,          # Fawn survival
+                female_upper, # female survival
+                male_upper,   # male survival
+                1.7,          # Fecundity
+                3.2)            # Theta
+
+c_dd <- 0.70
 
 # run optimizer
 set.seed(1)
-deer_opt <- optim(par=rep(1.2, 13), fn=objective_fn_deer, method="L-BFGS-B", lower=deer_lower, upper=deer_upper, control = list(trace = 1))
-
+deer_opt <- optim(par=runif(13, 0.9, 1.2), fn=objective_fn_deer, method="L-BFGS-B", lower=deer_lower, upper=deer_upper, control = list(trace = 1, maxit=1000))
 # What are optimized parameter values 
 deer_opt$par
 
@@ -379,11 +377,17 @@ A_adj[6, 5] <- 1
 
 #### Run population model ####
 set.seed(1)
-res22 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=2090532, Sims=1000, years=50) 
+res22 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=2090532, Sims=1000, years=50, ev_sd=0.02, harvest=TRUE, c_dd=c_dd) 
+
+# Lambda from adjusted matrix
+res22$matrix_lambda
+
+# Lambda from final matrix
+res22$final_lambda
 
 #Plot population projection
 ggplot(res22$results) +
-  coord_cartesian(ylim=c(0,2800000)) +
+  coord_cartesian(ylim=c(0,3800000)) +
   geom_hline(yintercept=1610000, color="red", linetype=3) +
   # geom_hline(yintercept=1750000, color="red", linetype=3) +
   geom_hline(yintercept=K) +
@@ -439,7 +443,15 @@ ggplot(res22$r.fec) +
         axis.title=element_text(size=12),
         axis.text=element_text(size=11))
 
-
+# Plot sex ratio
+ggplot(res22$ASR) +
+  geom_hline(yintercept=1, linetype=2) +
+  geom_hline(yintercept=0.4, linetype=2, color="red") +
+  coord_cartesian(ylim=c(0,1.5)) +
+  geom_ribbon(aes(x=Year, ymin=ASR.20, ymax=ASR.80), alpha=0.5) +
+  geom_line(aes(x=Year, y=ASR.median)) +
+  ylab("ASR (males/females)") +
+  theme_classic()
 
 #### Save results from both densities ####
 results14 <- res14$results
