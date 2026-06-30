@@ -95,7 +95,7 @@ female_lower <- female_min / female_base
 male_lower <- male_min / male_base
 
 # set up bounds (Fawn survival (1), female survival (5), male survival (5), fecundity (1), theta(1))
-deer_lower <- c(0.8,          # Fawn survival
+deer_lower <- c(0.9,          # Fawn survival
                 female_lower, # Female survival
                 male_lower,   # Male survival
                 0.5,         # Fecundity
@@ -107,7 +107,7 @@ deer_upper <- c(1.8,          # Fawn survival
                 2.2,          # Fecundity
                 3.2)            # Theta
 
-c_dd <- 0.15
+c_dd <- 1 #0.15
 
 # run optimizer
 set.seed(1)
@@ -145,6 +145,7 @@ A_adj[7,2] <- A_base[7,2]*deer_opt$par[12]
 A_adj[1,3:6] <- A_base[1,3:6]*deer_opt$par[12]
 A_adj[7,3:6] <- A_base[7,3:6]*deer_opt$par[12]
 
+Re(eigen(A_adj)$values[1])
 
 #### Run population model ####
 set.seed(1)

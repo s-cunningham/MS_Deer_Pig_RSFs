@@ -101,17 +101,11 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
   # Empty array to hold pop count
   deer.array <- array(0,dim=c(12,length(Year),Sims))
   
-  # Calculate stable stage distribution
-  mnFs <- mean(c(A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6]))
-  a2 <- A_adj
-  a2[1,1:6] <- a2[1,1:6]*0.5*mnFs
-  a2[7,1:6] <- a2[7,1:6]*0.5*mnFs
-
-  # Calculate lambda from matrix with split fecundity (like it should be)
-  lambda <- Re(eigen(a2)$values[1])
+    # Calculate lambda from matrix with split fecundity (like it should be)
+  lambda <- Re(eigen(A_adj)$values[1])
   
   # Set up initial popualtion size
-  w <- Re(eigen(a2)$vectors[, 1])
+  w <- Re(eigen(A_adj)$vectors[, 1])
   w <- w / sum(w) # normals to equal 1
   N0 <- w * 1 * K # e.g., start at 50% of K
   
@@ -157,10 +151,10 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
     beta <- (1-A_adj[12,12]) * (((A_adj[12,12]*(1-A_adj[12,12]))/(ev_sd^2))-1)
     A_s[12,12] <- rbeta(1, alpha, beta)
     
-    # save new matrix
-    A_dd <- A_s
-    
     for (y in 2:length(Year)){
+      
+      # save new matrix
+      A_dd <- A_s
       
       ## Adjust fecundity by female survival
       R0y_s <- A_s[1,2]
@@ -188,7 +182,7 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
       asr_mat[y-1,i] <- asr
       
       # Calculate % males & females
-      s_m <- 0.5 + 0.1 * (1 - asr)
+      s_m <- 0.5 + 0.05 * (1 - asr)
       s_m <- pmin(pmax(s_m, 0.4), 0.6)
       
       if (is.na(s_m)) s_m <- 0.5
@@ -202,17 +196,6 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
       A_dd[1,1:6] <- c(0, R0y_s, R0a_s3, R0a_s4, R0a_s5, R0a_s6) * s_f * density_factor
       A_dd[7,1:6] <- c(0, R0y_s, R0a_s3, R0a_s4, R0a_s5, R0a_s6) * s_m * density_factor
 
-      # apply only to adult survival transitions
-      A_dd[4,3] <- A_s[4,3]
-      A_dd[5,4] <- A_s[5,4]
-      A_dd[6,5] <- A_s[6,5]
-      A_dd[6,6] <- A_s[6,6]
-      
-      A_dd[10,9] <- A_s[10,9]
-      A_dd[11,10] <- A_s[11,10]
-      A_dd[12,11] <- A_s[12,11]
-      A_dd[12,12] <- A_s[12,12]
-      
       # Stop loop if there are zeros
       if (any(is.na(A_dd))) {
         stop("NA detected in A_dd")
@@ -283,7 +266,10 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
         r <- c(doe_r, buck_r)
         
         # make sure we're not taking more animals that exist in a certain age class
-        r <- pmin(r, N_preharvest)
+        # r <- pmin(r, N_preharvest)
+        small_stage <- N_preharvest < 50
+        r[small_stage] <- pmin(r[small_stage], 0.3 * N_preharvest[small_stage])
+        
         
         # Apply harvest AFTER computing proportion
         N_next <- N_preharvest - r
@@ -640,13 +626,19 @@ objective_fn_deer <- function(params) {
   # --- Regularize deviation from baseline (1 = literature values)
   error_reg <- sum((params - 1)^2)
   
+  # --- soft upper boundary from fecundity from getting too big
+  max_fec_female <- 1.0
+  error_fec_high <- sum(pmax(A_scaled[1,3:6] - max_fec_female, 0)^2)
+  
+  
   # --- Combine ---
   return(
     15 * error_pop +      # strongest: controls system behavior
       5 * error_msy +      # ties to data
       5 * error_lambda +
       5 * error_surv +    # biological realism
-      0.05 * error_reg +    # mild regularization
+      5 * error_fec_high + 
+      # 0.05 * error_reg +    # mild regularization
       0.5 * error_theta     # weak guidance only
   )
 
