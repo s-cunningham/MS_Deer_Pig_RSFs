@@ -72,13 +72,13 @@ lambda <- Re(eigen(deer.matrix)$values[1])
 Kf <- K * 0.60
 
 # How many deer are harvested?
-observed_harvest <- 280000 
+observed_harvest <- 240000 
 
 ### Optimize survival and fecundities
 
 # Caps on survival (maximum values)
 female_cap <- 0.97
-male_cap <- 0.97
+male_cap <- 0.90
 
 female_base <- c(0.93, 0.84, 0.84, 0.84, 0.84)
 female_upper <- female_cap / female_base
@@ -87,8 +87,8 @@ male_base <- c(0.82, 0.63, 0.53, 0.44, 0.49)
 male_upper <- male_cap / male_base
 
 # Caps on survival (minimum values)
-female_min <- 0.75
-male_min <- 0.7
+female_min <- 0.90
+male_min <- 0.80
 
 female_lower <- female_min / female_base
 male_lower <- male_min / male_base
@@ -97,16 +97,16 @@ male_lower <- male_min / male_base
 deer_lower <- c(0.6,          # Fawn survival
                 female_lower, # Female survival
                 male_lower,   # Male survival
-                0.7,          # Fecundity
+                0.8,          # Fecundity
                 2)            # Theta
 
-deer_upper <- c(1.8,         # Fawn survival
+deer_upper <- c(1.6,         # Fawn survival
                 female_upper, # female survival
                 male_upper,   # male survival
-                2.0,            # Fecundity
+                1.9,            # Fecundity
                 3.2)            # Theta
 
-c_dd <- 0.94
+c_dd <- 0.85
 
 # run optimizer
 set.seed(1)
@@ -202,7 +202,7 @@ ggplot(res14$r.surv) +
     legend.text=element_text(size=12))
 
 ggplot(res14$r.fec) +
-  coord_cartesian(xlim=c(0.7, 2), ylim=c(0,2)) +
+  coord_cartesian(xlim=c(0.7, 2), ylim=c(0,1.4)) +
   geom_segment(aes(x=x, y=f10pct, yend=f90pct), color="#21918c", linewidth=1) +
   geom_point(aes(x=x, y=fec, group=source, color=source, shape=offspring_sex), size=3) +
   scale_color_manual(values=c("#440154", "#21918c")) +
@@ -300,12 +300,12 @@ lambda <- Re(eigen(deer.matrix)$values[1])
 Kf <- K * 0.60
 
 # How many deer are harvested?
-observed_harvest <- 290000 
+observed_harvest <- 240000 
 
 ### Optimize survival and fecundities
 # Caps on survival (maximum values)
-female_cap <- 0.95
-male_cap <- 0.95
+female_cap <- 0.94
+male_cap <- 0.85
 
 female_base <- c(0.93, 0.84, 0.84, 0.84, 0.84)
 female_upper <- female_cap / female_base
@@ -314,7 +314,7 @@ male_base <- c(0.82, 0.63, 0.53, 0.44, 0.49)
 male_upper <- male_cap / male_base
 
 # Caps on survival (minimum values)
-female_min <- 0.70
+female_min <- 0.80
 male_min <- 0.70
 
 female_lower <- female_min / female_base
@@ -324,16 +324,16 @@ male_lower <- male_min / male_base
 deer_lower <- c(0.6,          # Fawn survival
                 female_lower, # Female survival
                 male_lower,   # Male survival
-                0.7,         # Fecundity
-                2)          # Theta
+                1.0,          # Fecundity
+                1)            # Theta
 
-deer_upper <- c(1.4,          # Fawn survival
+deer_upper <- c(1.8,         # Fawn survival
                 female_upper, # female survival
                 male_upper,   # male survival
-                1.5,          # Fecundity
+                2.2,            # Fecundity
                 3.2)            # Theta
 
-c_dd <- 0.94
+c_dd <- 0.95
 
 # run optimizer
 set.seed(1)

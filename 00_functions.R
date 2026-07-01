@@ -412,11 +412,11 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
                     realized=median_fec,
                     f10pct=fec.10pct,
                     f90pct=fec.90pct,
-                    literature=c(0.57, 0.66, 0.74, 0.85),
+                    literature=c(0.609, 0.783, 0.791, 1.017),
                     x=c(0.9, 1.6, 1.1, 1.8))
   fec <- fec |>
     pivot_longer(cols=c("realized", "literature"), names_to="source", values_to="fec")
-  fec$source <- factor(fec$source, levels=c("literature", "realized"), labels=c("Literature", "Implied"))
+  fec$source <- factor(fec$source, levels=c("literature", "realized"), labels=c("MDWFP", "Implied"))
   
   # Summarize sex ratio
   ASR.median <- apply(asr_mat, 1, median)
@@ -512,8 +512,8 @@ scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_
   pct_f <- 0.435
   
   # Calculate for post-breeding census
-  FecundityM <- c(0, R0y*deer.matrix[3,2], R0a*deer.matrix[4,3], R0a*deer.matrix[5,4], R0a*deer.matrix[6,5], R0a*deer.matrix[6,6])*pct_m
-  FecundityF <- c(0, R0y*deer.matrix[3,2], R0a*deer.matrix[4,3], R0a*deer.matrix[5,4], R0a*deer.matrix[6,5], R0a*deer.matrix[6,6])*pct_f
+  FecundityM <- c(0, R0y, R0a, R0a, R0a, R0a)*pct_m
+  FecundityF <- c(0, R0y, R0a, R0a, R0a, R0a)*pct_f
   
   # Add to matrix
   deer.matrix[1,1:6] <- FecundityF
@@ -553,8 +553,8 @@ deer_pop_proj <- function(A, N0, Kf, theta, Year, c_dd) {
     s_f <- 1 - s_m
     
     # Adjust sex ratio at birth
-    A_dd[1,1:6] <- c(0, R0y_dd*A[3,2], R0a_dd*A[4,3], R0a_dd*A[5,4], R0a_dd*A[6,5], R0a_dd*A[6,6])*s_m
-    A_dd[7,1:6] <- c(0, R0y_dd*A[3,2], R0a_dd*A[4,3], R0a_dd*A[5,4], R0a_dd*A[6,5], R0a_dd*A[6,6])*s_f
+    A_dd[1,1:6] <- c(0, R0y_dd, R0a_dd, R0a_dd, R0a_dd, R0a_dd)*s_m
+    A_dd[7,1:6] <- c(0, R0y_dd, R0a_dd, R0a_dd, R0a_dd, R0a_dd)*s_f
     
     # Calculate new pop size
     deer.array[,y] <- A_dd %*% deer.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)

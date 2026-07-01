@@ -42,13 +42,6 @@ FecundityF <- c(R0j, R0a)
 A_base[1,2:3] <- FecundityF 
 A_base[4,2:3] <- FecundityM 
 
-# # Calculate for post-breeding census (assume 1:1 sex ratio)
-FecundityM <- c(R0j*A_base[3,2], R0a*A_base[3,3])*0.5
-FecundityF <- c(R0j*A_base[3,2], R0a*A_base[3,3])*0.5
-
-A_base[1,2:3] <- FecundityF
-A_base[4,2:3] <- FecundityM
-
 # Calculate stable stage distribution
 w <- Re(eigen(A_base)$vectors[, 1])
 w <- w / sum(w) # normalize to equal 1
@@ -63,12 +56,44 @@ observed_harvest <- 150000
 
 ### Optimize survival and fecundities
 # set up bounds
-pig_lower <- c(0.5, 1.2, 1.2, 1.2, 1.2, 1.5) # piglet survival, female surv (2), male surv(2), fecundity
-pig_upper <- c(1.5, 1.65, 1.65, 1.8, 1.5, 2.8)
+# pig_lower <- c(0.5, 1.2, 1.2, 1.2, 1.2, 1.5) # piglet survival, female surv (2), male surv(2), fecundity
+# pig_upper <- c(1.5, 1.65, 1.65, 1.8, 1.5, 2.8)
+
+# Caps on survival (maximum values)
+female_cap <- sqrt(0.70)
+male_cap <- sqrt(0.70)
+
+female_base <- c(sqrt(0.35), sqrt(0.35))
+female_upper <- female_cap / female_base
+
+male_base <- c(sqrt(0.23), sqrt(0.23))
+male_upper <- male_cap / male_base
+
+# Caps on survival (minimum values)
+female_min <- sqrt(0.4)
+male_min <- sqrt(0.4)
+
+female_lower <- female_min / female_base
+male_lower <- male_min / male_base
+
+# set up bounds (Fawn survival (1), female survival (5), male survival (5), fecundity (1), theta(1))
+pigs_lower <- c(0.5,          # Piglet survival
+                female_lower, # Female survival
+                male_lower,   # Male survival
+                0.5,          # Fecundity
+                0.001)        # Theta
+
+pigs_upper <- c(1.5,          # Piglet survival
+                female_upper, # female survival
+                male_upper,   # male survival
+                2.2,          # Fecundity
+                1.5)          # Theta
+
+c_dd <- 0.94
 
 # run optimizer
 set.seed(1)
-pig_opt <- optim(par=c(runif(1, 1.15, 1.75), runif(2, 1.35, 1.55), runif(2, 1.45, 1.95), runif(1, 2.01, 2.95)), fn=objective_fn_pigs, method="L-BFGS-B", lower=pig_lower, upper=pig_upper, control = list(trace = 1))
+pig_opt <- optim(par=runif(7, 0.9, 1.2), fn=objective_fn_pigs, method="L-BFGS-B", lower=pig_lower, upper=pig_upper, control=list(trace=1, maxit=1000))
 
 # What are optimized parameter values 
 pig_opt$par
