@@ -109,7 +109,7 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
   a2[7,1:6] <- a2[7,1:6]*0.5*mnFs
   
   # Calculate lambda from matrix with split fecundity (like it should be)
-  lambda <- Re(eigen(A_adj)$values[1])
+  lambda <- Re(eigen(a2)$values[1])
   
   # Set up initial popualtion size
   w <- Re(eigen(a2)$vectors[, 1])
@@ -131,90 +131,91 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
   
   for (i in 1:Sims) {
     
-    A_s <- A_adj
-    
-    ## Stochasticity on Survival 
-    # Female survival
-    for (s in 2:5) {
-      # Survive & go
-      # Calculate beta distribution parameters
-      p <- A_adj[s+1,s]
-      
-      # prevent extreme values
-      p <- min(max(p, 1e-6), 1 - 1e-6)
-      
-      var <- ev_sd^2
-      tmp <- (p * (1 - p) / var) - 1
-      
-      if (tmp <= 0) {
-        # fallback: no stochasticity
-        A_s[s+1,s] <- p
-      } else {
-        alpha <- p * tmp
-        beta  <- (1 - p) * tmp
-        A_s[s+1,s] <- rbeta(1, alpha, beta)
-      }
-      
-    }
-    # Survive & stay
-    p <- A_adj[6,6]
-    
-    # prevent extreme values
-    p <- min(max(p, 1e-6), 1 - 1e-6)
-    
-    var <- ev_sd^2
-    tmp <- (p * (1 - p) / var) - 1
-    
-    if (tmp <= 0) {
-      # fallback: no stochasticity
-      A_s[6,6] <- p
-    } else {
-      alpha <- p * tmp
-      beta  <- (1 - p) * tmp
-      A_s[6,6] <- rbeta(1, alpha, beta)
-    }
-    
-    # Male survival
-    for (s in 8:11) {
-      # Survive & go
-      p <- A_adj[s+1,s]
-      
-      # prevent extreme values
-      p <- min(max(p, 1e-6), 1 - 1e-6)
-      
-      var <- ev_sd^2
-      tmp <- (p * (1 - p) / var) - 1
-      
-      if (tmp <= 0) {
-        # fallback: no stochasticity
-        A_s[s+1,s] <- p
-      } else {
-        alpha <- p * tmp
-        beta  <- (1 - p) * tmp
-        A_s[s+1,s] <- rbeta(1, alpha, beta)
-      }
-    }
-    # Survive & stay
-    p <- A_adj[12,12]
-    
-    # prevent extreme values
-    p <- min(max(p, 1e-6), 1 - 1e-6)
-    
-    var <- ev_sd^2
-    tmp <- (p * (1 - p) / var) - 1
-    
-    if (tmp <= 0) {
-      # fallback: no stochasticity
-      A_s[12,12] <- p
-    } else {
-      alpha <- p * tmp
-      beta  <- (1 - p) * tmp
-      A_s[12,12] <- rbeta(1, alpha, beta)
-    }
     
     for (y in 2:length(Year)){
       
-      # save new matrix
+      A_s <- A_adj
+      
+      ## Stochasticity on Survival 
+      # Female survival
+      for (s in 2:5) {
+        # Survive & go
+        # Calculate beta distribution parameters
+        p <- A_adj[s+1,s]
+        
+        # prevent extreme values
+        p <- min(max(p, 1e-6), 1 - 1e-6)
+        
+        var <- ev_sd^2
+        tmp <- (p * (1 - p) / var) - 1
+        
+        if (tmp <= 0) {
+          # fallback: no stochasticity
+          A_s[s+1,s] <- p
+        } else {
+          alpha <- p * tmp
+          beta  <- (1 - p) * tmp
+          A_s[s+1,s] <- rbeta(1, alpha, beta)
+        }
+        
+      }
+      # Survive & stay
+      p <- A_adj[6,6]
+      
+      # prevent extreme values
+      p <- min(max(p, 1e-6), 1 - 1e-6)
+      
+      var <- ev_sd^2
+      tmp <- (p * (1 - p) / var) - 1
+      
+      if (tmp <= 0) {
+        # fallback: no stochasticity
+        A_s[6,6] <- p
+      } else {
+        alpha <- p * tmp
+        beta  <- (1 - p) * tmp
+        A_s[6,6] <- rbeta(1, alpha, beta)
+      }
+      
+      # Male survival
+      for (s in 8:11) {
+        # Survive & go
+        p <- A_adj[s+1,s]
+        
+        # prevent extreme values
+        p <- min(max(p, 1e-6), 1 - 1e-6)
+        
+        var <- ev_sd^2
+        tmp <- (p * (1 - p) / var) - 1
+        
+        if (tmp <= 0) {
+          # fallback: no stochasticity
+          A_s[s+1,s] <- p
+        } else {
+          alpha <- p * tmp
+          beta  <- (1 - p) * tmp
+          A_s[s+1,s] <- rbeta(1, alpha, beta)
+        }
+      }
+      # Survive & stay
+      p <- A_adj[12,12]
+      
+      # prevent extreme values
+      p <- min(max(p, 1e-6), 1 - 1e-6)
+      
+      var <- ev_sd^2
+      tmp <- (p * (1 - p) / var) - 1
+      
+      if (tmp <= 0) {
+        # fallback: no stochasticity
+        A_s[12,12] <- p
+      } else {
+        alpha <- p * tmp
+        beta  <- (1 - p) * tmp
+        A_s[12,12] <- rbeta(1, alpha, beta)
+      }
+      
+      # save stochastic matrix
       A_dd <- A_s
       
       # Density dependent adjustment in fecundity
@@ -247,9 +248,9 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
       density_factor <- pmax(density_factor, 0.2)
       if (!is.finite(density_factor)) density_factor <- 1
       
-      # Adjust sex ratio at birth and reduce fecundity
-      A_dd[1,1:6] <- c(0, R0y_s, R0a_s3, R0a_s4, R0a_s5, R0a_s6) * s_f * density_factor
-      A_dd[7,1:6] <- c(0, R0y_s, R0a_s3, R0a_s4, R0a_s5, R0a_s6) * s_m * density_factor
+      # Adjust sex ratio at birth and reduce fecundity according to density
+      A_dd[1,1:6] <- c(0, A_s[1,2], A_s[1,3], A_s[1,3], A_s[1,3], A_s[1,3]) * s_f * density_factor
+      A_dd[7,1:6] <- c(0, A_s[1,2], A_s[1,3], A_s[1,3], A_s[1,3], A_s[1,3]) * s_m * density_factor
       
       # Stop loop if there are zeros
       if (any(is.na(A_dd))) {

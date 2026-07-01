@@ -44,8 +44,8 @@ FecundityM <- c(0, R0y, R0a, R0a, R0a, R0a)
 FecundityF <- c(0, R0y, R0a, R0a, R0a, R0a)
 
 # Add to matrix
-A_base[1,1:6] <- FecundityF * 0.565
-A_base[7,1:6] <- FecundityM * 0.435
+A_base[1,1:6] <- FecundityF 
+A_base[7,1:6] <- FecundityM 
 
 
 deer.matrix <- A_base
@@ -100,13 +100,13 @@ deer_lower <- c(0.6,          # Fawn survival
                 0.7,          # Fecundity
                 2)            # Theta
 
-deer_upper <- c(1.9,         # Fawn survival
+deer_upper <- c(1.8,         # Fawn survival
                 female_upper, # female survival
                 male_upper,   # male survival
-                2.6,            # Fecundity
+                2.0,            # Fecundity
                 3.2)            # Theta
 
-c_dd <- 0.64
+c_dd <- 0.94
 
 # run optimizer
 set.seed(1)
@@ -147,7 +147,7 @@ A_adj[7,3:6] <- A_base[7,3:6]*deer_opt$par[12]
 
 #### Run population model ####
 set.seed(1)
-res14 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=1347232, Sims=1000, years=50, ev_sd=0.02, harvest=TRUE, c_dd=c_dd) 
+res14 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=1347232, Sims=1000, years=50, ev_sd=0.05, harvest=TRUE, c_dd=c_dd) 
 
 # Lambda from adjusted matrix
 res14$matrix_lambda
@@ -237,7 +237,6 @@ ggplot(res14$ASR) +
   theme_classic()
 
 #### Deer density 22 / km2 ####
-
 set.seed(1)
 
 # Years in simulation
@@ -251,14 +250,14 @@ A_base <- matrix(0,12,12)
 
 ## Survival
 # Females
-A_base[2,1] <- 0.23
+A_base[2,1] <- 0.27
 A_base[3,2] <- 0.93
 A_base[4,3] <- 0.84
 A_base[5,4] <- 0.84
 A_base[6,5] <- 0.84
 A_base[6,6] <- 0.84
 # Males
-A_base[8,7] <- 0.23
+A_base[8,7] <- 0.27
 A_base[9,8] <- 0.82
 A_base[10,9] <- 0.63
 A_base[11,10] <- 0.53
@@ -276,7 +275,6 @@ FecundityF <- c(0, R0y, R0a, R0a, R0a, R0a)
 # Add to matrix
 A_base[1,1:6] <- FecundityF
 A_base[7,1:6] <- FecundityM
-
 
 deer.matrix <- A_base
 # 1.3:1 males:females - splits offspring into males & females
@@ -316,8 +314,8 @@ male_base <- c(0.82, 0.63, 0.53, 0.44, 0.49)
 male_upper <- male_cap / male_base
 
 # Caps on survival (minimum values)
-female_min <- 0.75
-male_min <- 0.7
+female_min <- 0.70
+male_min <- 0.70
 
 female_lower <- female_min / female_base
 male_lower <- male_min / male_base
@@ -329,13 +327,13 @@ deer_lower <- c(0.6,          # Fawn survival
                 0.7,         # Fecundity
                 2)          # Theta
 
-deer_upper <- c(1.5,          # Fawn survival
+deer_upper <- c(1.4,          # Fawn survival
                 female_upper, # female survival
                 male_upper,   # male survival
-                1.7,          # Fecundity
+                1.5,          # Fecundity
                 3.2)            # Theta
 
-c_dd <- 0.70
+c_dd <- 0.94
 
 # run optimizer
 set.seed(1)
@@ -377,7 +375,7 @@ A_adj[6, 5] <- 1
 
 #### Run population model ####
 set.seed(1)
-res22 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=2090532, Sims=1000, years=50, ev_sd=0.02, harvest=TRUE, c_dd=c_dd) 
+res22 <- run_deer_mod(A_adj, theta=deer_opt$par[13], K=2090532, Sims=1000, years=50, ev_sd=0.05, harvest=TRUE, c_dd=c_dd) 
 
 # Lambda from adjusted matrix
 res22$matrix_lambda
