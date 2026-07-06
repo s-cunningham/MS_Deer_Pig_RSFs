@@ -639,6 +639,367 @@ objective_fn_deer <- function(params) {
 }
 
 ## Wild pigs ####
+
+# function for running population matrix
+run_pig_mod <- function(A_adj, theta, K, Sims=1000, steps=50, ev_sd=0.02, harvest=TRUE, theta_mult=2, c_dd=0.2) {
+  
+  set.seed(1)
+  
+  ##Stochastistic model
+  Year <- 1:steps
+  
+  Kf <- K * 0.6
+  
+  # Empty array to hold pop count
+  pig.array <- array(0,dim=c(6,length(Year),Sims))
+  
+  # Calculate stable stage distribution
+  a2 <- A_adj
+  a2[1,1:3] <- a2[1,1:3]*0.5
+  a2[4,1:3] <- a2[4,1:3]*0.5
+  
+  # Calculate lambda from matrix with split fecundity (like it should be)
+  lambda <- Re(eigen(a2)$values[1])^2
+  
+  # Set up initial popualtion size
+  w <- Re(eigen(a2)$vectors[, 1])
+  w <- w / sum(w) # normals to equal 1
+  N0 <- w * 1 * K # e.g., start at 50% of K
+  
+  # Fill starting population
+  pig.array[,1,] <- N0
+  
+  # Create matrix to hold ASR
+  asr_mat <- matrix(0, nrow=length(Year), ncol=Sims)
+  
+  # Set up arrays to save realized demographic rates
+  realized_surv <- array(NA, dim=c(6, length(Year), Sims))
+  realized_surv[1:6,1,] <- c(A_adj[2,1], A_adj[3,2], A_adj[3,3], A_adj[5,4], A_adj[6,5], A_adj[6,6])
+  
+  realized_fecundity <- array(NA, dim=c(4,  length(Year) - 1, Sims)) # row 1: yearling F, row 2: adult F, row 3: yearling M, row 4: adult M,
+  
+  for (i in 1:Sims) {
+    
+    for (y in 2:length(Year)){
+      
+      A_s <- A_adj
+      
+      ## Stochasticity on Survival 
+      # survive & go
+      p <- A_adj[2,1]
+      
+      # prevent extreme values
+      p <- min(max(p, 1e-6), 1 - 1e-6)
+      
+      var <- ev_sd^2
+      tmp <- (p * (1 - p) / var) - 1
+      
+      if (tmp <= 0) {
+        # fallback: no stochasticity
+        A_s[2,1] <- p
+      } else {
+        alpha <- p * tmp
+        beta  <- (1 - p) * tmp
+        A_s[2,1] <- rbeta(1, alpha, beta)
+      }
+      
+      p <- A_adj[3,2]
+      
+      # prevent extreme values
+      p <- min(max(p, 1e-6), 1 - 1e-6)
+      
+      var <- ev_sd^2
+      tmp <- (p * (1 - p) / var) - 1
+      
+      if (tmp <= 0) {
+        # fallback: no stochasticity
+        A_s[3,2] <- p
+      } else {
+        alpha <- p * tmp
+        beta  <- (1 - p) * tmp
+        A_s[3,2] <- rbeta(1, alpha, beta)
+      }
+      # Survive & stay
+      p <- A_adj[3,3]
+      
+      # prevent extreme values
+      p <- min(max(p, 1e-6), 1 - 1e-6)
+      
+      var <- ev_sd^2
+      tmp <- (p * (1 - p) / var) - 1
+      
+      if (tmp <= 0) {
+        # fallback: no stochasticity
+        A_s[3,3] <- p
+      } else {
+        alpha <- p * tmp
+        beta  <- (1 - p) * tmp
+        A_s[3,3] <- rbeta(1, alpha, beta)
+      }
+      
+      # Male survival
+      # Survive & go
+      p <- A_adj[5,4]
+      
+      # prevent extreme values
+      p <- min(max(p, 1e-6), 1 - 1e-6)
+      
+      var <- ev_sd^2
+      tmp <- (p * (1 - p) / var) - 1
+      
+      if (tmp <= 0) {
+        # fallback: no stochasticity
+        A_s[5,4] <- p
+      } else {
+        alpha <- p * tmp
+        beta  <- (1 - p) * tmp
+        A_s[5,4] <- rbeta(1, alpha, beta)
+      }
+      
+      p <- A_adj[6,5]
+      
+      # prevent extreme values
+      p <- min(max(p, 1e-6), 1 - 1e-6)
+      
+      var <- ev_sd^2
+      tmp <- (p * (1 - p) / var) - 1
+      
+      if (tmp <= 0) {
+        # fallback: no stochasticity
+        A_s[6,5] <- p
+      } else {
+        alpha <- p * tmp
+        beta  <- (1 - p) * tmp
+        A_s[6,5] <- rbeta(1, alpha, beta)
+      }
+      
+      # Survive & stay
+      p <- A_adj[6,6]
+      
+      # prevent extreme values
+      p <- min(max(p, 1e-6), 1 - 1e-6)
+      
+      var <- ev_sd^2
+      tmp <- (p * (1 - p) / var) - 1
+      
+      if (tmp <= 0) {
+        # fallback: no stochasticity
+        A_s[6,6] <- p
+      } else {
+        alpha <- p * tmp
+        beta  <- (1 - p) * tmp
+        A_s[6,6] <- rbeta(1, alpha, beta)
+      }
+      
+      # save stochastic matrix
+      A_dd <- A_s
+      
+      # Density dependent adjustment in fecundity
+      # What was abundance at time step t-1
+      Nf_t <- sum(pig.array[1:3,y-1,i], na.rm=TRUE)
+      
+      # Check adult age ratio
+      female_sum <- sum(pig.array[2:3, y-1, i], na.rm=TRUE)
+      male_sum   <- sum(pig.array[5:6, y-1, i], na.rm=TRUE)
+      
+      if (female_sum > 0) {
+        asr <- male_sum / female_sum
+      } else {
+        asr <- 1
+      }
+      if (!is.finite(asr)) asr <- 1
+      
+      # Save sex ratio
+      asr_mat[y-1,i] <- asr
+      
+      # Calcuate density factor
+      density_factor <- 1 / (1 + c_dd * (Nf_t / Kf)^theta)
+      density_factor <- pmax(density_factor, 0.2)
+      if (!is.finite(density_factor)) density_factor <- 1
+      
+      # Adjust sex ratio at birth and reduce fecundity according to density
+      A_dd[1,1:3] <- c(0, A_s[1,2], A_s[1,3]) * 0.5 * density_factor
+      A_dd[4,1:3] <- c(0, A_s[1,2], A_s[1,3]) * 0.5 * density_factor
+      
+      # Stop loop if there are zeros
+      if (any(is.na(A_dd))) {
+        stop("NA detected in A_dd")
+      }
+      
+      # Save fecundity
+      realized_fecundity[1,y-1,i] <- A_dd[1,2] # Females per yearling female
+      realized_fecundity[2,y-1,i] <- A_dd[1,3] # Females per adult female
+      realized_fecundity[3,y-1,i] <- A_dd[4,2] # Males per yearling female 
+      realized_fecundity[4,y-1,i] <- A_dd[4,3] # Males per adult female
+      
+      # Make sure we have a population to work with
+      if (any(is.na(pig.array[, y-1, i]))) {
+        stop(paste0("NA detected in pig.array at previous timestep!\n Sim: ",i,"\nYear: ",y ))
+      }
+      
+      ## Harvest deer 
+      # Calculate new pop size BEFORE removals
+      N_preharvest <- pmax(A_dd %*% pig.array[,y-1,i], 0) # Make sure to multiply matrix x vector (not vice versa)
+      
+      # Harvest
+      if (harvest) {
+        
+        # Draw the number of deer to harvest each year
+        h <- round(rnorm(1, 150000, 15000))
+        
+        sow_h <- h * 0.5
+        boar_h <- h - sow_h
+        
+        # Proportional removals
+        r_f <- (N_preharvest[1:3,1] / sum(N_preharvest[1:3,1]))*sow_h
+        r_m <- (N_preharvest[4:6,1] / sum(N_preharvest[4:6,1]))*boar_h
+        
+        # Combine for total harvest
+        r <- c(r_f, r_m)
+        
+        # make sure we're not taking more animals that exist in a certain age class
+        r <- pmin(r, N_preharvest)
+        
+        # Apply harvest AFTER computing proportion
+        N_next <- N_preharvest - r
+        # Make sure population is not negative after harvest
+        N_next <- pmax(N_next, 0)
+        
+      } else {
+        N_next <- N_preharvest
+      }
+      
+      # Save abundance
+      pig.array[,y,i] <- pmax(N_next, 0)
+      
+      # ---- Realized survival ----
+      
+      # Female stages
+      realized_surv[1, y, i] <- N_next[2] / pig.array[1, y-1, i] # Piglet → yearling (F)
+
+      # Stage 2: comes only from stage 1
+      incoming_2 <- pig.array[1, y-1, i]
+      realized_surv[2, y, i] <- ifelse(incoming_2 > 0,
+                                       N_next[2] / incoming_2,
+                                       NA)
+      
+      # Stage 3: from stage 2 and 3
+      incoming_3 <- pig.array[2, y-1, i] + pig.array[3, y-1, i]
+      realized_surv[3, y, i] <- ifelse(incoming_3 > 0,
+                                       N_next[3] / incoming_3,
+                                       NA)
+      
+      # Male stages
+      realized_surv[4, y, i] <- N_next[5] / pig.array[4, y-1, i] # Piglet → yearling (M)
+
+      # Stage 5
+      incoming_5 <- pig.array[4, y-1, i]
+      realized_surv[5, y, i] <- ifelse(incoming_5 > 1e-6,
+                                        N_next[5] / incoming_5,
+                                        NA)
+      
+      # Stage 6
+      incoming_6 <- pig.array[5, y-1, i] + pig.array[6, y-1, i]
+      realized_surv[6, y, i] <- ifelse(incoming_6 > 1e-6,
+                                        N_next[6] / incoming_6,
+                                        NA)
+      
+      # Check buck:doe ratio
+      af <- sum(pig.array[2:3,y,i])
+      am <- sum(pig.array[5:6,y,i])
+      
+      if (is.na(af) | sum(af) < 1) {
+        warning("Female bottleneck: reproductive females lost!")
+      }
+      
+    }
+  }
+  
+  ## Summarize population trajectory
+  N.median <- apply(apply(pig.array,c(2,3),sum),1,median)
+  N.10pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.10)
+  N.90pct <- apply(apply(pig.array,c(2,3),sum),1,quantile, probs = 0.90)
+  
+  results <- data.frame(Year,N.median,N.10pct,N.90pct)
+  
+  ## Summarize recruits
+  recruits <- pig.array[1,,] + pig.array[4,,]
+  recruits <- rowMeans(recruits)
+  
+  ## Get realized survival rates
+  # Calculate median survival per stage (over all years and sims)
+  surv.50pct <- apply(realized_surv, 1, function(x) median(x, na.rm = TRUE))
+  surv.10pct <- apply(realized_surv, 1, quantile, probs = 0.10, na.rm=TRUE)
+  surv.90pct <- apply(realized_surv, 1, quantile, probs = 0.90, na.rm=TRUE)
+  
+  r.surv <- data.frame(sex=c(rep("Female",6), rep("Male",6)), 
+                       stage=rep(c("Piglet","Yearling","Adult"),2),
+                       surv.50pct,surv.10pct,surv.90pct,
+                       est=c(A_adj[2,1], A_adj[3,2], A_adj[3,3], A_adj[5,4], A_adj[6,5], A_adj[6,6]),
+                       literature=c(A_base[2,1], A_base[3,2], A_base[3,3], A_base[5,4], A_base[6,5], A_base[6,6]))
+  
+  r.surv <- r.surv |>
+    pivot_longer(cols=c("surv.50pct", "literature"), names_to="source", values_to="survival")
+  
+  # Square survival to get annual survival
+  r.surv <- r.surv |>
+    mutate(survival = survival^2,
+           surv.10pct = surv.10pct^2,
+           surv.90pct = surv.90pct^2)
+  
+  # Set factor levels
+  r.surv$stage <- factor(r.surv$stage, levels=c("Piglet","Yearling","Adult"),
+                         labels=c("Piglet","Yearling","Adult"))
+  
+  r.surv$source <- factor(r.surv$source, levels=c("literature", "surv.50pct"), labels=c("Literature", "Implied"))
+  
+  ## Get realized fecundities
+  # Calculate median survival per stage (over all years and sims)
+  median_fec <- apply(realized_fecundity, 1, function(x) median(x, na.rm = TRUE))
+  fec.10pct <- apply(realized_fecundity, 1, quantile, probs = 0.10, na.rm=TRUE)
+  fec.90pct <- apply(realized_fecundity, 1, quantile, probs = 0.90, na.rm=TRUE)
+  
+  
+  fec <- data.frame(stage=rep(c("Yearling", "Adult"), 2),
+                    offspring_sex=rep(c("Female", "Male"), each=2), 
+                    realized=median_fec,
+                    f10pct=fec.10pct,
+                    f90pct=fec.90pct,
+                    literature=c(0.54, 2.24, 0.54, 2.24),  # annual
+                    x=c(0.9, 1.6, 1.1, 1.8))
+  fec <- fec |>
+    pivot_longer(cols=c("realized", "literature"), names_to="source", values_to="fec")
+  fec$source <- factor(fec$source, levels=c("literature", "realized"), labels=c("Literature", "Implied"))
+  
+  # Summarize sex ratio
+  ASR.median <- apply(asr_mat, 1, median)
+  ASR.20 <- apply(asr_mat, 1, quantile, probs = 0.20)
+  ASR.80 <- apply(asr_mat, 1, quantile, probs = 0.80)
+  
+  ASR <- data.frame(Year, ASR.median, ASR.20, ASR.80)
+  ASR <- ASR[-nrow(ASR),]
+  
+  # create list for storing results
+  results_list <- list()
+  results_list$results <- results
+  results_list$recruits <- recruits
+  results_list$adult_females <- rowMeans(colSums(pig.array[2:3, , ]))
+  results_list$last_stage <- sum(pig.array[6, , ] > 0)
+  results_list$realized_fecundity <- realized_fecundity
+  results_list$realized_surv <- realized_surv
+  results_list$r.surv <- r.surv
+  results_list$r.fec <- fec
+  results_list$ASR <- ASR
+  results_list$matrix_lambda <- lambda
+  ## Get Lambda over simulation
+  results_list$final_lambda <- gm_mean(lambda_calc(results$N.median[(length(Year)/2):length(Year)]))^2
+  
+  return(results_list)
+  
+}
+
+
+
 # Scale matrices
 scale_pigs <- function(A_base,surv_scale_p,surv_scale_f,surv_scale_m,fec_scale) {
   
@@ -671,7 +1032,7 @@ scale_pigs <- function(A_base,surv_scale_p,surv_scale_f,surv_scale_m,fec_scale) 
 
 
 ## project population
-pig_pop_proj <- function(A, N0, Kf, theta, step) {
+pig_pop_proj <- function(A, N0, Kf, theta, step, c_dd) {
   
   # Empty array to hold pop count
   pig.array <- matrix(0,nrow=6, ncol=length(step))
@@ -684,7 +1045,8 @@ pig_pop_proj <- function(A, N0, Kf, theta, step) {
     Nf_t <- sum(pig.array[1:3,y-1])
     
     # Calcuate density factor
-    density_factor <- 1 / (1 + (Nf_t / Kf)^theta)
+    density_factor <- 1 / (1 + c_dd * (Nf_t / Kf)^theta)
+    density_factor <- pmax(density_factor, 0.2)
     
     # save new matrix
     A_dd <- A
@@ -694,8 +1056,8 @@ pig_pop_proj <- function(A, N0, Kf, theta, step) {
     R0a_dd <- A[1,3] * density_factor 
     
     # Adjust sex ratio at birth
-    A_dd[1,2:3] <- c(R0j_dd*A[3,2], R0a_dd*A[3,3]) 
-    A_dd[4,2:3] <- c(R0j_dd*A[3,2], R0a_dd*A[3,3])
+    A_dd[1,2:3] <- c(R0j_dd, R0a_dd)*0.5    ## Make sure this is correct (splitting piglets by half)
+    A_dd[4,2:3] <- c(R0j_dd, R0a_dd)*0.5 
     
     # Calculate new pop size
     pig.array[,y] <- A_dd %*% pig.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)
@@ -707,10 +1069,8 @@ pig_pop_proj <- function(A, N0, Kf, theta, step) {
   # Put into data frame
   results <- data.frame(step,N.median)
   
-  # Calculate MSY
-  msy <- get_msy(results)
-  
-  return(msy)
+  # Return population trajectory
+  return(N.median)
 }
 
 
@@ -723,6 +1083,10 @@ objective_fn_pigs <- function(params) {
   
   # Scale demographic rates
   A_scaled <- scale_pigs(A_base,surv_scale_p,surv_scale_f,surv_scale_m,fec_scale)
+  # cap survival (so no chance of >1)
+  A_scaled[2:3, 1:3] <- pmin(A_scaled[2:3, 1:3], 0.999)
+  A_scaled[5:6, 4:6] <- pmin(A_scaled[5:6, 4:6], 0.999)
+  
   
   # Calculate stable stage distribution
   w <- Re(eigen(A_scaled)$vectors[, 1])
@@ -731,14 +1095,45 @@ objective_fn_pigs <- function(params) {
   # Set up initial population size
   N0 <- w * 0.01 * K 
   
+  # Calibrate a for density dependence
+  theta <- params[7]
+  
+  error_theta <- (theta - 1)^2
+  
+  # --- Population trajectory ---
+  sim_N <- pig_pop_proj(A_scaled, N0, Kf, theta, step, c_dd=c_dd) 
+  
+  # use last half of time series (avoid transient dynamics)
+  tail_N <- tail(sim_N, length(sim_N) / 2)
+  
+  # simple smooth target: want stable population near K (or at least, the female portion of K)
+  error_pop <- mean(((tail_N - Kf) / Kf)^2) + var(tail_N) / Kf^2
+  
+  # --- MSY --- 
+  sim_msy <- get_msy(data.frame(step, N.median=sim_N))
+  
+  # Guard against invalid MSY
+  if (!is.finite(sim_msy) || sim_msy <= 0) {
+    return(1e6)
+  }
+  
+  error_msy <- ((sim_msy - observed_harvest) / observed_harvest)^2
+  
+  # --- Regularize deviation from baseline (1 = literature values)
+  error_reg <- sum((params - 1)^2)
+  
+  # --- Penalty for slow pop growth rate ----
   lambda <- Re(eigen(A_scaled)$values[1])
   
-  # Calibrate a for density dependence
-  theta <- estimate_theta_opt(N0, lambda, K)
+  error_lambda <- 0
   
-  # Run model and get MSY
-  sim_msy <- pig_pop_proj(A_scaled, N0, Kf, theta, step) 
+  if (lambda < 1.5) {
+    error_lambda <- (1.5 - lambda)^2
+  } else if (lambda > 2.45) {
+    error_lambda <- (lambda - 2.45)^2
+  }
   
-  return((sim_msy - observed_harvest)^2) # Squared error
+  # --- Combine ---
+  return(error_pop + error_msy + 0.05 * error_reg + 0.1 * error_theta + 50 * error_lambda) 
 }
 
