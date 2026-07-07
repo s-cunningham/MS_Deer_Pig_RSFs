@@ -814,8 +814,10 @@ run_pig_mod <- function(A_adj, theta, K, Sims=1000, steps=50, ev_sd=0.02, harves
       
       # Calcuate density factor
       density_factor <- 1 / (1 + c_dd * (Nf_t / Kf)^theta)
-      density_factor <- pmax(density_factor, 0.2)
+      # density_factor <- pmax(density_factor, 0.2)
       if (!is.finite(density_factor)) density_factor <- 1
+      
+      # print(density_factor)
       
       # Adjust sex ratio at birth and reduce fecundity according to density
       A_dd[1,1:3] <- c(0, A_s[1,2], A_s[1,3]) * 0.5 * density_factor
@@ -965,7 +967,7 @@ run_pig_mod <- function(A_adj, theta, K, Sims=1000, steps=50, ev_sd=0.02, harves
                     realized=median_fec,
                     f10pct=fec.10pct,
                     f90pct=fec.90pct,
-                    literature=c(0.54, 2.24, 0.54, 2.24),  # annual
+                    literature=c(1.8, 2.4, 1.8, 2.4),  # Each litter/2 * proportion breeding
                     x=c(0.9, 1.6, 1.1, 1.8))
   fec <- fec |>
     pivot_longer(cols=c("realized", "literature"), names_to="source", values_to="fec")
@@ -1046,7 +1048,7 @@ pig_pop_proj <- function(A, N0, Kf, theta, step, c_dd) {
     
     # Calcuate density factor
     density_factor <- 1 / (1 + c_dd * (Nf_t / Kf)^theta)
-    density_factor <- pmax(density_factor, 0.2)
+    # density_factor <- pmax(density_factor, 0.2)
     
     # save new matrix
     A_dd <- A
@@ -1087,7 +1089,6 @@ objective_fn_pigs <- function(params) {
   A_scaled[2:3, 1:3] <- pmin(A_scaled[2:3, 1:3], 0.999)
   A_scaled[5:6, 4:6] <- pmin(A_scaled[5:6, 4:6], 0.999)
   
-  
   # Calculate stable stage distribution
   w <- Re(eigen(A_scaled)$vectors[, 1])
   w <- w / sum(w) # normalize to equal 1
@@ -1123,7 +1124,7 @@ objective_fn_pigs <- function(params) {
   error_reg <- sum((params - 1)^2)
   
   # --- Penalty for slow pop growth rate ----
-  lambda <- Re(eigen(A_scaled)$values[1])
+  lambda <- Re(eigen(A_scaled)$values[1])^2   # Intrinsic lambda
   
   error_lambda <- 0
   
