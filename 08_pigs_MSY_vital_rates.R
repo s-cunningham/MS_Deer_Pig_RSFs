@@ -32,8 +32,8 @@ A_base[6,6] <- sqrt(0.23) # Adult survival
 
 ## Fecundity
 # Maximum fecundity (how many piglets per litter?) x how many females produce
-R0j <- 6.6*0.75
-R0a <- 10.8
+R0j <- 6.6*0.5
+R0a <- 10.8*0.75
 
 FecundityM <- c(R0j, R0a)
 FecundityF <- c(R0j, R0a)
@@ -60,8 +60,8 @@ observed_harvest <- 150000
 # pig_upper <- c(1.5, 1.65, 1.65, 1.8, 1.5, 2.8)
 
 # Caps on survival (maximum values)
-female_cap <- sqrt(0.65)
-male_cap <- sqrt(0.65)
+female_cap <- sqrt(0.60)
+male_cap <- sqrt(0.60)
 
 female_base <- c(sqrt(0.35), sqrt(0.35))
 female_upper <- female_cap / female_base
@@ -70,26 +70,26 @@ male_base <- c(sqrt(0.23), sqrt(0.23))
 male_upper <- male_cap / male_base
 
 # Caps on survival (minimum values)
-female_min <- sqrt(0.4)
-male_min <- sqrt(0.4)
+female_min <- sqrt(0.35)
+male_min <- sqrt(0.35)
 
 female_lower <- female_min / female_base
 male_lower <- male_min / male_base
 
 # set up bounds (Fawn survival (1), female survival (5), male survival (5), fecundity (1), theta(1))
-pigs_lower <- c(0.5,          # Piglet survival
+pigs_lower <- c(0.3,          # Piglet survival
                 female_lower, # Female survival
                 male_lower,   # Male survival
                 0.5,          # Fecundity
                 0.001)        # Theta
 
-pigs_upper <- c(1.5,          # Piglet survival
+pigs_upper <- c(1.2,          # Piglet survival
                 female_upper, # female survival
                 male_upper,   # male survival
                 1.2,          # Fecundity
-                1)          # Theta
+                3)            # Theta
 
-c_dd <- 0.2
+c_dd <- 0.9
 
 # run optimizer
 set.seed(1)
@@ -121,7 +121,7 @@ A_adj[4,3] <- A_base[4,3]*(pig_opt$par[6])
 
 #### Run population model ####
 set.seed(1)
-res27 <- run_pig_mod(A_adj, theta=pig_opt$par[13], K=1239278, Sims=1000, steps=100, ev_sd=0.05, harvest=TRUE, c_dd=c_dd) 
+res27 <- run_pig_mod(A_adj, theta=pig_opt$par[7], K=1239278, Sims=1000, steps=100, ev_sd=0.05, harvest=TRUE, c_dd=c_dd) 
 
 # Lambda from adjusted matrix
 res27$matrix_lambda
@@ -131,14 +131,14 @@ res27$final_lambda
 
 #Plot population projection
 ggplot(res27$results) +
-  coord_cartesian(ylim=c(0,2000000)) +
+  # coord_cartesian(ylim=c(0,2000000)) +
   geom_hline(yintercept=1000000, color="red", linetype=3) +
   geom_hline(yintercept=K) +
   geom_ribbon(aes(x=Year,ymin=N.10pct, ymax=N.90pct), alpha=.2,fill="purple") +
   geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1) +
-  scale_y_continuous(name="Abundance (in millions)", 
-                     breaks=c(0,500000,1000000,1500000, 2000000),
-                     labels=c(0, 0.5, 1, 1.5, 2)) +
+  # scale_y_continuous(name="Abundance (in millions)", 
+  #                    breaks=c(0,500000,1000000,1500000, 2000000),
+  #                    labels=c(0, 0.5, 1, 1.5, 2)) +
   scale_x_continuous(breaks=c(0,10,20,30,40), labels=c(0,5,10,15,20), name="Simulation Year") +
   theme_classic() + 
   theme(axis.title = element_text(size=14),

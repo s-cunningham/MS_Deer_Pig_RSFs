@@ -648,7 +648,7 @@ run_pig_mod <- function(A_adj, theta, K, Sims=1000, steps=50, ev_sd=0.02, harves
   ##Stochastistic model
   Year <- 1:steps
   
-  Kf <- K * 0.6
+  Kf <- K * 0.5
   
   # Empty array to hold pop count
   pig.array <- array(0,dim=c(6,length(Year),Sims))
