@@ -215,59 +215,44 @@ Kf <- K * 0.5
 # Set up pig matrix
 A_base <- matrix(0,6,6)
 
-# Fecundity
-# Fecundity <- c(0.54, 2.24, 2.24)
-
 ## Survival
 # Females
-A_base[2,1] <- sqrt(0.44)
-A_base[3,2] <- sqrt(0.35)
-A_base[3,3] <- sqrt(0.35)
+A_base[2,1] <- sqrt(0.33)  # Piglet survival
+A_base[3,2] <- sqrt(0.35) # Subadult survival
+A_base[3,3] <- sqrt(0.35) # Adult survival
 # Males
-A_base[5,4] <- sqrt(0.44)
-A_base[6,5] <- sqrt(0.23)
-A_base[6,6] <- sqrt(0.23)
+A_base[5,4] <- sqrt(0.33) # Piglet survival
+A_base[6,5] <- sqrt(0.23) # Subadult survival
+A_base[6,6] <- sqrt(0.23) # Adult survival
 
 ## Fecundity
-# Maximum fecundity (multiplied by how many sows reproducing each time step)
-R0j <- 6.6*0.75 
-R0a <- 10.8
+# Maximum fecundity (how many piglets per litter?) x how many females produce at a given time step
+R0j <- 4.8*0.75
+R0a <- 6.4*0.95
 
 FecundityM <- c(R0j, R0a)
 FecundityF <- c(R0j, R0a)
 
 # Add to matrix
-A_base[1,2:3] <- FecundityF
-A_base[4,2:3] <- FecundityM
-
-pig.matrix <- A_base
-# 1.3:1 males:females
-pct_m <- 0.5
-pct_f <- 0.5
-
-# # Calculate for post-breeding census
-FecundityM <- c(R0j*A_base[3,2], R0a*A_base[3,3])*pct_m
-FecundityF <- c(R0j*A_base[3,2], R0a*A_base[3,3])*pct_f
-
-pig.matrix[1,2:3] <- FecundityF
-pig.matrix[4,2:3] <- FecundityM
+A_base[1,2:3] <- FecundityF 
+A_base[4,2:3] <- FecundityM 
 
 # Calculate stable stage distribution
-w <- Re(eigen(pig.matrix)$vectors[, 1])
+w <- Re(eigen(A_base)$vectors[, 1])
 w <- w / sum(w) # normalize to equal 1
 
 # Set up initial popualtion size
 N0 <- w * 0.1 * K  # e.g., start at 50% of K
 
-lambda <- Re(eigen(pig.matrix)$values[1])
+lambda <- Re(eigen(A_base)$values[1])
 
-# How many pig are harvested?
+# How many pig are removed?
 observed_harvest <- 150000 
 
 ### Optimize survival and fecundities
 # Caps on survival (maximum values)
-female_cap <- sqrt(0.60)
-male_cap <- sqrt(0.60)
+female_cap <- sqrt(0.65)
+male_cap <- sqrt(0.65)
 
 female_base <- c(sqrt(0.35), sqrt(0.35))
 female_upper <- female_cap / female_base
@@ -282,20 +267,20 @@ male_min <- sqrt(0.35)
 female_lower <- female_min / female_base
 male_lower <- male_min / male_base
 
-# set up bounds (Fawn survival (1), female survival (5), male survival (5), fecundity (1), theta(1))
+# set up bounds (Fawn survival (1), female survival (2), male survival (2), fecundity (1), theta(1))
 pigs_lower <- c(0.3,          # Piglet survival
                 female_lower, # Female survival
                 male_lower,   # Male survival
-                0.5,          # Fecundity
+                1,          # Fecundity
                 0.001)        # Theta
 
-pigs_upper <- c(1.2,          # Piglet survival
+pigs_upper <- c(1.6,          # Piglet survival
                 female_upper, # female survival
                 male_upper,   # male survival
-                1.2,          # Fecundity
+                1.9,          # Fecundity
                 3)            # Theta
 
-c_dd <- 0.11
+c_dd <- 0.5
 
 # run optimizer
 set.seed(1)
@@ -325,7 +310,11 @@ A_adj[4,2] <- A_base[4,2]*(pig_opt$par[6])
 A_adj[1,3] <- A_base[1,3]*(pig_opt$par[6])
 A_adj[4,3] <- A_base[4,3]*(pig_opt$par[6])
 
-#### Run population model ####
+a2 <- A_adj
+a2[1, ] <- a2[1,]/2
+a2[4, ] <- a2[4,]/2
+Re(eigen(A_base)$values[1])^2
+
 #### Run population model ####
 set.seed(1)
 res8 <- run_pig_mod(A_adj, theta=pig_opt$par[7], K=367822, Sims=1000, steps=100, ev_sd=0.05, harvest=TRUE, c_dd=c_dd) 
