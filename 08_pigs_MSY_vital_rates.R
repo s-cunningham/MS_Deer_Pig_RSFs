@@ -22,11 +22,11 @@ A_base <- matrix(0,6,6)
 
 ## Survival
 # Females
-A_base[2,1] <- sqrt(0.44)  # Piglet survival
+A_base[2,1] <- sqrt(0.33)  # Piglet survival
 A_base[3,2] <- sqrt(0.35) # Subadult survival
 A_base[3,3] <- sqrt(0.35) # Adult survival
 # Males
-A_base[5,4] <- sqrt(0.44) # Piglet survival
+A_base[5,4] <- sqrt(0.33) # Piglet survival
 A_base[6,5] <- sqrt(0.23) # Subadult survival
 A_base[6,6] <- sqrt(0.23) # Adult survival
 
@@ -56,7 +56,7 @@ observed_harvest <- 150000
 
 ### Optimize survival and fecundities
 # Caps on survival (maximum values)
-female_cap <- sqrt(0.70)
+female_cap <- sqrt(0.65)
 male_cap <- sqrt(0.65)
 
 female_base <- c(sqrt(0.35), sqrt(0.35))
@@ -82,8 +82,8 @@ pigs_lower <- c(0.3,          # Piglet survival
 pigs_upper <- c(1.6,          # Piglet survival
                 female_upper, # female survival
                 male_upper,   # male survival
-                1.7,          # Fecundity
-                1)            # Theta
+                1.9,          # Fecundity
+                3)            # Theta
 
 c_dd <- 2.5
 
@@ -116,6 +116,10 @@ A_adj[1,3] <- A_base[1,3]*(pig_opt$par[6])
 A_adj[4,3] <- A_base[4,3]*(pig_opt$par[6])
 
 
+a2 <- A_adj
+a2[1, ] <- a2[1,]/2
+a2[4, ] <- a2[4,]/2
+Re(eigen(A_base)$values[1])^2
 
 #### Run population model ####
 set.seed(1)
