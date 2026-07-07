@@ -22,11 +22,11 @@ A_base <- matrix(0,6,6)
 
 ## Survival
 # Females
-A_base[2,1] <- sqrt(0.33)  # Piglet survival
+A_base[2,1] <- sqrt(0.44)  # Piglet survival
 A_base[3,2] <- sqrt(0.35) # Subadult survival
 A_base[3,3] <- sqrt(0.35) # Adult survival
 # Males
-A_base[5,4] <- sqrt(0.33) # Piglet survival
+A_base[5,4] <- sqrt(0.44) # Piglet survival
 A_base[6,5] <- sqrt(0.23) # Subadult survival
 A_base[6,6] <- sqrt(0.23) # Adult survival
 
@@ -56,8 +56,8 @@ observed_harvest <- 150000
 
 ### Optimize survival and fecundities
 # Caps on survival (maximum values)
-female_cap <- sqrt(0.75)
-male_cap <- sqrt(0.75)
+female_cap <- sqrt(0.70)
+male_cap <- sqrt(0.65)
 
 female_base <- c(sqrt(0.35), sqrt(0.35))
 female_upper <- female_cap / female_base
@@ -72,20 +72,20 @@ male_min <- sqrt(0.35)
 female_lower <- female_min / female_base
 male_lower <- male_min / male_base
 
-# set up bounds (Fawn survival (1), female survival (5), male survival (5), fecundity (1), theta(1))
+# set up bounds (Fawn survival (1), female survival (2), male survival (2), fecundity (1), theta(1))
 pigs_lower <- c(0.3,          # Piglet survival
                 female_lower, # Female survival
                 male_lower,   # Male survival
-                0.5,          # Fecundity
+                1,          # Fecundity
                 0.001)        # Theta
 
-pigs_upper <- c(1.2,          # Piglet survival
+pigs_upper <- c(1.6,          # Piglet survival
                 female_upper, # female survival
                 male_upper,   # male survival
-                1.2,          # Fecundity
-                3)            # Theta
+                1.7,          # Fecundity
+                1)            # Theta
 
-c_dd <- 1.5
+c_dd <- 2.5
 
 # run optimizer
 set.seed(1)

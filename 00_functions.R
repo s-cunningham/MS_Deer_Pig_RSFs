@@ -553,8 +553,8 @@ deer_pop_proj <- function(A, N0, Kf, theta, Year, c_dd) {
     s_f <- 1 - s_m
     
     # Adjust sex ratio at birth
-    A_dd[1,1:6] <- c(0, R0y_dd, R0a_dd, R0a_dd, R0a_dd, R0a_dd)*s_m
-    A_dd[7,1:6] <- c(0, R0y_dd, R0a_dd, R0a_dd, R0a_dd, R0a_dd)*s_f
+    A_dd[1,1:6] <- c(0, R0y_dd, R0a_dd, R0a_dd, R0a_dd, R0a_dd)*s_m * 0.35
+    A_dd[7,1:6] <- c(0, R0y_dd, R0a_dd, R0a_dd, R0a_dd, R0a_dd)*s_f * 0.35
     
     # Calculate new pop size
     deer.array[,y] <- A_dd %*% deer.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)
@@ -820,7 +820,7 @@ run_pig_mod <- function(A_adj, theta, K, Sims=1000, steps=50, ev_sd=0.02, harves
       # print(density_factor)
       
       # Adjust sex ratio at birth and reduce fecundity according to density
-      A_dd[1,1:3] <- c(0, A_s[1,2], A_s[1,3]) * 0.5 * density_factor
+      A_dd[1,1:3] <- c(0, A_s[1,2], A_s[1,3]) * 0.5 * density_factor 
       A_dd[4,1:3] <- c(0, A_s[1,2], A_s[1,3]) * 0.5 * density_factor
       
       # Stop loop if there are zeros
