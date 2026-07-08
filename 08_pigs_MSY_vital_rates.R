@@ -22,18 +22,18 @@ A_base <- matrix(0,6,6)
 
 ## Survival
 # Females
-A_base[2,1] <- sqrt(0.33)  # Piglet survival
+A_base[2,1] <- sqrt(0.44)  # Piglet survival
 A_base[3,2] <- sqrt(0.35) # Subadult survival
 A_base[3,3] <- sqrt(0.35) # Adult survival
 # Males
-A_base[5,4] <- sqrt(0.33) # Piglet survival
+A_base[5,4] <- sqrt(0.44) # Piglet survival
 A_base[6,5] <- sqrt(0.23) # Subadult survival
 A_base[6,6] <- sqrt(0.23) # Adult survival
 
 ## Fecundity
 # Maximum fecundity (how many piglets per litter?) x how many females produce at a given time step
 R0j <- 4.8*0.75
-R0a <- 6.4*0.95
+R0a <- 6.4
 
 FecundityM <- c(R0j, R0a)
 FecundityF <- c(R0j, R0a)
@@ -56,8 +56,8 @@ observed_harvest <- 150000
 
 ### Optimize survival and fecundities
 # Caps on survival (maximum values)
-female_cap <- sqrt(0.65)
-male_cap <- sqrt(0.65)
+female_cap <- sqrt(0.55)
+male_cap <- sqrt(0.55)
 
 female_base <- c(sqrt(0.35), sqrt(0.35))
 female_upper <- female_cap / female_base
@@ -66,8 +66,8 @@ male_base <- c(sqrt(0.23), sqrt(0.23))
 male_upper <- male_cap / male_base
 
 # Caps on survival (minimum values)
-female_min <- sqrt(0.35)
-male_min <- sqrt(0.35)
+female_min <- sqrt(0.25)
+male_min <- sqrt(0.25)
 
 female_lower <- female_min / female_base
 male_lower <- male_min / male_base
@@ -82,10 +82,10 @@ pigs_lower <- c(0.3,          # Piglet survival
 pigs_upper <- c(1.6,          # Piglet survival
                 female_upper, # female survival
                 male_upper,   # male survival
-                1.9,          # Fecundity
-                3)            # Theta
+                2.8,          # Fecundity
+                1.5)            # Theta
 
-c_dd <- 2.5
+c_dd <- 1.1
 
 # run optimizer
 set.seed(1)
@@ -133,14 +133,14 @@ res27$final_lambda
 
 #Plot population projection
 ggplot(res27$results) +
-  coord_cartesian(ylim=c(0,2000000)) +
+  coord_cartesian(ylim=c(0,4000000)) +
   geom_hline(yintercept=1000000, color="red", linetype=3) +
   geom_hline(yintercept=K) +
   geom_ribbon(aes(x=Year,ymin=N.10pct, ymax=N.90pct), alpha=.2,fill="purple") +
   geom_line(aes(x=Year, y=N.median),colour="purple",alpha=1,linewidth=1) +
   scale_y_continuous(name="Abundance (in millions)",
-                     breaks=c(0,500000,1000000,1500000, 2000000),
-                     labels=c(0, 0.5, 1, 1.5, 2)) +
+                     breaks=c(0,500000,1000000,1500000, 2000000, 2500000, 3000000, 3500000, 4000000),
+                     labels=c(0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4)) +
   scale_x_continuous(breaks=c(0,10,20,30,40), labels=c(0,5,10,15,20), name="Simulation Year") +
   theme_classic() + 
   theme(axis.title = element_text(size=14),
@@ -172,7 +172,7 @@ ggplot(res27$r.surv) +
         legend.title=element_text(size=14))
 
 ggplot(res27$r.fec) +
-  coord_cartesian(xlim=c(0.7, 2), ylim=c(0,5)) +
+  coord_cartesian(xlim=c(0.7, 2), ylim=c(0,4)) +
   geom_segment(aes(x=x, y=f10pct, yend=f90pct), color="#21918c", linewidth=1) +
   geom_point(aes(x=x, y=fec, group=source, color=source, shape=offspring_sex), size=3) +
   scale_color_manual(values=c("#440154", "#21918c")) +
@@ -189,7 +189,7 @@ ggplot(res27$r.fec) +
   theme(panel.border=element_rect(color="black", fill=NA, linewidth=0.5),
         legend.position.inside = c(0,1),
         legend.justification=c(0,1),
-        # legend.direction="horizontal",
+        legend.direction="horizontal",
         legend.background = element_rect(fill=NA),
         legend.text=element_markdown(size=11),
         legend.title=element_text(size=12),
@@ -203,7 +203,7 @@ ggplot(res27$r.fec) +
 
 
 ### K at 8 pigs/ km2 - full state ####
-
+set.seed(1)
 ## Stochastistic model
 step <- 1:200
 
@@ -217,11 +217,11 @@ A_base <- matrix(0,6,6)
 
 ## Survival
 # Females
-A_base[2,1] <- sqrt(0.33)  # Piglet survival
+A_base[2,1] <- sqrt(0.44)  # Piglet survival
 A_base[3,2] <- sqrt(0.35) # Subadult survival
 A_base[3,3] <- sqrt(0.35) # Adult survival
 # Males
-A_base[5,4] <- sqrt(0.33) # Piglet survival
+A_base[5,4] <- sqrt(0.44) # Piglet survival
 A_base[6,5] <- sqrt(0.23) # Subadult survival
 A_base[6,6] <- sqrt(0.23) # Adult survival
 
@@ -251,8 +251,8 @@ observed_harvest <- 150000
 
 ### Optimize survival and fecundities
 # Caps on survival (maximum values)
-female_cap <- sqrt(0.65)
-male_cap <- sqrt(0.65)
+female_cap <- sqrt(0.55)
+male_cap <- sqrt(0.55)
 
 female_base <- c(sqrt(0.35), sqrt(0.35))
 female_upper <- female_cap / female_base
@@ -261,8 +261,8 @@ male_base <- c(sqrt(0.23), sqrt(0.23))
 male_upper <- male_cap / male_base
 
 # Caps on survival (minimum values)
-female_min <- sqrt(0.35)
-male_min <- sqrt(0.35)
+female_min <- sqrt(0.4)
+male_min <- sqrt(0.4)
 
 female_lower <- female_min / female_base
 male_lower <- male_min / male_base
@@ -271,16 +271,16 @@ male_lower <- male_min / male_base
 pigs_lower <- c(0.3,          # Piglet survival
                 female_lower, # Female survival
                 male_lower,   # Male survival
-                1,          # Fecundity
+                0.8,          # Fecundity
                 0.001)        # Theta
 
 pigs_upper <- c(1.6,          # Piglet survival
                 female_upper, # female survival
                 male_upper,   # male survival
-                1.9,          # Fecundity
-                3)            # Theta
+                2.6,          # Fecundity
+                1.5)            # Theta
 
-c_dd <- 0.5
+c_dd <- 2 #1.9
 
 # run optimizer
 set.seed(1)
