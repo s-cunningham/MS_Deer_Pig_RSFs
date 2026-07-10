@@ -304,8 +304,8 @@ observed_harvest <- 240000
 
 ### Optimize survival and fecundities
 # Caps on survival (maximum values)
-female_cap <- 0.96
-male_cap <- 0.94
+female_cap <- 0.97
+male_cap <- 0.90
 
 female_base <- c(0.93, 0.84, 0.84, 0.84, 0.84)
 female_upper <- female_cap / female_base
@@ -314,26 +314,26 @@ male_base <- c(0.82, 0.63, 0.53, 0.44, 0.49)
 male_upper <- male_cap / male_base
 
 # Caps on survival (minimum values)
-female_min <- 0.80
-male_min <- 0.750
+female_min <- 0.90
+male_min <- 0.85
 
 female_lower <- female_min / female_base
 male_lower <- male_min / male_base
 
 # set up bounds (Fawn survival (1), female survival (5), male survival (5), fecundity (1), theta(1))
-deer_lower <- c(0.6,          # Fawn survival
+deer_lower <- c(0.9,          # Fawn survival
                 female_lower, # Female survival
                 male_lower,   # Male survival
-                1.0,          # Fecundity
+                0.8,          # Fecundity
                 1)            # Theta
 
-deer_upper <- c(1.9,         # Fawn survival
+deer_upper <- c(1.5,         # Fawn survival
                 female_upper, # female survival
                 male_upper,   # male survival
                 2.2,            # Fecundity
                 3.2)            # Theta
 
-c_dd <- 0.2
+c_dd <- 3.3
 
 # run optimizer
 set.seed(1)

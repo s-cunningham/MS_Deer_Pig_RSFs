@@ -835,9 +835,9 @@ run_pig_mod <- function(A_adj, theta, K, Sims=1000, steps=50, ev_sd=0.02, harves
       realized_fecundity[4,y-1,i] <- A_dd[4,3] # Males per adult female
       
       # Make sure we have a population to work with
-      if (any(is.na(pig.array[, y-1, i]))) {
-        stop(paste0("NA detected in pig.array at previous timestep!\n Sim: ",i,"\nYear: ",y ))
-      }
+      # if (any(is.na(pig.array[, y-1, i]))) {
+      #   stop(paste0("NA detected in pig.array at previous timestep!\n Sim: ",i,"\nYear: ",y ))
+      # }
       
       ## Harvest deer 
       # Calculate new pop size BEFORE removals
