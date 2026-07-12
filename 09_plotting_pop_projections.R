@@ -7,11 +7,15 @@ library(patchwork)
 rates <- read_csv("data/literature_demographic_rates.csv") |>
   mutate(sex = ifelse(sex=="female", "Female", "Male"))
 
-rates$age <- factor(rates$age, 
+## Deer ---------------------------------------------------------------------------------------------------------
+d_rates_s <- rates |>
+  filter(param=="survival" & species=="deer")
+
+d_rates_s$age <- factor(d_rates_s$age, 
                     levels=c("fawn","yearling","2-year-old","3-year-old","4-year-old","5+ years-old"), 
                     labels=c("Fawn","Yearling","2-year-old","3-year-old","4-year-old","5+ years-old"))
 
-rates <- rates |>
+d_rates_s <- d_rates_s |>
   rename(stage = age) |>
   mutate(stage = as.character(stage)) |>
   mutate(x=case_when(stage=="Fawn" ~ 0.2,
@@ -22,16 +26,26 @@ rates <- rates |>
                      stage=="5+ years-old" ~ 0.7)) |>
   mutate(x = if_else(sex=="Female", x - 0.01, x + 0.01))
 
+d_rates_r <- rates |>
+  filter(param=="fecundity" & species=="deer")|>
+  rename(rate = survival)
 
-ggplot(rates) +
-  coord_cartesian(ylim=c(0,1)) +
-  geom_point(aes(x=age, y=survival), color="gray", alpha=0.5, size=3) +
-  # scale_shape_manual(values=c(21,22,23,24,25,0:18)) +
-  facet_wrap(vars(sex), ncol=2) +
-  theme(legend.position="none",
-        panel.grid=element_blank()) 
-  
+## Pigs ------------------------------------------------------------------------------------------------------------
+p_rates_s <- rates |>
+  filter(param=="survival" & species=="pigs")
 
+p_rates_s$age <- factor(p_rates_s$age, 
+                        levels=c("Piglet", "Yearling", "Adult"))
+
+p_rates_s <- p_rates_s |>
+  rename(stage = age) |>
+  mutate(stage = as.character(stage)) |>
+  mutate(x=case_when(stage=="Piglet" ~ 0.5,
+                     stage=="Yearling" ~ 0.6,
+                     stage=="Adult" ~ 0.7)) |>
+  mutate(x = if_else(sex=="Female", x - 0.01, x + 0.01)) |>
+  # Drop chinn because neonates (to 6 weeks)
+  filter(author != "Chinn")
 
 
 ## Read results ####
@@ -44,8 +58,10 @@ deer_f <- read_csv("results/deer_fecundity.csv")
 
 # Pigs
 pigs <- read_csv("results/pigs_population_projections.csv")
-pigs_s <- read_csv("results/pigs_survival.csv")
-pigs_f <- read_csv("results/pig_fecundity.csv")
+pigs_s <- read_csv("results/pigs_survival.csv") |>
+  filter(source=="Implied")
+pigs_f <- read_csv("results/pig_fecundity.csv") |>
+  filter(source=="Implied")
 
 ## Plot ####
 
@@ -54,9 +70,9 @@ pigs_f <- read_csv("results/pig_fecundity.csv")
 deer_pop <- ggplot(deer) +
   coord_cartesian(ylim=c(0,3000000)) +
   geom_hline(yintercept=1610000, color="gray", linewidth=1) +
-  geom_hline(yintercept=1347232, linetype=2, color="#ed7953", linewidth=1) +
-  geom_hline(yintercept=2090532, linetype=2, color="#9c179e", linewidth=1) +
-  geom_ribbon(aes(x=Year, ymin=N.10pct, ymax=N.90pct, fill=density, group=density), alpha=.2) +
+  geom_hline(yintercept=1347232, linetype=2, color="#ed7953", linewidth=1, alpha=0.6) +
+  geom_hline(yintercept=2090532, linetype=2, color="#9c179e", linewidth=1, alpha=0.6) +
+  geom_ribbon(aes(x=Year, ymin=N.10pct, ymax=N.90pct, fill=density, group=density), alpha=0.2) +
   geom_line(aes(x=Year, y=N.median, color=density, group=density), alpha=1,linewidth=1) +
   scale_y_continuous(name="Abundance (in millions)", 
                      breaks=c(0,500000, 1000000, 1500000, 2000000, 2500000, 3000000),
@@ -89,20 +105,10 @@ deer_s <- deer_s |>
   mutate(x = if_else(sex=="Female", x - 0.01, x + 0.01)) #|>
   # filter(density=="14.3 deer km<sup>-2</sup>")
 
-# deer_s22 <- deer_s |>
-#   mutate(x=case_when(stage=="Fawn" ~ 0.2,
-#                      stage=="Yearling" ~ 0.3,
-#                      stage=="2-year-old" ~ 0.4,
-#                      stage=="3-year-old" ~ 0.5,
-#                      stage=="4-year-old" ~ 0.6,
-#                      stage=="5+ years-old" ~ 0.7)) |>
-#   mutate(x = if_else(sex=="Female", x - 0.01, x + 0.01)) |>
-#   filter(density=="22 deer km<sup>-2</sup>")
-
 ## Plot 14 deer/km2
-ggplot() +
+ds_plot <- ggplot() +
   coord_cartesian(ylim=c(0,1)) +
-  geom_point(data=rates, aes(x=x, y=survival), shape=21, color="gray10", fill="gray",  size=3, alpha=0.45) +
+  geom_point(data=d_rates_s, aes(x=x, y=survival), shape=21, color="gray10", fill="gray",  size=3, alpha=0.45) +
   geom_segment(data=deer_s, aes(x=x, y=surv.10pct, yend=surv.90pct, color=sex), linewidth=1) +
   geom_point(data=deer_s, aes(x=x, y=survival, color=sex), size=3) +
   guides(
@@ -115,14 +121,14 @@ ggplot() +
   ylab("Survival probability") + xlab("Stage") +
   facet_grid(.~density) +
   theme(panel.grid=element_blank(),
-        legend.position.inside=c(0.01, 0.99),
-        legend.justification = c(0,1),
+        legend.position.inside=c(0.99, 0.01),
+        legend.justification = c(1,0),
         axis.text=element_text(size=11),
         axis.title=element_text(size=12),
         strip.background = element_rect(fill = NA, color = NA),
         strip.text = element_markdown(size=12),
         legend.text=element_text(size=11),
-        legend.title=element_text(size=12))
+        legend.title=element_blank())
 
 ## Plot 22 deer/km2
 # ggplot() +
@@ -184,6 +190,8 @@ df_plot <- ggplot(deer_f) +
 
 
 deer_plots <- deer_pop + ds_plot + df_plot + plot_layout(widths = c(1.2, 1.6, 1))
+
+# deer_pop / ds_plot
 
 
 ### Pigs ####

@@ -641,9 +641,11 @@ objective_fn_deer <- function(params) {
 ## Wild pigs ####
 
 # function for running population matrix
-run_pig_mod <- function(A_adj, theta, K, Sims=1000, steps=50, ev_sd=0.02, harvest=TRUE, theta_mult=2, c_dd=0.2) {
+run_pig_mod <- function(A_adj, neonate_surv_scale, theta, K, Sims=1000, steps=50, ev_sd=0.02, harvest=TRUE, theta_mult=2, c_dd=0.2) {
   
   set.seed(1)
+  
+  surv_neo <- 0.44 * neonate_surv_scale
   
   ##Stochastistic model
   Year <- 1:steps
@@ -677,6 +679,9 @@ run_pig_mod <- function(A_adj, theta, K, Sims=1000, steps=50, ev_sd=0.02, harves
   realized_surv[1:6,1,] <- c(A_adj[2,1], A_adj[3,2], A_adj[3,3], A_adj[5,4], A_adj[6,5], A_adj[6,6])
   
   realized_fecundity <- array(NA, dim=c(4,  length(Year) - 1, Sims)) # row 1: yearling F, row 2: adult F, row 3: yearling M, row 4: adult M,
+  
+  # Track how many times female bottleneck occurs
+  female_bottleneck <- 0
   
   for (i in 1:Sims) {
     
@@ -819,9 +824,9 @@ run_pig_mod <- function(A_adj, theta, K, Sims=1000, steps=50, ev_sd=0.02, harves
       
       # print(density_factor)
       
-      # Adjust sex ratio at birth and reduce fecundity according to density
-      A_dd[1,1:3] <- c(0, A_s[1,2], A_s[1,3]) * 0.5 * density_factor 
-      A_dd[4,1:3] <- c(0, A_s[1,2], A_s[1,3]) * 0.5 * density_factor
+      # Adjust sex ratio at birth and reduce fecundity according to density, multiply by 0-6 mo survival
+      A_dd[1,1:3] <- c(0, A_s[1,2], A_s[1,3]) * 0.5 * density_factor * surv_neo
+      A_dd[4,1:3] <- c(0, A_s[1,2], A_s[1,3]) * 0.5 * density_factor * surv_neo
       
       # Stop loop if there are zeros
       if (any(is.na(A_dd))) {
@@ -835,9 +840,9 @@ run_pig_mod <- function(A_adj, theta, K, Sims=1000, steps=50, ev_sd=0.02, harves
       realized_fecundity[4,y-1,i] <- A_dd[4,3] # Males per adult female
       
       # Make sure we have a population to work with
-      # if (any(is.na(pig.array[, y-1, i]))) {
-      #   stop(paste0("NA detected in pig.array at previous timestep!\n Sim: ",i,"\nYear: ",y ))
-      # }
+      if (any(is.na(pig.array[, y-1, i]))) {
+        stop(paste0("NA detected in pig.array at previous timestep!\n Sim: ",i,"\nYear: ",y ))
+      }
       
       ## Harvest deer 
       # Calculate new pop size BEFORE removals
@@ -846,15 +851,31 @@ run_pig_mod <- function(A_adj, theta, K, Sims=1000, steps=50, ev_sd=0.02, harves
       # Harvest
       if (harvest) {
         
-        # Draw the number of deer to harvest each year
-        h <- round(rnorm(1, 150000, 15000))
+        # Draw the number of pigs to remove each year
+        if (sum(N_preharvest) >= 800000) {
+          h <- round(rnorm(1, 150000, 15000))
+        } else {
+          h <- 0.2 * sum(N_preharvest)
+        }
         
         sow_h <- h * 0.5
         boar_h <- h - sow_h
         
         # Proportional removals
-        r_f <- (N_preharvest[1:3,1] / sum(N_preharvest[1:3,1]))*sow_h
-        r_m <- (N_preharvest[4:6,1] / sum(N_preharvest[4:6,1]))*boar_h
+        female_total <- sum(N_preharvest[1:3])
+        
+        if (female_total > 0) {
+          r_f <- (N_preharvest[1:3] / female_total) * sow_h
+        } else {
+          r_f <- rep(0, 3)
+        }
+        male_total <- sum(N_preharvest[4:6])
+        
+        if (male_total > 0) {
+          r_m <- (N_preharvest[4:6] / male_total) * boar_h
+        } else {
+          r_m <- rep(0, 3)
+        }
         
         # Combine for total harvest
         r <- c(r_f, r_m)
@@ -911,11 +932,15 @@ run_pig_mod <- function(A_adj, theta, K, Sims=1000, steps=50, ev_sd=0.02, harves
       am <- sum(pig.array[5:6,y,i])
       
       if (is.na(af) | sum(af) < 1) {
-        warning("Female bottleneck: reproductive females lost!")
+        female_bottleneck <- female_bottleneck + 1
+        # warning("Female bottleneck: reproductive females lost!")
       }
       
     }
   }
+  
+  # Print number of times females lost
+  print(paste0("Number of female bottlenecks: ", female_bottleneck))
   
   ## Summarize population trajectory
   N.median <- apply(apply(pig.array,c(2,3),sum),1,median)
@@ -1003,11 +1028,13 @@ run_pig_mod <- function(A_adj, theta, K, Sims=1000, steps=50, ev_sd=0.02, harves
 
 
 # Scale matrices
-scale_pigs <- function(A_base,surv_scale_p,surv_scale_f,surv_scale_m,fec_scale) {
+scale_pigs <- function(A_base,surv_scale_neo,surv_scale_p,surv_scale_f,surv_scale_m,fec_scale) {
   
   pig.matrix <- matrix(0,6,6)
   
   ## Survival
+  # Neonates
+  surv_neo <- 0.44 * surv_scale_neo
   # Females
   pig.matrix[2,1] <- A_base[2,1]*surv_scale_p
   pig.matrix[3,2] <- A_base[3,2]*surv_scale_f[1]
@@ -1019,8 +1046,8 @@ scale_pigs <- function(A_base,surv_scale_p,surv_scale_f,surv_scale_m,fec_scale) 
   
   ## Fecundity
   # Maximum fecundity
-  R0y <- A_base[1,2]*fec_scale
-  R0a <- A_base[1,3]*fec_scale
+  R0y <- A_base[1,2]*fec_scale * surv_neo
+  R0a <- A_base[1,3]*fec_scale * surv_neo
   
   FecundityF <- c(R0y, R0a)*0.5
   FecundityM <- c(R0y, R0a)*0.5
@@ -1034,11 +1061,14 @@ scale_pigs <- function(A_base,surv_scale_p,surv_scale_f,surv_scale_m,fec_scale) 
 
 
 ## project population
-pig_pop_proj <- function(A, N0, Kf, theta, step, c_dd) {
+pig_pop_proj <- function(A, surv_scale_neo, N0, Kf, theta, step, c_dd) {
   
   # Empty array to hold pop count
   pig.array <- matrix(0,nrow=6, ncol=length(step))
   pig.array[,1] <- N0
+  
+  # Neonates
+  surv_neo <- 0.44 * surv_scale_neo
   
   for (y in 2:length(step)){
     
@@ -1054,8 +1084,8 @@ pig_pop_proj <- function(A, N0, Kf, theta, step, c_dd) {
     A_dd <- A
     
     # reduce fecundity
-    R0j_dd <- A[1,2] * density_factor 
-    R0a_dd <- A[1,3] * density_factor 
+    R0j_dd <- A[1,2] * density_factor * surv_neo
+    R0a_dd <- A[1,3] * density_factor * surv_neo
     
     # Adjust sex ratio at birth
     A_dd[1,2:3] <- c(R0j_dd, R0a_dd)*0.5    ## Make sure this is correct (splitting piglets by half)
@@ -1078,13 +1108,14 @@ pig_pop_proj <- function(A, N0, Kf, theta, step, c_dd) {
 
 objective_fn_pigs <- function(params) {
   
-  surv_scale_p <- params[1]
-  surv_scale_f <- params[2:3]
-  surv_scale_m <- params[4:5]
-  fec_scale <- params[6]
+  surv_scale_neo <- params[1]
+  surv_scale_p <- params[2]
+  surv_scale_f <- params[3:4]
+  surv_scale_m <- params[5:6]
+  fec_scale <- params[7]
   
   # Scale demographic rates
-  A_scaled <- scale_pigs(A_base,surv_scale_p,surv_scale_f,surv_scale_m,fec_scale)
+  A_scaled <- scale_pigs(A_base,surv_scale_neo,surv_scale_p,surv_scale_f,surv_scale_m,fec_scale)
   # cap survival (so no chance of >1)
   A_scaled[2:3, 1:3] <- pmin(A_scaled[2:3, 1:3], 0.999)
   A_scaled[5:6, 4:6] <- pmin(A_scaled[5:6, 4:6], 0.999)
@@ -1102,7 +1133,7 @@ objective_fn_pigs <- function(params) {
   error_theta <- (theta - 1)^2
   
   # --- Population trajectory ---
-  sim_N <- pig_pop_proj(A_scaled, N0, Kf, theta, step, c_dd=c_dd) 
+  sim_N <- pig_pop_proj(A_scaled, surv_scale_neo, N0, Kf, theta, step, c_dd=c_dd) 
   
   # use last half of time series (avoid transient dynamics)
   tail_N <- tail(sim_N, length(sim_N) / 2)
