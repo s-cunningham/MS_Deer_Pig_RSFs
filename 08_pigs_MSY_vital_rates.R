@@ -1,7 +1,6 @@
 library(ggplot2)
 library(ggtext)
 library(patchwork)
-library(truncnorm)
 
 source("00_functions.R")
 
@@ -22,18 +21,18 @@ A_base <- matrix(0,6,6)
 
 ## Survival
 # Females
-A_base[2,1] <- sqrt(0.44)  # Piglet survival
+A_base[2,1] <- sqrt(0.35)  # Piglet survival
 A_base[3,2] <- sqrt(0.35) # Subadult survival
 A_base[3,3] <- sqrt(0.35) # Adult survival
 # Males
-A_base[5,4] <- sqrt(0.44) # Piglet survival
+A_base[5,4] <- sqrt(0.35) # Piglet survival
 A_base[6,5] <- sqrt(0.23) # Subadult survival
 A_base[6,6] <- sqrt(0.23) # Adult survival
 
 ## Fecundity
 # Maximum fecundity (how many piglets per litter?) x how many females produce at a given time step
 R0j <- 4.8*0.75
-R0a <- 6.4*0.90
+R0a <- 6.4
 
 FecundityM <- c(R0j, R0a)
 FecundityF <- c(R0j, R0a)
@@ -84,10 +83,10 @@ pigs_upper <- c(1.2,          # Piglet survival (0-6 months)
                 1.4,          # Piglet survival (6-12 months)
                 female_upper, # female survival
                 male_upper,   # male survival
-                2.4,          # Fecundity
+                2,          # Fecundity
                 1)            # Theta
 
-c_dd <- 0.65
+c_dd <- 0.5
 
 # run optimizer
 set.seed(1)
@@ -125,7 +124,7 @@ Re(eigen(A_base)$values[1])^2
 
 #### Run population model ####
 set.seed(1)
-res27 <- run_pig_mod(A_adj, neonate_surv=pig_opt$par[1], theta=pig_opt$par[8], K=1239278, Sims=1000, steps=100, ev_sd=0.05, harvest=TRUE, c_dd=c_dd) 
+res27 <- run_pig_mod(A_adj, neonate_surv=pig_opt$par[1], theta=pig_opt$par[8], K=1239278, Sims=1000, steps=200, ev_sd=0.05, harvest=TRUE, c_dd=c_dd) 
 
 # Lambda from adjusted matrix
 res27$matrix_lambda
@@ -215,18 +214,18 @@ A_base <- matrix(0,6,6)
 
 ## Survival
 # Females
-A_base[2,1] <- sqrt(0.83)  # Piglet survival
+A_base[2,1] <- sqrt(0.35)  # Piglet survival
 A_base[3,2] <- sqrt(0.35) # Subadult survival
 A_base[3,3] <- sqrt(0.35) # Adult survival
 # Males
-A_base[5,4] <- sqrt(0.83) # Piglet survival
+A_base[5,4] <- sqrt(0.23) # Piglet survival
 A_base[6,5] <- sqrt(0.23) # Subadult survival
 A_base[6,6] <- sqrt(0.23) # Adult survival
 
 ## Fecundity
 # Maximum fecundity (how many piglets per litter?) x how many females produce at a given time step
 R0j <- 4.8*0.75
-R0a <- 6.4*0.90
+R0a <- 6.4
 
 FecundityM <- c(R0j, R0a)
 FecundityF <- c(R0j, R0a)
@@ -249,7 +248,7 @@ observed_harvest <- 150000
 
 ### Optimize survival and fecundities
 # Caps on survival (maximum values)
-female_cap <- sqrt(0.55)
+female_cap <- sqrt(0.60)
 male_cap <- sqrt(0.55)
 
 female_base <- c(sqrt(0.35), sqrt(0.35))
@@ -259,7 +258,7 @@ male_base <- c(sqrt(0.23), sqrt(0.23))
 male_upper <- male_cap / male_base
 
 # Caps on survival (minimum values)
-female_min <- sqrt(0.25)
+female_min <- sqrt(0.30)
 male_min <- sqrt(0.25)
 
 female_lower <- female_min / female_base
@@ -277,10 +276,10 @@ pigs_upper <- c(1.6,          # Piglet survival (0-6 months)
                 1.2,          # Piglet survival (6-12 months)
                 female_upper, # female survival
                 male_upper,   # male survival
-                2.3,          # Fecundity
+                2,          # Fecundity
                 1)            # Theta
 
-c_dd <- 0.3
+c_dd <- 0.12
 
 # run optimizer
 set.seed(1)
@@ -318,7 +317,7 @@ Re(eigen(A_base)$values[1])^2
 
 #### Run population model ####
 set.seed(1)
-res8 <- run_pig_mod(A_adj, neonate_surv=pig_opt$par[1], theta=pig_opt$par[7], K=367822, Sims=1000, steps=100, ev_sd=0.02, harvest=TRUE, c_dd=c_dd) 
+res8 <- run_pig_mod(A_adj, neonate_surv=pig_opt$par[1], theta=pig_opt$par[7], K=367822, Sims=1000, steps=200, ev_sd=0.05, harvest=TRUE, c_dd=c_dd) 
 
 # Lambda from adjusted matrix
 res8$matrix_lambda
@@ -395,14 +394,49 @@ results <- bind_rows(res27$results,res8$results)
 write_csv(results, "results/pigs_population_projections.csv")
 
 # Survival
-surv <- bind_rows(res27$r.surv,res8$r.surv)
+# Combine survival
+surv8 <- res8$r.surv
+surv27 <- res27$r.surv
+
+surv8$density <- "8 pigs km<sup>-2</sup>"
+surv27$density <- "27 pigs km<sup>-2</sup>"
+
+surv <- bind_rows(surv8,surv27)
 
 write_csv(surv, "results/pigs_survival.csv")
 
 # Fecundity
+fec8 <- res8$r.fec
+fec27 <- res27$r.fec
 
-fec <- bind_rows(res27$r.fec,res8$r.fec)
+fec8$density <- "8 pigs km<sup>-2</sup>"
+fec27$density <- "27 pigs km<sup>-2</sup>"
+
+fec <- bind_rows(fec8,fec27)
+
 write_csv(fec, "results/pig_fecundity.csv")
 
 
+
+nsurv_8f <- res8$neonate_surv |>
+  mutate(density = "8 pigs km<sup>-2</sup>",
+         stage="Neonate",
+         sex="Female")
+nsurv_8m <- res8$neonate_surv |>
+  mutate(density = "8 pigs km<sup>-2</sup>",
+         stage="Neonate",
+         sex="Male")
+
+
+nsurv_27f <- res27$neonate_surv|>
+  mutate(density = "27 pigs km<sup>-2</sup>",
+         stage="Neonate",
+         sex="Female")
+nsurv_27m <- res27$neonate_surv|>
+  mutate(density = "27 pigs km<sup>-2</sup>",
+         stage="Neonate",
+         sex="Male")
+
+nsurv <- bind_rows(nsurv_8f, nsurv_8m, nsurv_27f, nsurv_27m)
+write_csv(nsurv, "results/pigs_neonate_survival.csv")
 

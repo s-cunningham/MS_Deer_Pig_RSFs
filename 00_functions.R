@@ -90,7 +90,9 @@ ramas_K <- function(x) {
 
 
 ### Set up function to run population model with K #### 
-run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harvest=TRUE, theta_mult=2, c_dd=0.2) {
+run_deer_mod <- function(A_adj, neonate_surv_scale, theta, K, Sims=1000, years=50, ev_sd=0.02, harvest=TRUE, theta_mult=2, c_dd=0.2) {
+  
+  surv_neo = 0.27 * neonate_surv_scale
   
   set.seed(1)
   
@@ -103,10 +105,9 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
   deer.array <- array(0,dim=c(12,length(Year),Sims))
   
   # Calculate stable stage distribution
-  mnFs <- mean(c(A_adj[3,2], A_adj[4,3], A_adj[5,4], A_adj[6,5], A_adj[6,6]))
   a2 <- A_adj
-  a2[1,1:6] <- a2[1,1:6]*0.5*mnFs
-  a2[7,1:6] <- a2[7,1:6]*0.5*mnFs
+  a2[1,1:6] <- a2[1,1:6]*0.5*surv_neo
+  a2[7,1:6] <- a2[7,1:6]*0.5*surv_neo
   
   # Calculate lambda from matrix with split fecundity (like it should be)
   lambda <- Re(eigen(a2)$values[1])
@@ -129,6 +130,8 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
   
   realized_fecundity <- array(NA, dim=c(4,  length(Year) - 1, Sims)) # row 1: yearling F, row 2: adult F, row 3: yearling M, row 4: adult M,
   
+  realized_neo_surv <- array(NA, dim=c(1, length(Year), Sims))
+  
   for (i in 1:Sims) {
     
     
@@ -137,6 +140,26 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
       A_s <- A_adj
       
       ## Stochasticity on Survival 
+      
+      # Neonate survival
+      p <- surv_neo
+      
+      # prevent extreme values
+      p <- min(max(p, 1e-6), 1 - 1e-6)
+      
+      var <- ev_sd^2
+      tmp <- (p * (1 - p) / var) - 1
+      
+      if (tmp <= 0) {
+        # fallback: no stochasticity
+        surv_neo_s <- p
+      } else {
+        alpha <- p * tmp
+        beta  <- (1 - p) * tmp
+        surv_neo_s <- rbeta(1, alpha, beta)
+      }
+      realized_neo_surv[1,y-1,i] <- surv_neo_s
+
       # Female survival
       for (s in 2:5) {
         # Survive & go
@@ -252,16 +275,20 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
       A_dd[1,1:6] <- c(0, A_s[1,2], A_s[1,3], A_s[1,3], A_s[1,3], A_s[1,3]) * s_f * density_factor
       A_dd[7,1:6] <- c(0, A_s[1,2], A_s[1,3], A_s[1,3], A_s[1,3], A_s[1,3]) * s_m * density_factor
       
+      # Save fecundity
+      realized_fecundity[1,y-1,i] <- A_dd[1,2] # Females per yearling female
+      realized_fecundity[2,y-1,i] <- A_dd[1,3] # Females per adult female (only taking 1 female age group because fecundity is the same across deer >=2 years old)
+      realized_fecundity[3,y-1,i] <- A_dd[7,2] # Males per yearling female 
+      realized_fecundity[4,y-1,i] <- A_dd[7,3] # Males per adult female
+      
+      # Adjust sex ratio at birth and reduce fecundity according to density
+      A_dd[1,1:6] <- A_dd[1,1:6] * surv_neo_s
+      A_dd[7,1:6] <- A_dd[7,1:6] * surv_neo_s
+      
       # Stop loop if there are zeros
       if (any(is.na(A_dd))) {
         stop("NA detected in A_dd")
       }
-      
-      # Save fecundity
-      realized_fecundity[1,y-1,i] <- A_dd[1,2] # Females per yearling female
-      realized_fecundity[2,y-1,i] <- A_dd[1,3] # Females per adult female
-      realized_fecundity[3,y-1,i] <- A_dd[7,2] # Males per yearling female 
-      realized_fecundity[4,y-1,i] <- A_dd[7,3] # Males per adult female
       
       # Make sure we have a population to work with
       if (any(is.na(deer.array[, y-1, i]))) {
@@ -281,23 +308,10 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
         doe_h <- h * 0.54
         buck_h <- h - doe_h
         
+        # Proportional does
         doe_r <- c(0.0735, 0.189, 0.1895, 0.183, 0.183, 0.182) * doe_h
-        
-        # make sure we're not losing males by harvesting more than exist in that age class
-        stage_weights <- c(0.04, 0.11, 0.12, 0.23, 0.25, 0.25)
-        available <- N_preharvest[7:12]
-        
-        harvest_alloc <- stage_weights * available
-        total_alloc <- sum(harvest_alloc)
-        
-        if (total_alloc > 0) {
-          harvest_alloc <- harvest_alloc / total_alloc
-        } else {
-          harvest_alloc <- rep(0, length(harvest_alloc))
-        }
-        
-        
-        buck_r <- harvest_alloc * buck_h
+        # Proportional bucks
+        buck_r <- c(0.04, 0.11, 0.12, 0.23, 0.25, 0.25)*buck_h
         
         # Combine for total harvest
         r <- c(doe_r, buck_r)
@@ -418,6 +432,13 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
     pivot_longer(cols=c("realized", "literature"), names_to="source", values_to="fec")
   fec$source <- factor(fec$source, levels=c("literature", "realized"), labels=c("MDWFP", "Implied"))
   
+  # Neonate survival
+  median_neo_surv <- apply(realized_neo_surv, 1, function(x) median(x, na.rm=TRUE))
+  nsurv.10pct <- apply(realized_neo_surv, 1, quantile, probs = 0.10, na.rm=TRUE)
+  nsurv.90pct <- apply(realized_neo_surv, 1, quantile, probs = 0.90, na.rm=TRUE)
+  
+  n.surv <- data.frame(surv.50pct=median_neo_surv, surv.10pct=nsurv.10pct, surv.90pct=nsurv.90pct)
+  
   # Summarize sex ratio
   ASR.median <- apply(asr_mat, 1, median)
   ASR.20 <- apply(asr_mat, 1, quantile, probs = 0.20)
@@ -431,12 +452,10 @@ run_deer_mod <- function(A_adj, theta, K, Sims=1000, years=50, ev_sd=0.02, harve
   results_list$results <- results
   results_list$recruits <- recruits
   results_list$adult_females <- rowMeans(colSums(deer.array[3:6, , ]))
-  results_list$three_yr_males <- rowMeans(deer.array[10,,])
-  results_list$four_yr_males <- rowMeans(deer.array[11,,])
-  results_list$five_yr_males <- rowMeans(deer.array[12,,])
   results_list$last_stage <- sum(deer.array[12, , ] > 0)
   results_list$realized_fecundity <- realized_fecundity
   results_list$realized_surv <- realized_surv
+  results_list$neonate_surv <- n.surv
   results_list$r.surv <- r.surv
   results_list$r.fec <- fec
   results_list$ASR <- ASR
@@ -481,12 +500,14 @@ get_msy <- function(results) {
 }
 
 ## Deer ####
-scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_scale) {
+scale_deer <- function(A_base, surv_scale_neo, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_scale) {
   
   # Set up deer matrix
   deer.matrix <- matrix(0,12,12)
   
   ## Survival
+  # Neonates
+  neonate_surv <- 0.27 * surv_scale_neo
   # Females
   deer.matrix[2,1] <- A_base[2,1]*surv_scale_fawn
   deer.matrix[3,2] <- A_base[3,2]*surv_scale_f[1]
@@ -512,8 +533,8 @@ scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_
   pct_f <- 0.435
   
   # Calculate for post-breeding census
-  FecundityM <- c(0, R0y, R0a, R0a, R0a, R0a)*pct_m
-  FecundityF <- c(0, R0y, R0a, R0a, R0a, R0a)*pct_f
+  FecundityM <- c(0, R0y, R0a, R0a, R0a, R0a)*pct_m*neonate_surv
+  FecundityF <- c(0, R0y, R0a, R0a, R0a, R0a)*pct_f*neonate_surv
   
   # Add to matrix
   deer.matrix[1,1:6] <- FecundityF
@@ -522,11 +543,14 @@ scale_deer <- function(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_
   return(deer.matrix)
 }
 
-deer_pop_proj <- function(A, N0, Kf, theta, Year, c_dd) {
+deer_pop_proj <- function(A, surv_scale_neo, N0, Kf, theta, Year, c_dd) {
   
   # Empty array to hold pop count
   deer.array <- matrix(0,nrow=12, ncol=length(Year))
   deer.array[,1] <- N0
+  
+  # Neonates
+  surv_neo <- 0.27 * surv_scale_neo
   
   for (y in 2:length(Year)){
     
@@ -553,8 +577,8 @@ deer_pop_proj <- function(A, N0, Kf, theta, Year, c_dd) {
     s_f <- 1 - s_m
     
     # Adjust sex ratio at birth
-    A_dd[1,1:6] <- c(0, R0y_dd, R0a_dd, R0a_dd, R0a_dd, R0a_dd)*s_m * 0.35
-    A_dd[7,1:6] <- c(0, R0y_dd, R0a_dd, R0a_dd, R0a_dd, R0a_dd)*s_f * 0.35
+    A_dd[1,1:6] <- c(0, R0y_dd, R0a_dd, R0a_dd, R0a_dd, R0a_dd)*s_m * surv_neo
+    A_dd[7,1:6] <- c(0, R0y_dd, R0a_dd, R0a_dd, R0a_dd, R0a_dd)*s_f * surv_neo
     
     # Calculate new pop size
     deer.array[,y] <- A_dd %*% deer.array[,y-1] # Make sure to multiply matrix x vector (not vice versa)
@@ -577,13 +601,14 @@ deer_pop_proj <- function(A, N0, Kf, theta, Year, c_dd) {
 ## Define objective function
 objective_fn_deer <- function(params) {
   
-  surv_scale_fawn <- params[1]
-  surv_scale_f <- params[2:6]
-  surv_scale_m <- params[7:11]
-  fec_scale <- params[12]
+  surv_scale_neo <- params[1]
+  surv_scale_fawn <- params[2]
+  surv_scale_f <- params[3:7]
+  surv_scale_m <- params[8:12]
+  fec_scale <- params[13]
   
   # Scale demographic rates
-  A_scaled <- scale_deer(A_base, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_scale)
+  A_scaled <- scale_deer(A_base,surv_scale_neo, surv_scale_fawn, surv_scale_f, surv_scale_m, fec_scale)
   # cap survival (so no chance of >1)
   A_scaled[2:6, 1:6] <- pmin(A_scaled[2:6, 1:6], 0.999)
   A_scaled[8:12, 7:12] <- pmin(A_scaled[8:12, 7:12], 0.999)
@@ -596,12 +621,12 @@ objective_fn_deer <- function(params) {
   N0 <- w * 0.01 * K  # e.g., start at 50% of K (or in this case 1% of K)
   
   # Calibrate a for density dependence
-  theta <- params[13]
+  theta <- params[14]
   
   error_theta <- (theta - 1)^2
   
   # --- Population trajectory ---
-  sim_N <- deer_pop_proj(A_scaled, N0, Kf, theta, Year, c_dd=c_dd) 
+  sim_N <- deer_pop_proj(A_scaled, surv_scale_neo, N0, Kf, theta, Year, c_dd=c_dd) 
   
   # use last half of time series (avoid transient dynamics)
   tail_N <- tail(sim_N, length(sim_N) / 2)
@@ -680,6 +705,8 @@ run_pig_mod <- function(A_adj, neonate_surv_scale, theta, K, Sims=1000, steps=50
   
   realized_fecundity <- array(NA, dim=c(4,  length(Year) - 1, Sims)) # row 1: yearling F, row 2: adult F, row 3: yearling M, row 4: adult M,
   
+  realized_neo_surv <- array(NA, dim=c(1, length(Year), Sims))
+  
   # Track how many times female bottleneck occurs
   female_bottleneck <- 0
   
@@ -688,6 +715,24 @@ run_pig_mod <- function(A_adj, neonate_surv_scale, theta, K, Sims=1000, steps=50
     for (y in 2:length(Year)){
       
       A_s <- A_adj
+      
+      p <- surv_neo
+      
+      # prevent extreme values
+      p <- min(max(p, 1e-6), 1 - 1e-6)
+      
+      var <- ev_sd^2
+      tmp <- (p * (1 - p) / var) - 1
+      
+      if (tmp <= 0) {
+        # fallback: no stochasticity
+        surv_neo_s <- p
+      } else {
+        alpha <- p * tmp
+        beta  <- (1 - p) * tmp
+        surv_neo_s <- rbeta(1, alpha, beta)
+      }      
+      realized_neo_surv[1,y-1,i] <- surv_neo_s
       
       ## Stochasticity on Survival 
       # survive & go
@@ -821,23 +866,25 @@ run_pig_mod <- function(A_adj, neonate_surv_scale, theta, K, Sims=1000, steps=50
       density_factor <- 1 / (1 + c_dd * (Nf_t / Kf)^theta)
       # density_factor <- pmax(density_factor, 0.2)
       if (!is.finite(density_factor)) density_factor <- 1
-      
-      # print(density_factor)
-      
+
       # Adjust sex ratio at birth and reduce fecundity according to density, multiply by 0-6 mo survival
-      A_dd[1,1:3] <- c(0, A_s[1,2], A_s[1,3]) * 0.5 * density_factor * surv_neo
-      A_dd[4,1:3] <- c(0, A_s[1,2], A_s[1,3]) * 0.5 * density_factor * surv_neo
-      
-      # Stop loop if there are zeros
-      if (any(is.na(A_dd))) {
-        stop("NA detected in A_dd")
-      }
-      
+      A_dd[1,1:3] <- c(0, A_s[1,2], A_s[1,3]) * 0.5 * density_factor
+      A_dd[4,1:3] <- c(0, A_s[1,2], A_s[1,3]) * 0.5 * density_factor
+
       # Save fecundity
       realized_fecundity[1,y-1,i] <- A_dd[1,2] # Females per yearling female
       realized_fecundity[2,y-1,i] <- A_dd[1,3] # Females per adult female
       realized_fecundity[3,y-1,i] <- A_dd[4,2] # Males per yearling female 
       realized_fecundity[4,y-1,i] <- A_dd[4,3] # Males per adult female
+      
+      # Adjust sex ratio at birth and reduce fecundity according to density, multiply by 0-6 mo survival
+      A_dd[1,1:3] <- A_dd[1,1:3] * surv_neo_s
+      A_dd[4,1:3] <- A_dd[4,1:3] * surv_neo_s
+      
+      # Stop loop if there are zeros
+      if (any(is.na(A_dd))) {
+        stop("NA detected in A_dd")
+      }
       
       # Make sure we have a population to work with
       if (any(is.na(pig.array[, y-1, i]))) {
@@ -927,6 +974,7 @@ run_pig_mod <- function(A_adj, neonate_surv_scale, theta, K, Sims=1000, steps=50
                                         N_next[6] / incoming_6,
                                         NA)
       
+      
       # Check buck:doe ratio
       af <- sum(pig.array[2:3,y,i])
       am <- sum(pig.array[5:6,y,i])
@@ -959,10 +1007,9 @@ run_pig_mod <- function(A_adj, neonate_surv_scale, theta, K, Sims=1000, steps=50
   surv.10pct <- apply(realized_surv, 1, quantile, probs = 0.10, na.rm=TRUE)
   surv.90pct <- apply(realized_surv, 1, quantile, probs = 0.90, na.rm=TRUE)
   
-  r.surv <- data.frame(sex=c(rep("Female",6), rep("Male",6)), 
+  r.surv <- data.frame(sex=c(rep("Female",3), rep("Male",3)), 
                        stage=rep(c("Piglet","Yearling","Adult"),2),
                        surv.50pct,surv.10pct,surv.90pct,
-                       est=c(A_adj[2,1], A_adj[3,2], A_adj[3,3], A_adj[5,4], A_adj[6,5], A_adj[6,6]),
                        literature=c(A_base[2,1], A_base[3,2], A_base[3,3], A_base[5,4], A_base[6,5], A_base[6,6]))
   
   r.surv <- r.surv |>
@@ -979,6 +1026,13 @@ run_pig_mod <- function(A_adj, neonate_surv_scale, theta, K, Sims=1000, steps=50
                          labels=c("Piglet","Yearling","Adult"))
   
   r.surv$source <- factor(r.surv$source, levels=c("literature", "surv.50pct"), labels=c("Literature", "Implied"))
+  
+  # Neonate survival
+  median_neo_surv <- apply(realized_neo_surv, 1, function(x) median(x, na.rm=TRUE))
+  nsurv.10pct <- apply(realized_neo_surv, 1, quantile, probs = 0.10, na.rm=TRUE)
+  nsurv.90pct <- apply(realized_neo_surv, 1, quantile, probs = 0.90, na.rm=TRUE)
+  
+  n.surv <- data.frame(surv.50pct=median_neo_surv, surv.10pct=nsurv.10pct, surv.90pct=nsurv.90pct)
   
   ## Get realized fecundities
   # Calculate median survival per stage (over all years and sims)
@@ -1014,6 +1068,7 @@ run_pig_mod <- function(A_adj, neonate_surv_scale, theta, K, Sims=1000, steps=50
   results_list$last_stage <- sum(pig.array[6, , ] > 0)
   results_list$realized_fecundity <- realized_fecundity
   results_list$realized_surv <- realized_surv
+  results_list$neonate_surv <- n.surv
   results_list$r.surv <- r.surv
   results_list$r.fec <- fec
   results_list$ASR <- ASR
@@ -1128,7 +1183,7 @@ objective_fn_pigs <- function(params) {
   N0 <- w * 0.01 * K 
   
   # Calibrate a for density dependence
-  theta <- params[7]
+  theta <- params[8]
   
   error_theta <- (theta - 1)^2
   
